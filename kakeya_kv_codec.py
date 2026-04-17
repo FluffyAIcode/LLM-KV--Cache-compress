@@ -202,7 +202,12 @@ class KakeyaCodec:
             _, top_idx = residual.abs().topk(d_res, dim=-1)
             r_vals = residual.gather(-1, top_idx)
         else:
-            top_idx = torch.arange(skeleton.d_eff, device=vecs.device).expand(vecs.shape[0], -1)
+            top_idx = (
+                torch.arange(skeleton.d_eff, device=vecs.device)
+                .unsqueeze(0)
+                .expand(vecs.shape[0], -1)
+                .contiguous()
+            )
             r_vals = residual
 
         return CompressedVec(
@@ -477,12 +482,57 @@ class KakeyaCompressedLayer(DynamicLayer):
             self.values = torch.tensor([], dtype=self.dtype, device=self.device)
 
 
-class KakeyaKVCache(Cache):
-    """
-    Drop-in transformers cache for Gemma 4 style decoding.
+def _resolve_layer_plan(config) -> Tuple[List[str], Optional[int]]:
+    """Return (layer_types_for_caching, sliding_window).
 
-    Non-sliding attention layers use Kakeya compression on old KV history.
-    Sliding-window layers are left as standard `DynamicSlidingWindowLayer`.
+    Handles the common HF transformers patterns:
+      - Plain decoder transformers (Llama, Mistral, Qwen2/3, etc.):
+        no `layer_types`, no `sliding_window` -> all layers are full attention.
+      - Hybrid sliding+full transformers (Gemma 2/3/4, Cohere 2):
+        `layer_types` is a list, `sliding_window` is an int.
+      - Pure sliding transformers (rare):
+        no `layer_types`, `sliding_window` set -> treat every layer as sliding.
+      - Models with `attention_chunk_size` instead of `sliding_window`
+        (Llama 4, some chunked-attention variants): treated as sliding.
+      - Gemma 4 KV sharing: when the last `num_kv_shared_layers` decoder
+        layers reuse an earlier layer's KV, the HF cache object only
+        holds the non-shared prefix, so those trailing layers are stripped.
+    """
+    decoder_config = config.get_text_config(decoder=True)
+    sliding_window = getattr(decoder_config, "sliding_window", None) or getattr(
+        decoder_config, "attention_chunk_size", None
+    )
+    layer_types = getattr(decoder_config, "layer_types", None)
+    if layer_types is None:
+        n = decoder_config.num_hidden_layers
+        if sliding_window is not None:
+            layer_types = ["sliding_attention"] * n
+        else:
+            layer_types = ["full_attention"] * n
+    else:
+        layer_types = list(layer_types)
+
+    num_kv_shared_layers = getattr(decoder_config, "num_kv_shared_layers", 0) or 0
+    if num_kv_shared_layers > 0:
+        layer_types = layer_types[:-num_kv_shared_layers]
+
+    return layer_types, sliding_window
+
+
+class KakeyaKVCache(Cache):
+    """Drop-in `transformers.cache_utils.Cache` backed by the Kakeya codec.
+
+    Behavior per layer:
+      - ``full_attention`` / unknown -> `KakeyaCompressedLayer` (compressed)
+      - ``sliding_attention`` / ``chunked_attention`` -> `DynamicSlidingWindowLayer`
+        (unchanged; their cache is already O(sliding_window) regardless of
+        context length, so compressing them is not useful)
+
+    This class is intentionally model-agnostic: it accepts any HF config
+    that exposes either `layer_types` or `num_hidden_layers` (+ optional
+    `sliding_window`). The same class works for Llama, Mistral, Qwen,
+    Gemma 2/3/4, Cohere2, SmolLM2, etc. For model-specific construction
+    quirks (e.g. Gemma 4's `shared_layers` dict), see `build_kakeya_cache`.
     """
 
     def __init__(
@@ -497,37 +547,12 @@ class KakeyaKVCache(Cache):
         offloading: bool = False,
         offload_only_non_sliding: bool = True,
     ):
-        decoder_config = config.get_text_config(decoder=True)
-        sliding_window = getattr(decoder_config, "sliding_window", None) or getattr(
-            decoder_config, "attention_chunk_size", None
-        )
-        layer_types = getattr(decoder_config, "layer_types", None)
-        if layer_types is None:
-            layer_types = []
-            for _ in range(decoder_config.num_hidden_layers):
-                if sliding_window is not None:
-                    layer_types.append("sliding_attention")
-                else:
-                    layer_types.append("full_attention")
-
-        if hasattr(decoder_config, "num_kv_shared_layers"):
-            layer_types = layer_types[: -decoder_config.num_kv_shared_layers]
+        layer_types, sliding_window = _resolve_layer_plan(config)
 
         layers = []
         for layer_type in layer_types:
-            if layer_type in ("sliding_attention", "chunked_attention"):
+            if layer_type in ("sliding_attention", "chunked_attention") and sliding_window:
                 layers.append(DynamicSlidingWindowLayer(sliding_window=sliding_window))
-            elif layer_type in ("full_attention", "hybrid"):
-                layers.append(
-                    KakeyaCompressedLayer(
-                        variance_ratio=variance_ratio,
-                        K=K,
-                        d_res=d_res,
-                        residual_length=residual_length,
-                        block_size=block_size,
-                        min_rows_to_build=min_rows_to_build,
-                    )
-                )
             else:
                 layers.append(
                     KakeyaCompressedLayer(
@@ -546,11 +571,14 @@ class KakeyaKVCache(Cache):
             offload_only_non_sliding=offload_only_non_sliding,
         )
 
-        # Gemma 4 attention modules use this dictionary for shared KV layers.
-        self.shared_layers = {}
+        # Gemma 4 attention modules probe this attribute on the cache even
+        # though they actually feed shared KV through a per-forward dict
+        # built inside the model. Keeping it as an empty dict is the
+        # simplest way to stay compatible across models.
+        self.shared_layers: dict = {}
 
 
-def build_gemma4_kakeya_cache(
+def build_kakeya_cache(
     model,
     variance_ratio: float = 0.99,
     K: int = 16,
@@ -560,11 +588,15 @@ def build_gemma4_kakeya_cache(
     min_rows_to_build: int = 8,
     offloading: bool = False,
 ) -> KakeyaKVCache:
-    """
-    Convenience factory for Gemma 4 generation.
+    """Model-agnostic factory for a Kakeya-compressed KV cache.
+
+    Works for any HF transformers decoder-only model that uses the
+    standard `Cache` protocol. The layer plan (which layers are full
+    attention vs sliding) is inferred from `model.config`. Use this for
+    Llama / Mistral / Qwen / Gemma 2/3/4 / SmolLM2 / Cohere2 / etc.
 
     Example:
-        cache = build_gemma4_kakeya_cache(model)
+        cache = build_kakeya_cache(model)
         outputs = model.generate(
             **inputs,
             max_new_tokens=128,
@@ -572,7 +604,6 @@ def build_gemma4_kakeya_cache(
             past_key_values=cache,
         )
     """
-
     return KakeyaKVCache(
         config=model.config,
         variance_ratio=variance_ratio,
@@ -585,6 +616,9 @@ def build_gemma4_kakeya_cache(
     )
 
 
+build_gemma4_kakeya_cache = build_kakeya_cache
+
+
 __all__ = [
     "CompressedVec",
     "KakeyaSkeleton",
@@ -592,5 +626,6 @@ __all__ = [
     "KakeyaCodec",
     "KakeyaCompressedLayer",
     "KakeyaKVCache",
+    "build_kakeya_cache",
     "build_gemma4_kakeya_cache",
 ]
