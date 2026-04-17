@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Real, end-to-end compression benchmark for the Kakeya KV cache on
-Gemma 4 (google/gemma-4-E2B-it).
+Real, end-to-end compression benchmark for the Kakeya KV cache.
+
+This script is model-agnostic: pass `--model-path` to any HF
+transformers decoder-only checkpoint (Gemma 2/3/4, Llama, Mistral,
+Qwen, SmolLM2, Phi, Cohere2, ...). The layer plan (which layers are
+full attention vs sliding) is inferred from the model's config.
 
 What this script does
 ---------------------
@@ -58,7 +62,7 @@ from kakeya_kv_codec import (
     KakeyaCompressedBlock,
     KakeyaCompressedLayer,
     KakeyaKVCache,
-    build_gemma4_kakeya_cache,
+    build_kakeya_cache,
 )
 
 
@@ -237,15 +241,18 @@ def analytic_baseline_bytes_for_layer(
     model dtype, so bytes = 2 * bsz * n_kv * seq_len * head_dim * dtype_bytes.
     """
     text_cfg = config.get_text_config(decoder=True)
+    default_head_dim = getattr(text_cfg, "head_dim", None)
+    if default_head_dim is None:
+        default_head_dim = text_cfg.hidden_size // text_cfg.num_attention_heads
     if layer_type == "sliding_attention":
-        head_dim = text_cfg.head_dim
-        sw = getattr(text_cfg, "sliding_window", seq_len)
+        head_dim = default_head_dim
+        sw = getattr(text_cfg, "sliding_window", seq_len) or seq_len
         if seq_len >= sw:
             effective_seq = sw - 1
         else:
             effective_seq = seq_len
     else:
-        head_dim = getattr(text_cfg, "global_head_dim", None) or text_cfg.head_dim
+        head_dim = getattr(text_cfg, "global_head_dim", None) or default_head_dim
         effective_seq = seq_len
     n_kv = text_cfg.num_key_value_heads
     return 2 * bsz * n_kv * effective_seq * head_dim * dtype_bytes, head_dim
@@ -461,6 +468,7 @@ def humanize_bytes(n: int) -> str:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--model-path", default="/workspace/models/gemma-4-E2B-it")
+    p.add_argument("--model-name", default=None, help="Human-readable label for the report.")
     p.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
     p.add_argument("--context-tokens", type=int, default=2048)
     p.add_argument("--new-tokens", type=int, default=16)
@@ -483,10 +491,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.model_name is None:
+        args.model_name = args.model_path.rstrip("/").split("/")[-1]
     set_seed(0)
 
     dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}[args.dtype]
-    print(f"[load] dtype={args.dtype}", flush=True)
+    print(f"[load] model={args.model_name} dtype={args.dtype}", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
@@ -498,14 +508,22 @@ def main() -> None:
     text_cfg = model.config.get_text_config(decoder=True)
     num_hidden = text_cfg.num_hidden_layers
     num_shared = getattr(text_cfg, "num_kv_shared_layers", 0) or 0
-    non_shared_types = text_cfg.layer_types[: num_hidden - num_shared] if num_shared else text_cfg.layer_types
-    print(f"[model] num_hidden_layers={num_hidden}, num_kv_shared_layers={num_shared}, cached_layers={len(non_shared_types)}", flush=True)
-    print(f"[model] layer_types (cached): {non_shared_types}", flush=True)
+    layer_types = getattr(text_cfg, "layer_types", None)
+    if layer_types is None:
+        sw = getattr(text_cfg, "sliding_window", None) or getattr(text_cfg, "attention_chunk_size", None)
+        layer_types = ["sliding_attention" if sw else "full_attention"] * num_hidden
+    non_shared_types = list(layer_types)[: num_hidden - num_shared] if num_shared else list(layer_types)
+    print(
+        f"[model] num_hidden_layers={num_hidden}, num_kv_shared_layers={num_shared}, "
+        f"cached_layers={len(non_shared_types)} "
+        f"(full={non_shared_types.count('full_attention')}, sliding={non_shared_types.count('sliding_attention')})",
+        flush=True,
+    )
 
     input_ids = build_long_prompt(tokenizer, args.context_tokens)
     print(f"[prompt] tokens={input_ids.shape[-1]}", flush=True)
 
-    kakeya_cache = build_gemma4_kakeya_cache(
+    kakeya_cache = build_kakeya_cache(
         model,
         variance_ratio=args.variance_ratio,
         K=args.k_segments,
@@ -546,7 +564,7 @@ def main() -> None:
     if args.new_tokens > 0 and not args.skip_generation:
         print("[generate] building fresh caches for a short continuation ...", flush=True)
         fresh_baseline = DynamicCache(config=model.config)
-        fresh_kakeya = build_gemma4_kakeya_cache(
+        fresh_kakeya = build_kakeya_cache(
             model,
             variance_ratio=args.variance_ratio,
             K=args.k_segments,
@@ -608,9 +626,16 @@ def main() -> None:
         "args": vars(args),
         "model": {
             "path": args.model_path,
+            "name": args.model_name,
             "num_hidden_layers": num_hidden,
             "num_kv_shared_layers": num_shared,
+            "num_attention_heads": text_cfg.num_attention_heads,
+            "num_key_value_heads": text_cfg.num_key_value_heads,
+            "head_dim": getattr(text_cfg, "head_dim", text_cfg.hidden_size // text_cfg.num_attention_heads),
+            "global_head_dim": getattr(text_cfg, "global_head_dim", None),
+            "sliding_window": getattr(text_cfg, "sliding_window", None),
             "cached_layer_types": non_shared_types,
+            "dtype": args.dtype,
         },
         "context_tokens": int(input_ids.shape[-1]),
         "prefill_seconds": {"baseline": round(t_bl, 3), "kakeya": round(t_kv, 3)},
