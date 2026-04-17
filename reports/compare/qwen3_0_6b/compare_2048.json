@@ -1,0 +1,1253 @@
+{
+  "model_name": "qwen3_0_6b",
+  "model_path": "models/Qwen3-0.6B",
+  "context_tokens": 2048,
+  "dtype": "torch.bfloat16",
+  "codec_preset": {
+    "block_size": 512,
+    "residual_length": 256,
+    "d_res": 8,
+    "K": 16,
+    "variance_ratio": 0.95
+  },
+  "per_layer": [
+    {
+      "layer_idx": 0,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 4159400,
+        "compressed_bytes_bf16": 3128276,
+        "k_skeleton_bytes": 5016,
+        "k_encoded_bytes": 491520,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 189456,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": 273.14607620918264,
+          "v_mse_sample": 0.002634101398893686
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": 89.91869054269023,
+          "v_mse_sample": 0.0007403032602434521
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": 23.508858535122123,
+          "v_mse_sample": 0.00020209197757907428
+        }
+      }
+    },
+    {
+      "layer_idx": 1,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 4159400,
+        "compressed_bytes_bf16": 3128276,
+        "k_skeleton_bytes": 5016,
+        "k_encoded_bytes": 491520,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 189456,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 2,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 4154760,
+        "compressed_bytes_bf16": 3125956,
+        "k_skeleton_bytes": 5016,
+        "k_encoded_bytes": 491520,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 184816,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 3,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5052256,
+        "compressed_bytes_bf16": 3574704,
+        "k_skeleton_bytes": 18356,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 184236,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 4,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5053416,
+        "compressed_bytes_bf16": 3575284,
+        "k_skeleton_bytes": 20676,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 183076,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 5,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 4302796,
+        "compressed_bytes_bf16": 3199974,
+        "k_skeleton_bytes": 6756,
+        "k_encoded_bytes": 638976,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 183656,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 6,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5079516,
+        "compressed_bytes_bf16": 3588334,
+        "k_skeleton_bytes": 54896,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 174956,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 7,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5045296,
+        "compressed_bytes_bf16": 3571224,
+        "k_skeleton_bytes": 18356,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 177276,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 8,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5126496,
+        "compressed_bytes_bf16": 3611824,
+        "k_skeleton_bytes": 109416,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 167416,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 9,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5079516,
+        "compressed_bytes_bf16": 3588334,
+        "k_skeleton_bytes": 58376,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 171476,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 10,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 4945252,
+        "compressed_bytes_bf16": 3521202,
+        "k_skeleton_bytes": 16616,
+        "k_encoded_bytes": 1277952,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 177276,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 11,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5143896,
+        "compressed_bytes_bf16": 3620524,
+        "k_skeleton_bytes": 125656,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 168576,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 12,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5043556,
+        "compressed_bytes_bf16": 3570354,
+        "k_skeleton_bytes": 36336,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 157556,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 13,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5134616,
+        "compressed_bytes_bf16": 3615884,
+        "k_skeleton_bytes": 129716,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 155236,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 14,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5119536,
+        "compressed_bytes_bf16": 3608344,
+        "k_skeleton_bytes": 108256,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 161616,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 15,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5049936,
+        "compressed_bytes_bf16": 3573544,
+        "k_skeleton_bytes": 27636,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 172636,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 16,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5125916,
+        "compressed_bytes_bf16": 3611534,
+        "k_skeleton_bytes": 107676,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 168576,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 17,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5077776,
+        "compressed_bytes_bf16": 3587464,
+        "k_skeleton_bytes": 59536,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 168576,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 18,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5145056,
+        "compressed_bytes_bf16": 3621104,
+        "k_skeleton_bytes": 121016,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 174376,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 19,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5146796,
+        "compressed_bytes_bf16": 3621974,
+        "k_skeleton_bytes": 116956,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 180176,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 20,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5160136,
+        "compressed_bytes_bf16": 3628644,
+        "k_skeleton_bytes": 126816,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 183656,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 21,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5123596,
+        "compressed_bytes_bf16": 3610374,
+        "k_skeleton_bytes": 86796,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 187136,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 22,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5160716,
+        "compressed_bytes_bf16": 3628934,
+        "k_skeleton_bytes": 123336,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 187716,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 23,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5143316,
+        "compressed_bytes_bf16": 3620234,
+        "k_skeleton_bytes": 104776,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 188876,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 24,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5121276,
+        "compressed_bytes_bf16": 3609214,
+        "k_skeleton_bytes": 82736,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 188876,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 25,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5121276,
+        "compressed_bytes_bf16": 3609214,
+        "k_skeleton_bytes": 81576,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 190036,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 26,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5153176,
+        "compressed_bytes_bf16": 3625164,
+        "k_skeleton_bytes": 111736,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 191776,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    },
+    {
+      "layer_idx": 27,
+      "layer_type": "full_attention",
+      "is_sliding": false,
+      "seq_len": 2048,
+      "head_dim": 128,
+      "num_kv_heads": 8,
+      "baseline_bytes": 8388608,
+      "kakeya": {
+        "compressed_bytes_f32": 5108516,
+        "compressed_bytes_bf16": 3602834,
+        "k_skeleton_bytes": 72296,
+        "k_encoded_bytes": 1376256,
+        "k_tail_bytes": 1048576,
+        "v_skeleton_bytes": 186556,
+        "v_encoded_bytes": 1376256,
+        "v_tail_bytes": 1048576,
+        "k_blocks": 3
+      },
+      "turboquant": {
+        "turbo2": {
+          "compressed_bytes": 1114112,
+          "bits_per_value": 2.125,
+          "ratio_vs_baseline": 7.529411764705882,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo3": {
+          "compressed_bytes": 1638400,
+          "bits_per_value": 3.125,
+          "ratio_vs_baseline": 5.12,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        },
+        "turbo4": {
+          "compressed_bytes": 2162688,
+          "bits_per_value": 4.125,
+          "ratio_vs_baseline": 3.878787878787879,
+          "k_mse_sample": NaN,
+          "v_mse_sample": NaN
+        }
+      }
+    }
+  ],
+  "totals": {
+    "baseline_bytes": 234881024,
+    "kakeya_total_bytes_f32": 139237196,
+    "kakeya_total_bytes_bf16": 98978726,
+    "kakeya_full_only_baseline_bytes": 234881024,
+    "kakeya_full_only_bytes_f32": 139237196,
+    "kakeya_full_only_bytes_bf16": 98978726,
+    "turboquant_total_bytes": {
+      "turbo2": 31195136,
+      "turbo3": 45875200,
+      "turbo4": 60555264
+    },
+    "turboquant_full_only_bytes": {
+      "turbo2": 31195136,
+      "turbo3": 45875200,
+      "turbo4": 60555264
+    }
+  },
+  "ratios": {
+    "kakeya_total_ratio_f32": 1.6869129137015946,
+    "kakeya_total_ratio_bf16": 2.3730455370783416,
+    "kakeya_full_only_ratio_f32": 1.6869129137015946,
+    "kakeya_full_only_ratio_bf16": 2.3730455370783416,
+    "turboquant_total_ratios": {
+      "turbo2": 7.529411764705882,
+      "turbo3": 5.12,
+      "turbo4": 3.878787878787879
+    },
+    "turboquant_full_only_ratios": {
+      "turbo2": 7.529411764705882,
+      "turbo3": 5.12,
+      "turbo4": 3.878787878787879
+    }
+  }
+}
