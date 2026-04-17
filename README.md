@@ -41,6 +41,9 @@ depending on the model architecture. Concretely (see
 |---|---:|---:|---:|
 | Qwen/Qwen3-0.6B | 14.00 GiB | 3.10 GiB | **4.51×** |
 | google/gemma-4-E2B-it | 774 MiB | 180 MiB | **4.29×** |
+| THUDM/glm-edge-4b-chat | 15.00 GiB | 3.87 GiB | **3.88×** |
+| THUDM/glm-edge-1.5b-chat | 7.00 GiB | 1.89 GiB | **3.70×** |
+| deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B | 3.50 GiB | 1.03 GiB | **3.41×** |
 | HuggingFaceTB/SmolLM2-1.7B-Instruct | 24.00 GiB | 10.65 GiB | **2.25×** |
 | Qwen/Qwen2.5-0.5B-Instruct | 1.50 GiB | 714 MiB | **2.15×** |
 
@@ -59,11 +62,14 @@ gemma4_inference_test.py # Gemma-4-specific reference runner (legacy CLI)
 
 reports/
   STANDARD.md            # benchmark methodology + Gemma 4 reference numbers
-  CROSS_MODEL.md         # side-by-side comparison across 4 models
-  gemma4_e2b/            # Gemma 4 E2B: bench_*.json + REPORT.md
-  qwen2_5_0_5b/          # Qwen2.5-0.5B
-  smollm2_1_7b/          # SmolLM2-1.7B
-  qwen3_0_6b/            # Qwen3-0.6B
+  CROSS_MODEL.md         # side-by-side comparison across all 7 models
+  gemma4_e2b/            # Gemma 4 E2B (Google)
+  qwen2_5_0_5b/          # Qwen2.5-0.5B (Alibaba)
+  qwen3_0_6b/            # Qwen3-0.6B (Alibaba)
+  smollm2_1_7b/          # SmolLM2-1.7B (HuggingFace)
+  deepseek_r1_distill_qwen_1_5b/  # DeepSeek-R1-Distill-Qwen-1.5B (DeepSeek)
+  glm_edge_1_5b/         # GLM-Edge-1.5B-Chat (Zhipu AI)
+  glm_edge_4b/           # GLM-Edge-4B-Chat (Zhipu AI)
 ```
 
 ## How the codec works (one paragraph)

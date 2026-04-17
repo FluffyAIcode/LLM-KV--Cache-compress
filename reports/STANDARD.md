@@ -127,9 +127,12 @@ block is measured, all longer contexts are arithmetic.
 ## Per-model reports
 
 - `reports/gemma4_e2b/` — reference run (this document's numbers)
-- `reports/qwen2_5_0_5b/` — Qwen2.5-0.5B-Instruct
-- `reports/smollm2_1_7b/` — SmolLM2-1.7B-Instruct
-- `reports/qwen3_0_6b/` — Qwen3-0.6B
+- `reports/qwen2_5_0_5b/` — Qwen2.5-0.5B-Instruct (Alibaba)
+- `reports/smollm2_1_7b/` — SmolLM2-1.7B-Instruct (HuggingFace)
+- `reports/qwen3_0_6b/` — Qwen3-0.6B (Alibaba)
+- `reports/deepseek_r1_distill_qwen_1_5b/` — DeepSeek-R1-Distill-Qwen-1.5B (DeepSeek)
+- `reports/glm_edge_1_5b/` — GLM-Edge-1.5B-Chat (Zhipu AI)
+- `reports/glm_edge_4b/` — GLM-Edge-4B-Chat (Zhipu AI)
 
 Each folder contains `bench_<ctx>.json` for every measured context
 length, plus `extrapolation.json` with the projected rows.
