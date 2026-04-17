@@ -183,9 +183,26 @@ def build_long_prompt(tokenizer, target_tokens: int) -> torch.Tensor:
 
 
 @torch.inference_mode()
-def run_prefill(model, input_ids: torch.Tensor, cache) -> float:
+def run_prefill(model, input_ids: torch.Tensor, cache, chunk: int = 0) -> float:
+    """Prefill with optional chunking to keep the attention activation memory bounded.
+
+    With chunk=0 the whole prompt is fed in one forward pass (the default when the
+    machine has enough RAM). With chunk>0 the prompt is fed chunk tokens at a time,
+    updating the same cache incrementally. The resulting cache is byte-identical
+    whether chunked or not, because the full-attention / sliding attention layers
+    re-use the same `past_key_values` object across sub-calls."""
     start = time.perf_counter()
-    _ = model(input_ids=input_ids, past_key_values=cache, use_cache=True)
+    if chunk <= 0 or input_ids.shape[-1] <= chunk:
+        _ = model(input_ids=input_ids, past_key_values=cache, use_cache=True)
+    else:
+        n = input_ids.shape[-1]
+        for start_i in range(0, n, chunk):
+            end_i = min(start_i + chunk, n)
+            _ = model(
+                input_ids=input_ids[:, start_i:end_i],
+                past_key_values=cache,
+                use_cache=True,
+            )
     return time.perf_counter() - start
 
 
@@ -208,6 +225,129 @@ def run_generate(model, tokenizer, input_ids: torch.Tensor, cache, max_new_token
 
 def layer_is_sliding(layer) -> bool:
     return bool(getattr(layer, "is_sliding", False))
+
+
+def analytic_baseline_bytes_for_layer(
+    layer_type: str, seq_len: int, config, dtype_bytes: int, bsz: int = 1
+) -> Tuple[int, int]:
+    """Return (bytes, head_dim) for a deterministic DynamicCache of `seq_len`
+    tokens at this layer, matching how transformers would populate it.
+
+    The baseline stores K and V as [bsz, num_kv_heads, seq_len, head_dim] in the
+    model dtype, so bytes = 2 * bsz * n_kv * seq_len * head_dim * dtype_bytes.
+    """
+    text_cfg = config.get_text_config(decoder=True)
+    if layer_type == "sliding_attention":
+        head_dim = text_cfg.head_dim
+        sw = getattr(text_cfg, "sliding_window", seq_len)
+        if seq_len >= sw:
+            effective_seq = sw - 1
+        else:
+            effective_seq = seq_len
+    else:
+        head_dim = getattr(text_cfg, "global_head_dim", None) or text_cfg.head_dim
+        effective_seq = seq_len
+    n_kv = text_cfg.num_key_value_heads
+    return 2 * bsz * n_kv * effective_seq * head_dim * dtype_bytes, head_dim
+
+
+def summarize_cache_analytic_baseline(
+    kakeya_cache: KakeyaKVCache,
+    layer_types: List[str],
+    config,
+    seq_len: int,
+    dtype_bytes: int,
+    bsz: int = 1,
+) -> Dict[str, Any]:
+    """Same shape of output as `summarize_cache`, but the baseline side is
+    computed analytically instead of materialized as a real DynamicCache."""
+    per_layer: List[Dict[str, Any]] = []
+    bl_full = bl_slide = 0
+    kv_full = kv_slide = 0
+    kv_full_compressed = 0
+
+    for idx, (kv_layer, lt) in enumerate(zip(kakeya_cache.layers, layer_types)):
+        bl_bytes, head_dim = analytic_baseline_bytes_for_layer(
+            lt, seq_len, config, dtype_bytes, bsz=bsz
+        )
+        sliding = lt == "sliding_attention"
+
+        if isinstance(kv_layer, KakeyaCompressedLayer):
+            kv_stats = kakeya_layer_bytes(kv_layer)
+            kv_bytes_total = kv_stats["total_bytes"]
+            kv_compressed_only = kv_stats["skeleton_bytes"] + kv_stats["encoded_bytes"]
+            kv_blocks = kv_stats["compressed_blocks"]
+            kv_tail = kv_stats["exact_tail_bytes"]
+            kv_sk = kv_stats["skeleton_bytes"]
+            kv_enc = kv_stats["encoded_bytes"]
+            kv_seq = kv_layer.get_seq_length()
+        else:
+            kv_bytes_total, _, _ = baseline_layer_bytes(kv_layer)
+            kv_compressed_only = 0
+            kv_blocks = 0
+            kv_tail = kv_bytes_total
+            kv_sk = 0
+            kv_enc = 0
+            kv_seq = kv_layer.get_seq_length()
+
+        per_layer.append({
+            "layer_idx": idx,
+            "layer_type": lt,
+            "is_sliding": sliding,
+            "baseline_seq_len": (
+                seq_len if not sliding else (
+                    (getattr(config.get_text_config(decoder=True), "sliding_window", seq_len) - 1)
+                    if seq_len >= getattr(config.get_text_config(decoder=True), "sliding_window", seq_len)
+                    else seq_len
+                )
+            ),
+            "kakeya_seq_len": kv_seq,
+            "head_dim": head_dim,
+            "baseline_bytes": bl_bytes,
+            "kakeya_bytes_total": kv_bytes_total,
+            "kakeya_compressed_blocks": kv_blocks,
+            "kakeya_skeleton_bytes": kv_sk,
+            "kakeya_encoded_bytes": kv_enc,
+            "kakeya_exact_tail_bytes": kv_tail,
+            "layer_ratio_baseline_over_kakeya": (bl_bytes / kv_bytes_total) if kv_bytes_total > 0 else None,
+        })
+
+        if sliding:
+            bl_slide += bl_bytes
+            kv_slide += kv_bytes_total
+        else:
+            bl_full += bl_bytes
+            kv_full += kv_bytes_total
+            kv_full_compressed += kv_compressed_only
+
+    bl_total = bl_full + bl_slide
+    kv_total = kv_full + kv_slide
+    kv_full_dtype_matched = kv_full - kv_full_compressed + kv_full_compressed // 2
+    kv_total_dtype_matched = kv_full_dtype_matched + kv_slide
+
+    def ratio(a, b):
+        return (a / b) if b > 0 else None
+
+    return {
+        "per_layer": per_layer,
+        "totals": {
+            "baseline_full_bytes": bl_full,
+            "baseline_sliding_bytes": bl_slide,
+            "baseline_total_bytes": bl_total,
+            "kakeya_full_bytes": kv_full,
+            "kakeya_sliding_bytes": kv_slide,
+            "kakeya_total_bytes": kv_total,
+            "kakeya_full_bytes_dtype_matched": kv_full_dtype_matched,
+            "kakeya_total_bytes_dtype_matched": kv_total_dtype_matched,
+        },
+        "ratios": {
+            "full_attention_ratio_f32_compressed_store": ratio(bl_full, kv_full),
+            "full_attention_ratio_bf16_compressed_store": ratio(bl_full, kv_full_dtype_matched),
+            "total_ratio_f32_compressed_store": ratio(bl_total, kv_total),
+            "total_ratio_bf16_compressed_store": ratio(bl_total, kv_total_dtype_matched),
+        },
+        "baseline_mode": "analytic",
+    }
 
 
 def summarize_cache(
@@ -332,6 +472,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--attn", default="eager")
     p.add_argument("--report", default="/workspace/kakeya_bench_report.json")
     p.add_argument("--skip-baseline-generation", action="store_true")
+    p.add_argument("--skip-generation", action="store_true")
+    p.add_argument("--prefill-chunk", type=int, default=0,
+                   help="Chunk size for incremental prefill (0 = single forward).")
+    p.add_argument("--skip-baseline-prefill", action="store_true",
+                   help="Derive baseline KV bytes analytically instead of running the DynamicCache "
+                        "prefill. Much cheaper for long contexts (baseline is deterministic).")
     return p.parse_args()
 
 
@@ -359,7 +505,6 @@ def main() -> None:
     input_ids = build_long_prompt(tokenizer, args.context_tokens)
     print(f"[prompt] tokens={input_ids.shape[-1]}", flush=True)
 
-    baseline_cache = DynamicCache(config=model.config)
     kakeya_cache = build_gemma4_kakeya_cache(
         model,
         variance_ratio=args.variance_ratio,
@@ -369,22 +514,36 @@ def main() -> None:
         block_size=args.block_size,
     )
 
-    print("[prefill] baseline DynamicCache ...", flush=True)
-    t_bl = run_prefill(model, input_ids, baseline_cache)
-    print(f"[prefill] baseline done: {t_bl:.2f}s", flush=True)
+    if args.skip_baseline_prefill:
+        print("[prefill] baseline skipped (will be derived analytically)", flush=True)
+        baseline_cache = None
+        t_bl = 0.0
+    else:
+        baseline_cache = DynamicCache(config=model.config)
+        print("[prefill] baseline DynamicCache ...", flush=True)
+        t_bl = run_prefill(model, input_ids, baseline_cache, chunk=args.prefill_chunk)
+        print(f"[prefill] baseline done: {t_bl:.2f}s", flush=True)
+        gc.collect()
 
     print("[prefill] KakeyaKVCache ...", flush=True)
-    t_kv = run_prefill(model, input_ids, kakeya_cache)
+    t_kv = run_prefill(model, input_ids, kakeya_cache, chunk=args.prefill_chunk)
     print(f"[prefill] kakeya   done: {t_kv:.2f}s", flush=True)
 
     print("[measure] summarizing caches ...", flush=True)
-    summary = summarize_cache(baseline_cache, kakeya_cache, non_shared_types)
+    if baseline_cache is None:
+        summary = summarize_cache_analytic_baseline(
+            kakeya_cache, non_shared_types, model.config, input_ids.shape[-1],
+            dtype_bytes=torch.tensor([], dtype=dtype).element_size(),
+            bsz=int(input_ids.shape[0]),
+        )
+    else:
+        summary = summarize_cache(baseline_cache, kakeya_cache, non_shared_types)
 
     # -----------------------------------------------------------------
     # Generation sanity check
     # -----------------------------------------------------------------
     gen_report: Dict[str, Any] = {}
-    if args.new_tokens > 0:
+    if args.new_tokens > 0 and not args.skip_generation:
         print("[generate] building fresh caches for a short continuation ...", flush=True)
         fresh_baseline = DynamicCache(config=model.config)
         fresh_kakeya = build_gemma4_kakeya_cache(

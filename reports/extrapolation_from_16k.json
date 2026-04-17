@@ -1,0 +1,73 @@
+{
+  "source_report": "/workspace/reports/bench_16k.json",
+  "projections": [
+    {
+      "context_tokens": 16384,
+      "N_blocks_per_full_layer": 31,
+      "exact_tail_tokens_per_full_layer": 512,
+      "baseline_full_bytes": 100663296,
+      "baseline_sliding_bytes": 6279168,
+      "baseline_total_bytes": 106942464,
+      "kakeya_full_bytes": 46846752,
+      "kakeya_sliding_bytes": 6279168,
+      "kakeya_total_bytes": 53125920,
+      "kakeya_full_bytes_dtype_matched": 24996240,
+      "kakeya_total_bytes_dtype_matched": 31275408,
+      "full_ratio_f32_store": 2.1487785535270407,
+      "full_ratio_bf16_store": 4.0271375214832315,
+      "total_ratio_f32_store": 2.0129997560512836,
+      "total_ratio_bf16_store": 3.419378701630367
+    },
+    {
+      "context_tokens": 32768,
+      "N_blocks_per_full_layer": 63,
+      "exact_tail_tokens_per_full_layer": 512,
+      "baseline_full_bytes": 201326592,
+      "baseline_sliding_bytes": 6279168,
+      "baseline_total_bytes": 207605760,
+      "kakeya_full_bytes": 91957486,
+      "kakeya_sliding_bytes": 6279168,
+      "kakeya_total_bytes": 98236654,
+      "kakeya_full_bytes_dtype_matched": 47551607,
+      "kakeya_total_bytes_dtype_matched": 53830775,
+      "full_ratio_f32_store": 2.189344236748708,
+      "full_ratio_bf16_store": 4.233854641337358,
+      "total_ratio_f32_store": 2.113322792936331,
+      "total_ratio_bf16_store": 3.8566370259391585
+    },
+    {
+      "context_tokens": 65536,
+      "N_blocks_per_full_layer": 127,
+      "exact_tail_tokens_per_full_layer": 512,
+      "baseline_full_bytes": 402653184,
+      "baseline_sliding_bytes": 6279168,
+      "baseline_total_bytes": 408932352,
+      "kakeya_full_bytes": 182178955,
+      "kakeya_sliding_bytes": 6279168,
+      "kakeya_total_bytes": 188458123,
+      "kakeya_full_bytes_dtype_matched": 92662341,
+      "kakeya_total_bytes_dtype_matched": 98941509,
+      "full_ratio_f32_store": 2.210206903426359,
+      "full_ratio_bf16_store": 4.345381086368193,
+      "total_ratio_f32_store": 2.1698844575672656,
+      "total_ratio_bf16_store": 4.133071712096083
+    },
+    {
+      "context_tokens": 131072,
+      "N_blocks_per_full_layer": 255,
+      "exact_tail_tokens_per_full_layer": 512,
+      "baseline_full_bytes": 805306368,
+      "baseline_sliding_bytes": 6279168,
+      "baseline_total_bytes": 811585536,
+      "kakeya_full_bytes": 362621893,
+      "kakeya_sliding_bytes": 6279168,
+      "kakeya_total_bytes": 368901061,
+      "kakeya_full_bytes_dtype_matched": 182883810,
+      "kakeya_total_bytes_dtype_matched": 189162978,
+      "full_ratio_f32_store": 2.2207880537428,
+      "full_ratio_bf16_store": 4.403377029382754,
+      "total_ratio_f32_store": 2.2000086792919253,
+      "total_ratio_bf16_store": 4.290403675078535
+    }
+  ]
+}
