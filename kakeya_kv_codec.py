@@ -202,7 +202,12 @@ class KakeyaCodec:
             _, top_idx = residual.abs().topk(d_res, dim=-1)
             r_vals = residual.gather(-1, top_idx)
         else:
-            top_idx = torch.arange(skeleton.d_eff, device=vecs.device).expand(vecs.shape[0], -1)
+            top_idx = (
+                torch.arange(skeleton.d_eff, device=vecs.device)
+                .unsqueeze(0)
+                .expand(vecs.shape[0], -1)
+                .contiguous()
+            )
             r_vals = residual
 
         return CompressedVec(
@@ -510,8 +515,9 @@ class KakeyaKVCache(Cache):
                 else:
                     layer_types.append("full_attention")
 
-        if hasattr(decoder_config, "num_kv_shared_layers"):
-            layer_types = layer_types[: -decoder_config.num_kv_shared_layers]
+        num_kv_shared_layers = getattr(decoder_config, "num_kv_shared_layers", 0) or 0
+        if num_kv_shared_layers > 0:
+            layer_types = layer_types[:-num_kv_shared_layers]
 
         layers = []
         for layer_type in layer_types:
@@ -546,8 +552,10 @@ class KakeyaKVCache(Cache):
             offload_only_non_sliding=offload_only_non_sliding,
         )
 
-        # Gemma 4 attention modules use this dictionary for shared KV layers.
-        self.shared_layers = {}
+        # Kept for compatibility with helpers that inspect cache-level metadata.
+        # Gemma 4's shared-KV layers are fed through a per-forward `shared_kv_states`
+        # dict built inside the model, not through this attribute, so it stays empty.
+        self.shared_layers: dict = {}
 
 
 def build_gemma4_kakeya_cache(
