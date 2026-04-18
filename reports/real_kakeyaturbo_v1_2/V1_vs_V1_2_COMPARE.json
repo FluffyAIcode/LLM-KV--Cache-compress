@@ -1,0 +1,443 @@
+[
+  {
+    "short": "qwen3_0_6b",
+    "full_name": "Qwen/Qwen3-0.6B",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 2.8178869778869777,
+          "full_attn_ratio_bf16": 2.8178869778869777,
+          "baseline_bf16_bytes": 234881024,
+          "compressed_bytes": 83353600,
+          "mean_k_mse": 1.412290062317857,
+          "mean_v_mse": 3.7353244132785717
+        },
+        "v1_2": {
+          "total_ratio_bf16": 4.067182468857653,
+          "full_attn_ratio_bf16": 4.067182468857653,
+          "baseline_bf16_bytes": 234881024,
+          "compressed_bytes": 57750304,
+          "mean_k_mse": 1.4122117274142858,
+          "mean_v_mse": 4.300123700539286
+        },
+        "speedup": 1.4433447830854709
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 2.8692802281654197,
+          "full_attn_ratio_bf16": 2.8692802281654197,
+          "baseline_bf16_bytes": 469762048,
+          "compressed_bytes": 163721216,
+          "mean_k_mse": 1.3980717649392855,
+          "mean_v_mse": 3.618541250292857
+        },
+        "v1_2": {
+          "total_ratio_bf16": 4.103638217228553,
+          "full_attn_ratio_bf16": 4.103638217228553,
+          "baseline_bf16_bytes": 469762048,
+          "compressed_bytes": 114474528,
+          "mean_k_mse": 1.398493795167857,
+          "mean_v_mse": 4.181695011735714
+        },
+        "speedup": 1.4301977816409954
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.8960307782812054,
+          "full_attn_ratio_bf16": 2.8960307782812054,
+          "baseline_bf16_bytes": 939524096,
+          "compressed_bytes": 324417856,
+          "mean_k_mse": 1.3915091397142858,
+          "mean_v_mse": 3.5392604441892854
+        },
+        "v1_2": {
+          "total_ratio_bf16": 4.122936557186046,
+          "full_attn_ratio_bf16": 4.122936557186046,
+          "baseline_bf16_bytes": 939524096,
+          "compressed_bytes": 227877408,
+          "mean_k_mse": 1.3910669885857143,
+          "mean_v_mse": 4.090022681682143
+        },
+        "speedup": 1.4236508078940409
+      }
+    }
+  },
+  {
+    "short": "gemma4_e2b",
+    "full_name": "google/gemma-4-E2B-it",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 1.570608642824026,
+          "full_attn_ratio_bf16": 2.19587870665103,
+          "baseline_bf16_bytes": 18862080,
+          "compressed_bytes": 12009408,
+          "mean_k_mse": 0.0037902687,
+          "mean_v_mse": 0.2927241168333333
+        },
+        "v1_2": {
+          "total_ratio_bf16": 2.1088785849218614,
+          "full_attn_ratio_bf16": 4.721613832853026,
+          "baseline_bf16_bytes": 18862080,
+          "compressed_bytes": 8944128,
+          "mean_k_mse": 0.003786351466666667,
+          "mean_v_mse": 0.3077875244333333
+        },
+        "speedup": 1.342714236647776
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 1.8667548128982252,
+          "full_attn_ratio_bf16": 2.3818713769103566,
+          "baseline_bf16_bytes": 31444992,
+          "compressed_bytes": 16844736,
+          "mean_k_mse": 0.0037849663333333334,
+          "mean_v_mse": 0.2754885548
+        },
+        "v1_2": {
+          "total_ratio_bf16": 2.9092200975211164,
+          "full_attn_ratio_bf16": 5.5558993705359985,
+          "baseline_bf16_bytes": 31444992,
+          "compressed_bytes": 10808736,
+          "mean_k_mse": 0.0037818969,
+          "mean_v_mse": 0.2811556229
+        },
+        "speedup": 1.5584371752626767
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.139789394236282,
+          "full_attn_ratio_bf16": 2.494495142212791,
+          "baseline_bf16_bytes": 56610816,
+          "compressed_bytes": 26456256,
+          "mean_k_mse": 0.003769994766666667,
+          "mean_v_mse": 0.2650252828
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.875270258725496,
+          "full_attn_ratio_bf16": 6.042899459434539,
+          "baseline_bf16_bytes": 56610816,
+          "compressed_bytes": 14608224,
+          "mean_k_mse": 0.0037663627333333334,
+          "mean_v_mse": 0.2666558204
+        },
+        "speedup": 1.8110521853991288
+      }
+    }
+  },
+  {
+    "short": "glm_edge_4b",
+    "full_name": "THUDM/glm-edge-4b-chat",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 2.006767205083059,
+          "full_attn_ratio_bf16": 2.006767205083059,
+          "baseline_bf16_bytes": 251658240,
+          "compressed_bytes": 125404800,
+          "mean_k_mse": 0.6717366090675,
+          "mean_v_mse": 0.37450935339
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.078411754482383,
+          "full_attn_ratio_bf16": 3.078411754482383,
+          "baseline_bf16_bytes": 251658240,
+          "compressed_bytes": 81749376,
+          "mean_k_mse": 0.672027176605,
+          "mean_v_mse": 0.403628776715
+        },
+        "speedup": 1.5340153789063784
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 2.0368260993207574,
+          "full_attn_ratio_bf16": 2.0368260993207574,
+          "baseline_bf16_bytes": 503316480,
+          "compressed_bytes": 247108224,
+          "mean_k_mse": 0.6770068796925,
+          "mean_v_mse": 0.373112457135
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.099416518382331,
+          "full_attn_ratio_bf16": 3.099416518382331,
+          "baseline_bf16_bytes": 503316480,
+          "compressed_bytes": 162390720,
+          "mean_k_mse": 0.67685621598,
+          "mean_v_mse": 0.40693655609499996
+        },
+        "speedup": 1.5216893182073459
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.060270682459162,
+          "full_attn_ratio_bf16": 2.060270682459162,
+          "baseline_bf16_bytes": 1006632960,
+          "compressed_bytes": 488592576,
+          "mean_k_mse": 0.678061333855,
+          "mean_v_mse": 0.37369580291250004
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.1035978999473746,
+          "full_attn_ratio_bf16": 3.1035978999473746,
+          "baseline_bf16_bytes": 1006632960,
+          "compressed_bytes": 324343872,
+          "mean_k_mse": 0.678258505555,
+          "mean_v_mse": 0.4162324906
+        },
+        "speedup": 1.5064029820794642
+      }
+    }
+  },
+  {
+    "short": "glm_edge_1_5b",
+    "full_name": "THUDM/glm-edge-1.5b-chat",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 2.0978065156328776,
+          "full_attn_ratio_bf16": 2.0978065156328776,
+          "baseline_bf16_bytes": 117440512,
+          "compressed_bytes": 55982528,
+          "mean_k_mse": 0.7494368524607143,
+          "mean_v_mse": 0.309069315
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.083329342665615,
+          "full_attn_ratio_bf16": 3.083329342665615,
+          "baseline_bf16_bytes": 117440512,
+          "compressed_bytes": 38088864,
+          "mean_k_mse": 0.7496373724571429,
+          "mean_v_mse": 0.3494629330571429
+        },
+        "speedup": 1.469787284808494
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 2.126298079040007,
+          "full_attn_ratio_bf16": 2.126298079040007,
+          "baseline_bf16_bytes": 234881024,
+          "compressed_bytes": 110464768,
+          "mean_k_mse": 0.7534054667321428,
+          "mean_v_mse": 0.30667494762142855
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.116579963280564,
+          "full_attn_ratio_bf16": 3.116579963280564,
+          "baseline_bf16_bytes": 234881024,
+          "compressed_bytes": 75364992,
+          "mean_k_mse": 0.7535177815285714,
+          "mean_v_mse": 0.35090537866785715
+        },
+        "speedup": 1.465730507872939
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.136834854826868,
+          "full_attn_ratio_bf16": 2.136834854826868,
+          "baseline_bf16_bytes": 469762048,
+          "compressed_bytes": 219840128,
+          "mean_k_mse": 0.7513967854785715,
+          "mean_v_mse": 0.308792382075
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.1301443527580544,
+          "full_attn_ratio_bf16": 3.1301443527580544,
+          "baseline_bf16_bytes": 469762048,
+          "compressed_bytes": 150076800,
+          "mean_k_mse": 0.7514161761892858,
+          "mean_v_mse": 0.35475445884285717
+        },
+        "speedup": 1.4648508496982875
+      }
+    }
+  },
+  {
+    "short": "deepseek_r1_distill_qwen_1_5b",
+    "full_name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 2.0703767053737043,
+          "full_attn_ratio_bf16": 2.0703767053737043,
+          "baseline_bf16_bytes": 58720256,
+          "compressed_bytes": 28362112,
+          "mean_k_mse": 0.5488038568071428,
+          "mean_v_mse": 0.4318889669714286
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.13885838422196,
+          "full_attn_ratio_bf16": 3.13885838422196,
+          "baseline_bf16_bytes": 58720256,
+          "compressed_bytes": 18707520,
+          "mean_k_mse": 0.5495982623857143,
+          "mean_v_mse": 0.4777595203178571
+        },
+        "speedup": 1.5160808060074236
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 2.1153780976896943,
+          "full_attn_ratio_bf16": 2.1153780976896943,
+          "baseline_bf16_bytes": 117440512,
+          "compressed_bytes": 55517504,
+          "mean_k_mse": 0.5497359807535714,
+          "mean_v_mse": 0.41306149212857146
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.20515897344533,
+          "full_attn_ratio_bf16": 3.20515897344533,
+          "baseline_bf16_bytes": 117440512,
+          "compressed_bytes": 36641088,
+          "mean_k_mse": 0.5500148077178572,
+          "mean_v_mse": 0.4657961398214286
+        },
+        "speedup": 1.5151707285547853
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.137245504379005,
+          "full_attn_ratio_bf16": 2.137245504379005,
+          "baseline_bf16_bytes": 234881024,
+          "compressed_bytes": 109898944,
+          "mean_k_mse": 0.5458533467642857,
+          "mean_v_mse": 0.3992364350928571
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.236599697859885,
+          "full_attn_ratio_bf16": 3.236599697859885,
+          "baseline_bf16_bytes": 234881024,
+          "compressed_bytes": 72570304,
+          "mean_k_mse": 0.5458068396392857,
+          "mean_v_mse": 0.4547813212321428
+        },
+        "speedup": 1.5143789944713473
+      }
+    }
+  },
+  {
+    "short": "smollm2_1_7b",
+    "full_name": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 2.2029401219074938,
+          "full_attn_ratio_bf16": 2.2029401219074938,
+          "baseline_bf16_bytes": 402653184,
+          "compressed_bytes": 182779904,
+          "mean_k_mse": 0.6609955312958333,
+          "mean_v_mse": 0.2456688293625
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.079967611526302,
+          "full_attn_ratio_bf16": 3.079967611526302,
+          "baseline_bf16_bytes": 402653184,
+          "compressed_bytes": 130732928,
+          "mean_k_mse": 0.6607779751125,
+          "mean_v_mse": 0.2628108604541667
+        },
+        "speedup": 1.3981168080317148
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 2.2159966383819714,
+          "full_attn_ratio_bf16": 2.2159966383819714,
+          "baseline_bf16_bytes": 805306368,
+          "compressed_bytes": 363405952,
+          "mean_k_mse": 0.6555075363083334,
+          "mean_v_mse": 0.23987941851250003
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.0870531524938376,
+          "full_attn_ratio_bf16": 3.0870531524938376,
+          "baseline_bf16_bytes": 805306368,
+          "compressed_bytes": 260865728,
+          "mean_k_mse": 0.6559754847125,
+          "mean_v_mse": 0.25702895253749997
+        },
+        "speedup": 1.393076640561998
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.2240366255421162,
+          "full_attn_ratio_bf16": 2.2240366255421162,
+          "baseline_bf16_bytes": 1610612736,
+          "compressed_bytes": 724184448,
+          "mean_k_mse": 0.6509479390958334,
+          "mean_v_mse": 0.23471239305833333
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.09128278200199,
+          "full_attn_ratio_bf16": 3.09128278200199,
+          "baseline_bf16_bytes": 1610612736,
+          "compressed_bytes": 521017600,
+          "mean_k_mse": 0.6492452985291667,
+          "mean_v_mse": 0.2527545962541667
+        },
+        "speedup": 1.3899423896620766
+      }
+    }
+  },
+  {
+    "short": "qwen2_5_0_5b",
+    "full_name": "Qwen/Qwen2.5-0.5B-Instruct",
+    "per_ctx": {
+      "2048": {
+        "v1": {
+          "total_ratio_bf16": 2.3919703144960156,
+          "full_attn_ratio_bf16": 2.3919703144960156,
+          "baseline_bf16_bytes": 25165824,
+          "compressed_bytes": 10520960,
+          "mean_k_mse": 1.29970700845,
+          "mean_v_mse": 0.22444235149166666
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.2064583205920125,
+          "full_attn_ratio_bf16": 3.2064583205920125,
+          "baseline_bf16_bytes": 25165824,
+          "compressed_bytes": 7848480,
+          "mean_k_mse": 1.2989876557083333,
+          "mean_v_mse": 0.23190382311666666
+        },
+        "speedup": 1.3405092451022362
+      },
+      "4096": {
+        "v1": {
+          "total_ratio_bf16": 2.431732446104563,
+          "full_attn_ratio_bf16": 2.431732446104563,
+          "baseline_bf16_bytes": 50331648,
+          "compressed_bytes": 20697856,
+          "mean_k_mse": 1.2970413742541667,
+          "mean_v_mse": 0.21464931057916667
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.2749237416063712,
+          "full_attn_ratio_bf16": 3.2749237416063712,
+          "baseline_bf16_bytes": 50331648,
+          "compressed_bytes": 15368800,
+          "mean_k_mse": 1.2967426711333334,
+          "mean_v_mse": 0.22320237572916668
+        },
+        "speedup": 1.3467450939565873
+      },
+      "8192": {
+        "v1": {
+          "total_ratio_bf16": 2.467121547221307,
+          "full_attn_ratio_bf16": 2.467121547221307,
+          "baseline_bf16_bytes": 100663296,
+          "compressed_bytes": 40801920,
+          "mean_k_mse": 1.2918495831124999,
+          "mean_v_mse": 0.2052657180791667
+        },
+        "v1_2": {
+          "total_ratio_bf16": 3.3389957521244686,
+          "full_attn_ratio_bf16": 3.3389957521244686,
+          "baseline_bf16_bytes": 100663296,
+          "compressed_bytes": 30147776,
+          "mean_k_mse": 1.2917830045583334,
+          "mean_v_mse": 0.21415134758333332
+        },
+        "speedup": 1.353397345130865
+      }
+    }
+  }
+]

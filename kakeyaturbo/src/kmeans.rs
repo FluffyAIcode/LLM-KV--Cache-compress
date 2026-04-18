@@ -11,14 +11,19 @@
 //! This module provides the fit (centres + assignments) and the
 //! per-row (seg_id, t) decomposition.
 
+use half::f16;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
 /// Result of a spherical K-means fit.
+///
+/// **Storage contract**: `centers` are stored in **bf16** to halve the
+/// per-block K-means footprint (see A optimisation in v1.2). Centres
+/// are fit in f32 (iterative); the final result is converted once.
 #[derive(Debug, Clone)]
 pub struct KmeansFit {
-    /// Unit-norm centres, row-major `[K, d_eff]`.
-    pub centers: Vec<f32>,
+    /// Unit-norm centres row-major `[K, d_eff]`, stored as bf16.
+    pub centers: Vec<f16>,
     /// Number of centres.
     pub k: usize,
     /// Coefficient dimension.
@@ -26,10 +31,29 @@ pub struct KmeansFit {
 }
 
 impl KmeansFit {
-    /// Get a view of the `i`-th centre.
+    /// Get a freshly-allocated f32 copy of the `i`-th centre.
     #[must_use]
-    pub fn center(&self, i: usize) -> &[f32] {
-        &self.centers[i * self.d_eff..(i + 1) * self.d_eff]
+    pub fn center(&self, i: usize) -> Vec<f32> {
+        self.centers[i * self.d_eff..(i + 1) * self.d_eff]
+            .iter()
+            .map(|&v| v.to_f32())
+            .collect()
+    }
+
+    /// Byte footprint of this fit (what the codec stores).
+    #[must_use]
+    pub fn nbytes(&self) -> usize {
+        self.centers.len() * std::mem::size_of::<f16>()
+    }
+
+    /// Construct directly from f32 centres (e.g. for tests).
+    #[must_use]
+    pub fn from_f32(centers: Vec<f32>, k: usize, d_eff: usize) -> Self {
+        Self {
+            centers: centers.iter().map(|&v| f16::from_f32(v)).collect(),
+            k,
+            d_eff,
+        }
     }
 }
 
@@ -189,11 +213,7 @@ pub fn fit_spherical_kmeans(
         centers = new_centers;
     }
 
-    KmeansFit {
-        centers,
-        k,
-        d_eff,
-    }
+    KmeansFit::from_f32(centers, k, d_eff)
 }
 
 /// Assign a coefficient row to the centre that minimises the residual
@@ -219,7 +239,7 @@ pub fn assign_and_project(coeff: &[f32], fit: &KmeansFit) -> (u32, f32) {
     let mut best_t = 0.0_f32;
     for c in 0..fit.k {
         let center = fit.center(c);
-        let t = dot(coeff, center);
+        let t = dot(coeff, &center);
         let abs_t = t.abs();
         if abs_t > best_abs_proj {
             best_abs_proj = abs_t;
@@ -289,7 +309,7 @@ mod tests {
             let mut found = false;
             for c in 0..3 {
                 let center = fit.center(c);
-                let cos = dot(row, center);
+                let cos = dot(row, &center);
                 if cos > 0.95 {
                     found = true;
                     break;
@@ -312,7 +332,8 @@ mod tests {
         for c in 0..fit.k {
             let center = fit.center(c);
             let norm: f32 = center.iter().map(|v| v * v).sum::<f32>().sqrt();
-            assert_abs_diff_eq!(norm, 1.0, epsilon = 1e-4);
+            // bf16 storage gives ~1e-3 relative error on unit norm.
+            assert_abs_diff_eq!(norm, 1.0, epsilon = 1e-2);
         }
     }
 
@@ -431,11 +452,7 @@ mod tests {
 
     #[test]
     fn assign_zero_coeff_returns_zero() {
-        let fit = KmeansFit {
-            centers: vec![1.0, 0.0, 0.0, 1.0],
-            k: 2,
-            d_eff: 2,
-        };
+        let fit = KmeansFit::from_f32(vec![1.0, 0.0, 0.0, 1.0], 2, 2);
         let (seg, t) = assign_and_project(&[0.0_f32, 0.0], &fit);
         assert_eq!(seg, 0);
         assert_abs_diff_eq!(t, 0.0);
@@ -443,11 +460,7 @@ mod tests {
 
     #[test]
     fn assign_finds_best_cosine() {
-        let fit = KmeansFit {
-            centers: vec![1.0, 0.0, 0.0, 1.0],
-            k: 2,
-            d_eff: 2,
-        };
+        let fit = KmeansFit::from_f32(vec![1.0, 0.0, 0.0, 1.0], 2, 2);
         let (seg, t) = assign_and_project(&[3.0_f32, 0.0], &fit);
         assert_eq!(seg, 0);
         assert_abs_diff_eq!(t, 3.0);
@@ -460,11 +473,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "coeff dim mismatch")]
     fn assign_rejects_wrong_dim() {
-        let fit = KmeansFit {
-            centers: vec![1.0, 0.0],
-            k: 1,
-            d_eff: 2,
-        };
+        let fit = KmeansFit::from_f32(vec![1.0, 0.0], 1, 2);
         let _ = assign_and_project(&[1.0_f32], &fit);
     }
 
@@ -490,13 +499,9 @@ mod tests {
 
     #[test]
     fn center_view_returns_correct_slice() {
-        let fit = KmeansFit {
-            centers: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            k: 3,
-            d_eff: 2,
-        };
-        assert_eq!(fit.center(0), &[1.0_f32, 2.0]);
-        assert_eq!(fit.center(1), &[3.0_f32, 4.0]);
-        assert_eq!(fit.center(2), &[5.0_f32, 6.0]);
+        let fit = KmeansFit::from_f32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+        assert_eq!(fit.center(0), vec![1.0_f32, 2.0]);
+        assert_eq!(fit.center(1), vec![3.0_f32, 4.0]);
+        assert_eq!(fit.center(2), vec![5.0_f32, 6.0]);
     }
 }
