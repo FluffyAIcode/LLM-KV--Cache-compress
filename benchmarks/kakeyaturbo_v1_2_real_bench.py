@@ -111,7 +111,11 @@ def capture(model_path: str, ctx: int, chunk: int, dtype=torch.bfloat16, attn="e
 
 
 def bench_one(tensor_path: Path, out_json: Path, metric: str, share_basis: bool,
-              block_size: int, variance_ratio: float, k: int, bit_width: int, seed: int):
+              block_size: int, variance_ratio: float, k: int, bit_width: int, seed: int,
+              pca_method: str = "exact",
+              rsvd_target_rank: int | None = None,
+              rsvd_oversample: int = 8,
+              rsvd_power_iters: int = 2):
     cmd = [
         str(BENCH_BIN),
         "--input", str(tensor_path), "--output", str(out_json),
@@ -120,10 +124,16 @@ def bench_one(tensor_path: Path, out_json: Path, metric: str, share_basis: bool,
         "--variance-ratio", str(variance_ratio),
         "--k", str(k), "--bit-width", str(bit_width),
         "--rotation-seed", str(seed),
+        "--pca-method", pca_method,
         "--verify",
     ]
     if share_basis:
         cmd.append("--share-basis")
+    if pca_method == "randomized":
+        if rsvd_target_rank is not None:
+            cmd += ["--rsvd-target-rank", str(rsvd_target_rank)]
+        cmd += ["--rsvd-oversample", str(rsvd_oversample),
+                "--rsvd-power-iters", str(rsvd_power_iters)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"bench failed ({r.returncode}): {r.stderr}")
@@ -131,7 +141,11 @@ def bench_one(tensor_path: Path, out_json: Path, metric: str, share_basis: bool,
 
 
 def run_model(model_path, model_name, ctx, prefill_chunk, block_size, variance_ratio,
-              k, bit_width, rotation_seed, out_dir: Path):
+              k, bit_width, rotation_seed, out_dir: Path,
+              pca_method: str = "exact",
+              rsvd_target_rank: int | None = None,
+              rsvd_oversample: int = 8,
+              rsvd_power_iters: int = 2):
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"[{model_name}] ctx={ctx} prefill + capture …", flush=True)
     ks, vs, layer_types, meta = capture(model_path, ctx, prefill_chunk)
@@ -170,11 +184,19 @@ def run_model(model_path, model_name, ctx, prefill_chunk, block_size, variance_r
         k_rep = bench_one(kp, layer_dir / "k.json",
                           metric="inner_product", share_basis=False,
                           block_size=block_size, variance_ratio=variance_ratio,
-                          k=k, bit_width=bit_width, seed=rotation_seed)
+                          k=k, bit_width=bit_width, seed=rotation_seed,
+                          pca_method=pca_method,
+                          rsvd_target_rank=rsvd_target_rank,
+                          rsvd_oversample=rsvd_oversample,
+                          rsvd_power_iters=rsvd_power_iters)
         v_rep = bench_one(vp, layer_dir / "v.json",
                           metric="mse", share_basis=True,
                           block_size=block_size, variance_ratio=variance_ratio,
-                          k=k, bit_width=bit_width, seed=rotation_seed + 1)
+                          k=k, bit_width=bit_width, seed=rotation_seed + 1,
+                          pca_method=pca_method,
+                          rsvd_target_rank=rsvd_target_rank,
+                          rsvd_oversample=rsvd_oversample,
+                          rsvd_power_iters=rsvd_power_iters)
 
         seq = int(k_arr.shape[0])
         n_full_blocks = seq // block_size
@@ -227,6 +249,11 @@ def main():
     ap.add_argument("--rotation-seed", type=int, default=0xCAFEBABE)
     ap.add_argument("--prefill-chunk", type=int, default=0)
     ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--pca-method", choices=["exact", "randomized"], default="exact")
+    ap.add_argument("--rsvd-target-rank", type=int, default=None,
+                    help="target_rank for randomized SVD (default: head_dim/2)")
+    ap.add_argument("--rsvd-oversample", type=int, default=8)
+    ap.add_argument("--rsvd-power-iters", type=int, default=2)
     args = ap.parse_args()
 
     if not BENCH_BIN.exists():
@@ -235,7 +262,11 @@ def main():
 
     s = run_model(args.model_path, args.model_name, args.context_tokens,
                   args.prefill_chunk, args.block_size, args.variance_ratio,
-                  args.k, args.bit_width, args.rotation_seed, args.out_dir)
+                  args.k, args.bit_width, args.rotation_seed, args.out_dir,
+                  pca_method=args.pca_method,
+                  rsvd_target_rank=args.rsvd_target_rank,
+                  rsvd_oversample=args.rsvd_oversample,
+                  rsvd_power_iters=args.rsvd_power_iters)
     t = s["totals"]
     print(f"\n===== {args.model_name} @ {args.context_tokens} tokens =====")
     print(f"baseline (bf16) total     : {t['baseline_bf16_bytes']/1024/1024:.2f} MiB")
