@@ -49,7 +49,6 @@ pub mod quantize;
 pub mod skeleton;
 pub mod wht;
 
+pub use codec::{decode_block, encode_block, Code, CodecParams};
 pub use distortion::{Distortion, InnerProduct, LInf, NormMode, MSE};
-// Re-exports added as modules become non-empty:
-// pub use codec::{decode_block, encode_block, Code};
-// pub use skeleton::Skeleton;
+pub use skeleton::Skeleton;
