@@ -1,0 +1,47 @@
+{
+  "model": "gemma4_e2b",
+  "ctx": 4096,
+  "rope_pairing": "halfsplit",
+  "n_full_attn_layers_measured": 3,
+  "mean_post_rope_mse": 0.0015848108333333334,
+  "mean_pre_rope_mse": 0.0015086651666666665,
+  "mse_ratio_pre_over_post": 0.951952835590788,
+  "total_post_rope_bytes": 3226112,
+  "total_pre_rope_bytes": 4569600,
+  "bytes_ratio_pre_over_post": 1.4164418346294239,
+  "per_layer": [
+    {
+      "layer_idx": 4,
+      "post_rope_bytes": 1123232,
+      "pre_rope_bytes": 1736896,
+      "post_rope_mse": 0.0014617056,
+      "pre_rope_mse": 0.0013462516,
+      "post_rope_ratio_bf16": 3.734139,
+      "pre_rope_ratio_bf16": 2.414827,
+      "post_rope_skel_bytes": 951200,
+      "pre_rope_skel_bytes": 1433792
+    },
+    {
+      "layer_idx": 9,
+      "post_rope_bytes": 1067808,
+      "pre_rope_bytes": 1294336,
+      "post_rope_mse": 0.0016383521,
+      "pre_rope_mse": 0.0016296305,
+      "post_rope_ratio_bf16": 3.927957,
+      "pre_rope_ratio_bf16": 3.240506,
+      "post_rope_skel_bytes": 879392,
+      "pre_rope_skel_bytes": 1089536
+    },
+    {
+      "layer_idx": 14,
+      "post_rope_bytes": 1035072,
+      "pre_rope_bytes": 1538368,
+      "post_rope_mse": 0.0016543748,
+      "pre_rope_mse": 0.0015501134,
+      "post_rope_ratio_bf16": 4.052186,
+      "pre_rope_ratio_bf16": 2.726463,
+      "post_rope_skel_bytes": 846656,
+      "pre_rope_skel_bytes": 1235264
+    }
+  ]
+}

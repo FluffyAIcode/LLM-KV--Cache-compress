@@ -237,8 +237,6 @@ def main():
           f"@ ctx={meta['ctx']} in {meta['prefill_s']}s")
     print(f"  head_dim={meta['head_dim']}  rope_theta={meta['rope_theta']}")
 
-    inv_freq = rope_freqs(meta["head_dim"], base=meta["rope_theta"])
-
     rope_fn = inverse_rope_halfsplit if args.rope_pairing == "halfsplit" else inverse_rope_adjacent
 
     rows = []
@@ -248,12 +246,15 @@ def main():
         k_reshaped = ks[li]  # [seq, n_kv_heads, head_dim]
         seq = k_reshaped.shape[0]
         positions = np.arange(seq, dtype=np.float64)
+        # Per-layer head_dim: e.g. Gemma-4 uses head_dim=256 for sliding
+        # layers and 512 for global full-attn layers.
+        hd = k_reshaped.shape[-1]
+        inv_freq = rope_freqs(hd, base=meta["rope_theta"])
 
         # Pre-RoPE K: invert positional rotation
         k_pre = rope_fn(k_reshaped, positions, inv_freq)
 
         # Flatten both to [seq * n_kv_heads, head_dim] for the codec
-        hd = meta["head_dim"]
         k_post_flat = k_reshaped.reshape(-1, hd).astype(np.float32, copy=False)
         k_pre_flat = k_pre.reshape(-1, hd).astype(np.float32, copy=False)
 

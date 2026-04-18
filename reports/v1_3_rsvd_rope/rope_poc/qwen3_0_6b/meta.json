@@ -1,0 +1,9 @@
+{
+  "ctx": 4096,
+  "prefill_s": 26.75,
+  "num_full_layers": 28,
+  "head_dim": 128,
+  "num_key_value_heads": 8,
+  "rope_theta": 1000000.0,
+  "rope_pairing": "halfsplit"
+}
