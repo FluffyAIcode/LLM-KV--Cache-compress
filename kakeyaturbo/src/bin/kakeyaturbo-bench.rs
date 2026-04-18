@@ -25,7 +25,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use kakeyaturbo::{
-    decode_block, encode_block, CodecParams, Distortion, InnerProduct, LInf, MSE,
+    decode_block, decode_layer, encode_block, encode_layer, CodecParams, Code, Distortion,
+    InnerProduct, LInf, LayerEncoding, MSE,
 };
 
 const MAGIC: u32 = 0x4B4B_5456;
@@ -42,6 +43,7 @@ struct Args {
     bit_width: u8,
     rotation_seed: u32,
     verify: bool,
+    share_basis: bool,
 }
 
 fn print_help() {
@@ -67,6 +69,7 @@ fn parse_args() -> Result<Args, String> {
     let mut bit_width: u8 = 3;
     let mut rotation_seed: u32 = 0xCAFE_BABE;
     let mut verify = false;
+    let mut share_basis = false;
 
     let mut i = 1;
     while i < argv.len() {
@@ -112,6 +115,7 @@ fn parse_args() -> Result<Args, String> {
                     .map_err(|e| format!("bad --rotation-seed: {e}"))?;
             }
             "--verify" => verify = true,
+            "--share-basis" => share_basis = true,
             other => return Err(format!("unknown flag {other}; try --help")),
         }
         i += 1;
@@ -129,6 +133,7 @@ fn parse_args() -> Result<Args, String> {
         bit_width,
         rotation_seed,
         verify,
+        share_basis,
     })
 }
 
@@ -185,47 +190,84 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
     };
 
     let bs = args.block_size;
-    let mut total_skeleton = 0usize;
-    let mut total_codes = 0usize;
-    let mut total_blocks = 0usize;
-    let mut total_vecs_encoded = 0usize;
+    let n_full = num_vecs / bs;
+    let weights = vec![1.0_f32; bs];
+
     let mut total_mse_sum = 0.0_f64;
     let mut total_mse_count = 0usize;
     let mut encode_ns: u128 = 0;
     let mut decode_ns: u128 = 0;
 
-    // Split into full blocks; drop the tail < block_size (bench simplification
-    // that does not change the per-block ratio we report).
-    let n_full = num_vecs / bs;
-    let weights = vec![1.0_f32; bs];
-
-    for b in 0..n_full {
-        let off = b * bs * dim;
-        let block = &data[off..off + bs * dim];
+    let (total_skeleton, total_codes, total_blocks, total_vecs_encoded, shared_pca_bytes) = if args.share_basis {
+        // v1.2 B' path: fit one basis over all blocks, K-means per-block.
+        let mut block_vecs: Vec<Vec<f32>> = Vec::with_capacity(n_full);
+        let mut ws: Vec<Vec<f32>> = Vec::with_capacity(n_full);
+        for b in 0..n_full {
+            let off = b * bs * dim;
+            block_vecs.push(data[off..off + bs * dim].to_vec());
+            ws.push(weights.clone());
+        }
         let t0 = Instant::now();
-        let (sk, codes) = encode_block::<R>(block, &weights, dim, &params);
+        let enc: LayerEncoding = encode_layer::<R>(&block_vecs, &ws, dim, &params, true);
         encode_ns += t0.elapsed().as_nanos();
-        total_skeleton += sk.nbytes();
-        total_codes += codes.iter().map(|c| c.nbytes()).sum::<usize>();
-        total_blocks += 1;
-        total_vecs_encoded += bs;
 
         if args.verify {
             let t1 = Instant::now();
-            let rec = decode_block::<R>(&sk, &codes);
+            let recs = decode_layer::<R>(&enc);
             decode_ns += t1.elapsed().as_nanos();
-            let mut sq = 0.0_f64;
-            for i in 0..bs * dim {
-                let e = block[i] - rec[i];
-                sq += (e * e) as f64;
+            for (i, rec) in recs.iter().enumerate() {
+                let orig = &block_vecs[i];
+                let mut sq = 0.0_f64;
+                for j in 0..bs * dim {
+                    let e = orig[j] - rec[j];
+                    sq += (e * e) as f64;
+                }
+                total_mse_sum += sq / (bs * dim) as f64;
+                total_mse_count += 1;
             }
-            total_mse_sum += sq / (bs * dim) as f64;
-            total_mse_count += 1;
         }
-    }
+
+        let shared_pca_bytes = enc.shared_pca.as_ref().map(|p| p.nbytes()).unwrap_or(0);
+        // Skeleton accounting: one shared PCA once, K-means per block.
+        let per_block_skel: usize = enc.per_block.iter().map(|(sk, _)| sk.kmeans.nbytes()).sum();
+        let codes_total: usize = enc.per_block.iter().flat_map(|(_, cs)| cs.iter()).map(|c| c.nbytes()).sum();
+        let skeleton_total = shared_pca_bytes + per_block_skel;
+        (skeleton_total, codes_total, enc.per_block.len(), enc.per_block.len() * bs, shared_pca_bytes)
+    } else {
+        // v1.0/1.1 path: per-block fit.
+        let mut total_skeleton = 0usize;
+        let mut total_codes = 0usize;
+        let mut total_blocks = 0usize;
+        let mut total_vecs_encoded = 0usize;
+
+        for b in 0..n_full {
+            let off = b * bs * dim;
+            let block = &data[off..off + bs * dim];
+            let t0 = Instant::now();
+            let (sk, codes) = encode_block::<R>(block, &weights, dim, &params);
+            encode_ns += t0.elapsed().as_nanos();
+            total_skeleton += sk.nbytes();
+            total_codes += codes.iter().map(|c: &Code| c.nbytes()).sum::<usize>();
+            total_blocks += 1;
+            total_vecs_encoded += bs;
+
+            if args.verify {
+                let t1 = Instant::now();
+                let rec = decode_block::<R>(&sk, &codes);
+                decode_ns += t1.elapsed().as_nanos();
+                let mut sq = 0.0_f64;
+                for i in 0..bs * dim {
+                    let e = block[i] - rec[i];
+                    sq += (e * e) as f64;
+                }
+                total_mse_sum += sq / (bs * dim) as f64;
+                total_mse_count += 1;
+            }
+        }
+        (total_skeleton, total_codes, total_blocks, total_vecs_encoded, 0)
+    };
 
     let baseline_bytes = total_vecs_encoded * dim * std::mem::size_of::<f32>();
-    // bf16 baseline: half the f32 size (KV caches on real models live in bf16).
     let baseline_bytes_bf16 = total_vecs_encoded * dim * 2;
     let compressed_bytes = total_skeleton + total_codes;
 
@@ -253,6 +295,8 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         } else {
             -1.0
         },
+        share_basis: args.share_basis,
+        shared_pca_bytes,
     }
 }
 
@@ -276,6 +320,8 @@ struct Report {
     decode_seconds: f64,
     verify: bool,
     mean_block_mse: f64,
+    share_basis: bool,
+    shared_pca_bytes: usize,
 }
 
 impl Report {
@@ -300,7 +346,9 @@ impl Report {
                 \"encode_seconds\":{es:.6},\
                 \"decode_seconds\":{ds:.6},\
                 \"verify\":{verify},\
-                \"mean_block_mse\":{mse:.10}\
+                \"mean_block_mse\":{mse:.10},\
+                \"share_basis\":{sb},\
+                \"shared_pca_bytes\":{spb}\
             }}",
             metric = self.metric,
             bs = self.block_size,
@@ -321,6 +369,8 @@ impl Report {
             ds = self.decode_seconds,
             verify = self.verify,
             mse = self.mean_block_mse,
+            sb = self.share_basis,
+            spb = self.shared_pca_bytes,
         )
     }
 }

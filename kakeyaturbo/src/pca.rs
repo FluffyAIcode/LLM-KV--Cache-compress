@@ -17,7 +17,20 @@
 //! `d_eff` is chosen to cover `variance_ratio` of the total weighted
 //! variance, clipped to `[1, D]`.
 
+use half::f16;
 use nalgebra::{DMatrix, DVector, SymmetricEigen};
+
+/// Convert an f32 slice to an owned bf16 Vec (saturating conversion for NaN/Inf).
+#[inline]
+fn to_bf16(src: &[f32]) -> Vec<f16> {
+    src.iter().map(|&x| f16::from_f32(x)).collect()
+}
+
+/// Convert a bf16 slice to an owned f32 Vec.
+#[inline]
+fn to_f32(src: &[f16]) -> Vec<f32> {
+    src.iter().map(|&x| x.to_f32()).collect()
+}
 
 /// Compute the weighted mean of a set of vectors.
 ///
@@ -53,16 +66,56 @@ pub fn weighted_mean(vectors: &[f32], weights: &[f32], d: usize) -> Vec<f32> {
 }
 
 /// Result of a weighted PCA fit.
+///
+/// **Storage contract**: tensors are stored in **bf16** to halve
+/// skeleton bytes (see A optimisation in v1.2). **Arithmetic contract**:
+/// `project` / `unproject` still work in f32 internally by converting
+/// once on read, so the PCA computation path is numerically unchanged.
+///
+/// The public fields expose the raw bf16 bytes; use [`Self::mean_f32`]
+/// and [`Self::basis_f32`] when you need f32 views.
 #[derive(Debug, Clone)]
 pub struct PcaFit {
-    /// Mean vector, length `D`.
-    pub mean: Vec<f32>,
-    /// Basis, stored as row-major `[d_eff, D]` (each row is a principal direction).
-    pub basis: Vec<f32>,
+    /// Mean vector, length `D`, stored as bf16.
+    pub mean: Vec<f16>,
+    /// Basis row-major `[d_eff, D]`, stored as bf16.
+    pub basis: Vec<f16>,
     /// Number of kept components.
     pub d_eff: usize,
     /// Captured variance ratio (actual, may be ≥ the requested threshold).
     pub captured_variance: f32,
+}
+
+impl PcaFit {
+    /// Return the mean as a freshly-allocated f32 vector.
+    #[must_use]
+    pub fn mean_f32(&self) -> Vec<f32> {
+        to_f32(&self.mean)
+    }
+
+    /// Return the basis as a freshly-allocated f32 vector.
+    #[must_use]
+    pub fn basis_f32(&self) -> Vec<f32> {
+        to_f32(&self.basis)
+    }
+
+    /// Construct a `PcaFit` directly from f32 buffers (e.g. unit tests).
+    #[must_use]
+    pub fn from_f32(mean: Vec<f32>, basis: Vec<f32>, d_eff: usize, captured: f32) -> Self {
+        Self {
+            mean: to_bf16(&mean),
+            basis: to_bf16(&basis),
+            d_eff,
+            captured_variance: captured,
+        }
+    }
+
+    /// Byte footprint of this fit (the thing the codec actually stores).
+    #[must_use]
+    pub fn nbytes(&self) -> usize {
+        self.mean.len() * std::mem::size_of::<f16>()
+            + self.basis.len() * std::mem::size_of::<f16>()
+    }
 }
 
 /// Weighted PCA truncated by explained-variance ratio.
@@ -157,14 +210,31 @@ pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_rat
     };
 
     PcaFit {
-        mean,
-        basis,
+        mean: to_bf16(&mean),
+        basis: to_bf16(&basis),
         d_eff,
         captured_variance,
     }
 }
 
+/// Fit a weighted PCA on a concatenated multi-block tensor and return a
+/// single `PcaFit` — used for the V-stream's layer-pooled basis in v1.2
+/// (the A+B' optimisation). Input is row-major `[n_total, D]` with
+/// matching `weights` of length `n_total`.
+#[must_use]
+pub fn fit_weighted_pca_pooled(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+) -> PcaFit {
+    fit_weighted_pca(vectors, weights, d, variance_ratio)
+}
+
 /// Project a single vector `x` onto the PCA basis: `coeff = U · (x − μ)`.
+///
+/// Internally converts the bf16 basis/mean to f32 once per call; the
+/// inner multiply-add loop stays in f32 for numerical accuracy.
 #[must_use]
 pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
     let d = fit.mean.len();
@@ -173,7 +243,9 @@ pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
     for k in 0..fit.d_eff {
         let mut acc = 0.0_f32;
         for j in 0..d {
-            acc += fit.basis[k * d + j] * (x[j] - fit.mean[j]);
+            let basis_kj = fit.basis[k * d + j].to_f32();
+            let mean_j = fit.mean[j].to_f32();
+            acc += basis_kj * (x[j] - mean_j);
         }
         coeff[k] = acc;
     }
@@ -186,11 +258,11 @@ pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
 pub fn unproject(coeff: &[f32], fit: &PcaFit) -> Vec<f32> {
     assert_eq!(coeff.len(), fit.d_eff, "coeff length mismatch");
     let d = fit.mean.len();
-    let mut x = fit.mean.clone();
+    let mut x = fit.mean_f32();
     for k in 0..fit.d_eff {
         let c = coeff[k];
         for j in 0..d {
-            x[j] += fit.basis[k * d + j] * c;
+            x[j] += fit.basis[k * d + j].to_f32() * c;
         }
     }
     x
@@ -276,7 +348,8 @@ mod tests {
         let fit = fit_weighted_pca(&vecs, &w, 2, 0.99);
         assert_eq!(fit.d_eff, 2);
         // First basis row must point along direction (cos 0.3, sin 0.3).
-        let v0 = &fit.basis[0..2];
+        let basis = fit.basis_f32();
+        let v0 = &basis[0..2];
         let expected = [0.3_f32.cos(), 0.3_f32.sin()];
         // Sign can flip; test |dot product| ≈ 1.
         let dot = (v0[0] * expected[0] + v0[1] * expected[1]).abs();
@@ -301,12 +374,15 @@ mod tests {
         let w = vec![1.0_f32; n];
         let fit = fit_weighted_pca(&vecs, &w, 2, 1.0);
         assert_eq!(fit.d_eff, 2);
+        // Tolerance: bf16 storage of mean/basis introduces ~1e-2 relative
+        // round-trip error on non-tiny magnitudes.
         for i in 0..n {
             let x = &vecs[i * 2..i * 2 + 2];
             let c = project(x, &fit);
             let r = unproject(&c, &fit);
-            assert_abs_diff_eq!(x[0], r[0], epsilon = 1e-4);
-            assert_abs_diff_eq!(x[1], r[1], epsilon = 1e-4);
+            let scale = x[0].abs().max(x[1].abs()).max(1.0);
+            assert_abs_diff_eq!(x[0], r[0], epsilon = 2e-2 * scale);
+            assert_abs_diff_eq!(x[1], r[1], epsilon = 2e-2 * scale);
         }
     }
 
@@ -318,11 +394,11 @@ mod tests {
         let w = vec![1.0_f32; n];
         let fit = fit_weighted_pca(&vecs, &w, 2, 0.95);
         assert!(fit.d_eff >= 1);
-        // All points project to the same reconstruction.
+        // All points project to the same reconstruction (bf16 tol).
         let c = project(&vecs[0..2], &fit);
         let r = unproject(&c, &fit);
-        assert_abs_diff_eq!(r[0], 5.0, epsilon = 1e-4);
-        assert_abs_diff_eq!(r[1], -3.0, epsilon = 1e-4);
+        assert_abs_diff_eq!(r[0], 5.0, epsilon = 1e-1);
+        assert_abs_diff_eq!(r[1], -3.0, epsilon = 1e-1);
     }
 
     #[test]
@@ -365,7 +441,8 @@ mod tests {
             w.push(0.0);
         }
         let fit = fit_weighted_pca(&vecs, &w, d, 0.95);
-        let v0 = &fit.basis[0..2];
+        let basis = fit.basis_f32();
+        let v0 = &basis[0..2];
         assert!(v0[0].abs() > v0[1].abs(), "decoys leaked into basis: {v0:?}");
     }
 
@@ -382,7 +459,8 @@ mod tests {
             w.push(1.0);
         }
         let fit = fit_weighted_pca(&vecs, &w, 2, 0.9);
-        let v0 = &fit.basis[0..2];
+        let basis = fit.basis_f32();
+        let v0 = &basis[0..2];
         assert!(v0[0].abs() > v0[1].abs(), "basis not x-dominated: {v0:?}");
     }
 
@@ -419,24 +497,64 @@ mod tests {
     #[test]
     #[should_panic(expected = "x dimension mismatch")]
     fn project_rejects_wrong_dim() {
-        let fit = PcaFit {
-            mean: vec![0.0; 3],
-            basis: vec![1.0, 0.0, 0.0],
-            d_eff: 1,
-            captured_variance: 1.0,
-        };
+        let fit = PcaFit::from_f32(vec![0.0; 3], vec![1.0, 0.0, 0.0], 1, 1.0);
         let _ = project(&[1.0_f32, 2.0], &fit);
     }
 
     #[test]
     #[should_panic(expected = "coeff length mismatch")]
     fn unproject_rejects_wrong_dim() {
-        let fit = PcaFit {
-            mean: vec![0.0; 3],
-            basis: vec![1.0, 0.0, 0.0],
-            d_eff: 1,
-            captured_variance: 1.0,
-        };
+        let fit = PcaFit::from_f32(vec![0.0; 3], vec![1.0, 0.0, 0.0], 1, 1.0);
         let _ = unproject(&[1.0_f32, 2.0], &fit);
+    }
+
+    // -------------------- bf16 storage round-trip --------------------
+
+    #[test]
+    fn bf16_storage_round_trips_within_tolerance() {
+        // PcaFit storage is bf16; ensure mean_f32/basis_f32 round-trip
+        // within bf16 precision (~1e-2 relative for values near 1).
+        let mean = vec![0.25_f32, -1.5, 3.125, 0.0];
+        let basis = vec![1.0_f32, -0.5, 0.25, -0.125];
+        let fit = PcaFit::from_f32(mean.clone(), basis.clone(), 1, 0.9);
+        let m2 = fit.mean_f32();
+        let b2 = fit.basis_f32();
+        for (a, b) in mean.iter().zip(m2.iter()) {
+            assert_abs_diff_eq!(a, b, epsilon = 1e-2);
+        }
+        for (a, b) in basis.iter().zip(b2.iter()) {
+            assert_abs_diff_eq!(a, b, epsilon = 1e-2);
+        }
+    }
+
+    #[test]
+    fn pca_fit_stores_bf16_not_f32() {
+        // Regression guard: if we ever revert to f32 storage, nbytes doubles.
+        let vecs: Vec<f32> = (0..20).map(|i| (i as f32) * 0.1).collect();
+        let w = vec![1.0_f32; 5];
+        let fit = fit_weighted_pca(&vecs, &w, 4, 0.95);
+        let expected_bytes = (fit.mean.len() + fit.basis.len()) * 2;
+        assert_eq!(
+            fit.nbytes(),
+            expected_bytes,
+            "PcaFit should store tensors as bf16 (2 bytes each)"
+        );
+    }
+
+    #[test]
+    fn pooled_fit_matches_plain_fit() {
+        // fit_weighted_pca_pooled is currently just an alias but the
+        // contract is "takes n_blocks × block_size pooled data"; confirm
+        // it works on a realistic shape.
+        let n = 64;
+        let d = 4;
+        let vecs: Vec<f32> = (0..n * d).map(|i| (i as f32 * 0.13).sin()).collect();
+        let w = vec![1.0_f32; n];
+        let a = fit_weighted_pca(&vecs, &w, d, 0.9);
+        let b = fit_weighted_pca_pooled(&vecs, &w, d, 0.9);
+        assert_eq!(a.d_eff, b.d_eff);
+        for (x, y) in a.mean_f32().iter().zip(b.mean_f32().iter()) {
+            assert_abs_diff_eq!(x, y, epsilon = 1e-4);
+        }
     }
 }

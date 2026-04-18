@@ -175,7 +175,7 @@ pub fn encode_block<R: Distortion>(
         let res = if coeff.iter().all(|c| c.abs() <= f32::EPSILON) {
             vec![0.0_f32; pca.d_eff]
         } else {
-            residual(coeff, t, kmeans.center(seg_id as usize))
+            residual(coeff, t, &kmeans.center(seg_id as usize))
         };
         let res_padded = pad_zero(&res, wht_len);
         let rotated = rotate(&res_padded, params.rotation_seed);
@@ -255,6 +255,181 @@ pub fn decode_block<R: Distortion>(skeleton: &Skeleton, codes: &[Code]) -> Vec<f
         out.extend_from_slice(&x_hat);
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// v1.2 extension: encode_layer with optional shared PCA basis.
+// ---------------------------------------------------------------------------
+
+/// Result of encoding a whole layer-stream with an optionally shared PCA basis.
+///
+/// When `shared_pca` is `Some`, all `per_block` entries reference this basis
+/// instead of owning their own copy. This lives alongside the existing
+/// `encode_block` path — callers who prefer per-block fitting (v1 behaviour)
+/// still use it exactly as before.
+#[derive(Debug, Clone)]
+pub struct LayerEncoding {
+    /// Shared PCA fit (mean + basis) — present only if `share_basis` was true.
+    pub shared_pca: Option<crate::pca::PcaFit>,
+    /// Per-block skeletons. When `shared_pca` is `Some`, the PCA field of each
+    /// block's skeleton is a duplicate of `shared_pca` (to keep each block
+    /// decodable standalone); the `nbytes` accounting in [`layer_nbytes`]
+    /// subtracts the duplication.
+    pub per_block: Vec<(Skeleton, Vec<Code>)>,
+}
+
+/// Byte footprint of a `LayerEncoding`, accounting for the shared PCA once
+/// (not per-block).
+#[must_use]
+pub fn layer_nbytes(enc: &LayerEncoding) -> usize {
+    let shared = enc.shared_pca.as_ref().map(crate::pca::PcaFit::nbytes).unwrap_or(0);
+    let mut per_block_total = 0;
+    for (sk, codes) in &enc.per_block {
+        // If PCA is shared, exclude the PCA portion of each skeleton.
+        let sk_bytes = if enc.shared_pca.is_some() {
+            sk.kmeans.nbytes()
+        } else {
+            sk.nbytes()
+        };
+        per_block_total += sk_bytes + codes.iter().map(Code::nbytes).sum::<usize>();
+    }
+    shared + per_block_total
+}
+
+/// Encode a sequence of blocks.
+///
+/// * `blocks[i]` has shape `[block_size * d]` (row-major).
+/// * `weights[i]` has length `block_size`.
+/// * `share_basis == true` triggers the v1.2 B' optimisation: one weighted
+///   PCA is fit on the concatenated data of all blocks and re-used across
+///   them; only K-means centres remain per-block.
+///
+/// For the `share_basis == false` path this is exactly equivalent to
+/// calling [`encode_block`] on each block independently.
+pub fn encode_layer<R: Distortion>(
+    blocks: &[Vec<f32>],
+    weights: &[Vec<f32>],
+    d: usize,
+    params: &CodecParams,
+    share_basis: bool,
+) -> LayerEncoding {
+    assert_eq!(blocks.len(), weights.len(), "blocks and weights length mismatch");
+    assert!(!blocks.is_empty(), "at least one block required");
+
+    if !share_basis {
+        let mut per_block = Vec::with_capacity(blocks.len());
+        for (b, w) in blocks.iter().zip(weights) {
+            let (sk, codes) = encode_block::<R>(b, w, d, params);
+            per_block.push((sk, codes));
+        }
+        return LayerEncoding { shared_pca: None, per_block };
+    }
+
+    // --- share_basis == true path ---
+    //
+    // 1. Fit pooled PCA once on the union of all blocks' vectors.
+    // 2. For each block: project against the shared basis, run per-block
+    //    K-means in the coefficient space, quantise the residual as usual.
+    //
+    // This is implemented by re-using encode_block via a modified params
+    // that tells it "the PCA is already fit" — but since encode_block's
+    // signature doesn't expose that, we inline the pipeline here. The
+    // inner ops (kmeans, rotation, quantise) are identical.
+    use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
+    use crate::pca::{fit_weighted_pca_pooled, project};
+    use crate::quantize::{pack_bits, quantize_vector};
+    use crate::wht::rotate;
+    use half::f16;
+
+    let n_total: usize = blocks.iter().map(|b| b.len() / d).sum();
+    let mut pooled_vecs = Vec::with_capacity(n_total * d);
+    let mut pooled_weights = Vec::with_capacity(n_total);
+    for (b, w) in blocks.iter().zip(weights) {
+        pooled_vecs.extend_from_slice(b);
+        pooled_weights.extend_from_slice(w);
+    }
+    let shared_pca = fit_weighted_pca_pooled(&pooled_vecs, &pooled_weights, d, params.variance_ratio);
+
+    // Pre-project every block's coefficients so we can run K-means in
+    // coefficient space on each block.
+    let wht_len = next_pow2(shared_pca.d_eff);
+
+    let mut per_block: Vec<(Skeleton, Vec<Code>)> = Vec::with_capacity(blocks.len());
+    for (block_vecs, w) in blocks.iter().zip(weights) {
+        let n = block_vecs.len() / d;
+        assert_eq!(w.len(), n, "block weight length mismatch");
+
+        // Project through the shared basis.
+        let mut coeffs = Vec::with_capacity(n * shared_pca.d_eff);
+        for i in 0..n {
+            let x = &block_vecs[i * d..(i + 1) * d];
+            coeffs.extend_from_slice(&project(x, &shared_pca));
+        }
+        // K-means per block (effective_k shrinks if block has few valid rows).
+        let valid_rows = (0..n).filter(|&i| {
+            w[i] > 0.0
+                && coeffs[i * shared_pca.d_eff..(i + 1) * shared_pca.d_eff]
+                    .iter()
+                    .any(|c| c.abs() > f32::EPSILON)
+        }).count();
+        let effective_k = params.k.min(valid_rows.max(1));
+        let kmeans = fit_spherical_kmeans(
+            &coeffs, w, shared_pca.d_eff, effective_k,
+            params.rotation_seed, params.kmeans_max_iter,
+        );
+
+        let mut codes = Vec::with_capacity(n);
+        for i in 0..n {
+            let x = &block_vecs[i * d..(i + 1) * d];
+            let coeff = &coeffs[i * shared_pca.d_eff..(i + 1) * shared_pca.d_eff];
+            let (seg_id, t) = assign_and_project(coeff, &kmeans);
+            let res = if coeff.iter().all(|c| c.abs() <= f32::EPSILON) {
+                vec![0.0_f32; shared_pca.d_eff]
+            } else {
+                residual(coeff, t, &kmeans.center(seg_id as usize))
+            };
+            let res_padded = pad_zero(&res, wht_len);
+            let rotated = rotate(&res_padded, params.rotation_seed);
+            let res_norm = l2_norm(&res);
+            let scale = if res_norm > f32::EPSILON { (wht_len as f32).sqrt() / res_norm } else { 1.0 };
+            let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
+            let q = quantize_vector::<R>(&scaled, params.bit_width);
+            let packed = pack_bits(&q, params.bit_width);
+            let norm = match R::NORM_MODE {
+                NormMode::Explicit => f16::from_f32(l2_norm(x)),
+                NormMode::Absorbed => f16::from_f32(1.0 / scale.max(f32::EPSILON)),
+            };
+            codes.push(Code {
+                seg_id,
+                alpha: f16::from_f32(0.0),
+                t: f16::from_f32(t),
+                norm,
+                residual_packed: packed,
+            });
+        }
+
+        let skeleton = Skeleton {
+            pca: shared_pca.clone(),
+            kmeans,
+            rotation_seed: params.rotation_seed,
+            wht_len,
+            bit_width: params.bit_width,
+        };
+        per_block.push((skeleton, codes));
+    }
+
+    LayerEncoding {
+        shared_pca: Some(shared_pca),
+        per_block,
+    }
+}
+
+/// Decode a whole layer. Dual of [`encode_layer`].
+pub fn decode_layer<R: Distortion>(enc: &LayerEncoding) -> Vec<Vec<f32>> {
+    enc.per_block
+        .iter()
+        .map(|(sk, codes)| decode_block::<R>(sk, codes))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -670,5 +845,135 @@ mod tests {
     fn l2_norm_basic() {
         assert_abs_diff_eq!(l2_norm(&[3.0_f32, 4.0]), 5.0, epsilon = 1e-6);
         assert_abs_diff_eq!(l2_norm(&[0.0_f32, 0.0, 0.0]), 0.0);
+    }
+
+    // -------------------- encode_layer / shared basis (v1.2 B') --------------------
+
+    fn mk_blocks(n_blocks: usize, bs: usize, d: usize, rank: usize, noise: f32, seed: u64)
+        -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
+        let total = synthetic_block(n_blocks * bs, d, rank, noise, seed);
+        let mut bs_vecs = Vec::with_capacity(n_blocks);
+        let mut ws = Vec::with_capacity(n_blocks);
+        for i in 0..n_blocks {
+            bs_vecs.push(total[i * bs * d..(i + 1) * bs * d].to_vec());
+            ws.push(vec![1.0_f32; bs]);
+        }
+        (bs_vecs, ws)
+    }
+
+    #[test]
+    fn encode_layer_no_sharing_matches_per_block_encode() {
+        let n_blocks = 3;
+        let bs = 32;
+        let d = 16;
+        let (blocks, ws) = mk_blocks(n_blocks, bs, d, 4, 0.02, 101);
+        let params = CodecParams {
+            variance_ratio: 0.9,
+            k: 4, bit_width: 3,
+            rotation_seed: 0xA5A5_A5A5,
+            kmeans_max_iter: 32,
+        };
+        let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
+        assert!(enc.shared_pca.is_none());
+        assert_eq!(enc.per_block.len(), n_blocks);
+        for (i, (sk, codes)) in enc.per_block.iter().enumerate() {
+            let (sk2, codes2) = encode_block::<MSE>(&blocks[i], &ws[i], d, &params);
+            assert_eq!(sk.d_eff(), sk2.d_eff());
+            assert_eq!(sk.k(), sk2.k());
+            assert_eq!(codes.len(), codes2.len());
+            for (c, c2) in codes.iter().zip(codes2.iter()) {
+                assert_eq!(c.residual_packed, c2.residual_packed);
+                assert_eq!(c.seg_id, c2.seg_id);
+            }
+        }
+    }
+
+    #[test]
+    fn encode_layer_shared_basis_amortises_skeleton_bytes() {
+        let n_blocks = 4;
+        let bs = 64;
+        let d = 16;
+        let (blocks, ws) = mk_blocks(n_blocks, bs, d, 4, 0.01, 202);
+        let params = CodecParams {
+            variance_ratio: 0.9,
+            k: 4, bit_width: 3,
+            ..Default::default()
+        };
+        let per_block_enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
+        let shared_enc = encode_layer::<MSE>(&blocks, &ws, d, &params, true);
+
+        assert!(shared_enc.shared_pca.is_some());
+        assert_eq!(shared_enc.per_block.len(), n_blocks);
+
+        let per_block_bytes = layer_nbytes(&per_block_enc);
+        let shared_bytes = layer_nbytes(&shared_enc);
+        assert!(
+            shared_bytes < per_block_bytes,
+            "shared encoding must be smaller: shared={shared_bytes} per_block={per_block_bytes}"
+        );
+    }
+
+    #[test]
+    fn encode_layer_shared_decodes_round_trip() {
+        let n_blocks = 4;
+        let bs = 32;
+        let d = 16;
+        let (blocks, ws) = mk_blocks(n_blocks, bs, d, 4, 0.02, 303);
+        let params = CodecParams {
+            variance_ratio: 0.9,
+            k: 4, bit_width: 4,
+            ..Default::default()
+        };
+        let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, true);
+        let recs = decode_layer::<MSE>(&enc);
+        assert_eq!(recs.len(), n_blocks);
+        for i in 0..n_blocks {
+            let rec = &recs[i];
+            assert_eq!(rec.len(), blocks[i].len());
+            for v in rec {
+                assert!(v.is_finite(), "non-finite reconstruction");
+            }
+            let mse = mse_of(&blocks[i], rec);
+            assert!(mse < 5.0, "MSE too high for shared basis path: {mse}");
+        }
+    }
+
+    #[test]
+    fn encode_layer_empty_rejected() {
+        let params = CodecParams::default();
+        let blocks: Vec<Vec<f32>> = vec![];
+        let ws: Vec<Vec<f32>> = vec![];
+        let result = std::panic::catch_unwind(|| {
+            encode_layer::<MSE>(&blocks, &ws, 4, &params, true)
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn encode_layer_length_mismatch_rejected() {
+        let params = CodecParams::default();
+        let blocks = vec![vec![0.0_f32; 16]];
+        let ws: Vec<Vec<f32>> = vec![];
+        let result = std::panic::catch_unwind(|| {
+            encode_layer::<MSE>(&blocks, &ws, 4, &params, true)
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn layer_nbytes_excludes_duplicate_basis_when_shared() {
+        let n_blocks = 3;
+        let bs = 32;
+        let d = 16;
+        let (blocks, ws) = mk_blocks(n_blocks, bs, d, 4, 0.01, 404);
+        let params = CodecParams { variance_ratio: 0.9, k: 4, bit_width: 3, ..Default::default() };
+        let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, true);
+        let reported = layer_nbytes(&enc);
+        // Expected = 1× shared PCA + n_blocks × (K-means + codes).
+        let pca_once = enc.shared_pca.as_ref().unwrap().nbytes();
+        let per_block_sum: usize = enc.per_block.iter()
+            .map(|(sk, codes)| sk.kmeans.nbytes() + codes.iter().map(Code::nbytes).sum::<usize>())
+            .sum();
+        assert_eq!(reported, pca_once + per_block_sum);
     }
 }
