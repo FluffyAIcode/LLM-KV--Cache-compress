@@ -1,0 +1,218 @@
+{
+  "model": "gemma4_e2b",
+  "ctx": 4096,
+  "meta": {
+    "ctx": 4096,
+    "prefill_seconds": 29.3,
+    "head_dim": 256,
+    "global_head_dim": 512,
+    "num_kv_heads": 1,
+    "num_full_layers": 3
+  },
+  "variance_ratio": 0.95,
+  "k": 16,
+  "bit_width": 3,
+  "num_layers_measured": 3,
+  "aggregate": [
+    {
+      "block_size": 512,
+      "mean_mse_across_layers": 0.0011537365666666665,
+      "total_bytes_across_layers": 3496128,
+      "mean_d_eff_across_layers": 106.91666666666667,
+      "mean_inflation_vs_baseline": 1.0,
+      "median_inflation_vs_baseline": 1.0,
+      "max_inflation_vs_baseline": 1.0,
+      "mean_bytes_ratio_vs_baseline": 1.0
+    },
+    {
+      "block_size": 1024,
+      "mean_mse_across_layers": 0.0012440069,
+      "total_bytes_across_layers": 2686272,
+      "mean_d_eff_across_layers": 131.5,
+      "mean_inflation_vs_baseline": 1.0689666666666666,
+      "median_inflation_vs_baseline": 1.0474,
+      "max_inflation_vs_baseline": 1.1251,
+      "mean_bytes_ratio_vs_baseline": 0.7674666666666666
+    },
+    {
+      "block_size": 2048,
+      "mean_mse_across_layers": 0.0012984356666666667,
+      "total_bytes_across_layers": 2182944,
+      "mean_d_eff_across_layers": 153.5,
+      "mean_inflation_vs_baseline": 1.1254333333333333,
+      "median_inflation_vs_baseline": 1.1242,
+      "max_inflation_vs_baseline": 1.1324,
+      "mean_bytes_ratio_vs_baseline": 0.6241
+    }
+  ],
+  "per_layer": [
+    {
+      "n_vecs": 4096,
+      "dim": 512,
+      "variance_ratio": 0.95,
+      "k": 16,
+      "bit_width": 3,
+      "cells": [
+        {
+          "block_size": 512,
+          "n_blocks": 8,
+          "covered_vecs": 4096,
+          "mean_mse": 0.001542864,
+          "min_mse": 0.001508896,
+          "max_mse": 0.001740202,
+          "mean_d_eff": 112.25,
+          "total_payload_bytes": 1194048,
+          "total_skeleton_bytes": 956480,
+          "total_code_bytes": 237568,
+          "ratio_vs_raw": 7.0254,
+          "mse_inflation_vs_baseline": 1.0,
+          "bytes_vs_baseline": 1.0
+        },
+        {
+          "block_size": 1024,
+          "n_blocks": 4,
+          "covered_vecs": 4096,
+          "mean_mse": 0.00173593,
+          "min_mse": 0.001696796,
+          "max_mse": 0.001834422,
+          "mean_d_eff": 134.25,
+          "total_payload_bytes": 1005344,
+          "total_skeleton_bytes": 571168,
+          "total_code_bytes": 434176,
+          "ratio_vs_raw": 8.344,
+          "mse_inflation_vs_baseline": 1.1251,
+          "bytes_vs_baseline": 0.842
+        },
+        {
+          "block_size": 2048,
+          "n_blocks": 2,
+          "covered_vecs": 4096,
+          "mean_mse": 0.00173443,
+          "min_mse": 0.001693304,
+          "max_mse": 0.001775556,
+          "mean_d_eff": 149.5,
+          "total_payload_bytes": 751968,
+          "total_skeleton_bytes": 317792,
+          "total_code_bytes": 434176,
+          "ratio_vs_raw": 11.1555,
+          "mse_inflation_vs_baseline": 1.1242,
+          "bytes_vs_baseline": 0.6298
+        }
+      ],
+      "layer_idx": 4,
+      "head_dim": 512
+    },
+    {
+      "n_vecs": 4096,
+      "dim": 512,
+      "variance_ratio": 0.95,
+      "k": 16,
+      "bit_width": 3,
+      "cells": [
+        {
+          "block_size": 512,
+          "n_blocks": 8,
+          "covered_vecs": 4096,
+          "mean_mse": 0.001016569,
+          "min_mse": 0.0009472645,
+          "max_mse": 0.001404731,
+          "mean_d_eff": 105.875,
+          "total_payload_bytes": 1164768,
+          "total_skeleton_bytes": 902624,
+          "total_code_bytes": 262144,
+          "ratio_vs_raw": 7.202,
+          "mse_inflation_vs_baseline": 1.0,
+          "bytes_vs_baseline": 1.0
+        },
+        {
+          "block_size": 1024,
+          "n_blocks": 4,
+          "covered_vecs": 4096,
+          "mean_mse": 0.00105155,
+          "min_mse": 0.0009524718,
+          "max_mse": 0.001321465,
+          "mean_d_eff": 131.0,
+          "total_payload_bytes": 844160,
+          "total_skeleton_bytes": 557440,
+          "total_code_bytes": 286720,
+          "ratio_vs_raw": 9.9372,
+          "mse_inflation_vs_baseline": 1.0344,
+          "bytes_vs_baseline": 0.7247
+        },
+        {
+          "block_size": 2048,
+          "n_blocks": 2,
+          "covered_vecs": 4096,
+          "mean_mse": 0.001151124,
+          "min_mse": 0.001077232,
+          "max_mse": 0.001225016,
+          "mean_d_eff": 152.5,
+          "total_payload_bytes": 758304,
+          "total_skeleton_bytes": 324128,
+          "total_code_bytes": 434176,
+          "ratio_vs_raw": 11.0623,
+          "mse_inflation_vs_baseline": 1.1324,
+          "bytes_vs_baseline": 0.651
+        }
+      ],
+      "layer_idx": 9,
+      "head_dim": 512
+    },
+    {
+      "n_vecs": 4096,
+      "dim": 512,
+      "variance_ratio": 0.95,
+      "k": 16,
+      "bit_width": 3,
+      "cells": [
+        {
+          "block_size": 512,
+          "n_blocks": 8,
+          "covered_vecs": 4096,
+          "mean_mse": 0.0009017767,
+          "min_mse": 0.0008138651,
+          "max_mse": 0.001329401,
+          "mean_d_eff": 102.625,
+          "total_payload_bytes": 1137312,
+          "total_skeleton_bytes": 875168,
+          "total_code_bytes": 262144,
+          "ratio_vs_raw": 7.3758,
+          "mse_inflation_vs_baseline": 1.0,
+          "bytes_vs_baseline": 1.0
+        },
+        {
+          "block_size": 1024,
+          "n_blocks": 4,
+          "covered_vecs": 4096,
+          "mean_mse": 0.0009445407,
+          "min_mse": 0.0008324144,
+          "max_mse": 0.001275931,
+          "mean_d_eff": 129.25,
+          "total_payload_bytes": 836768,
+          "total_skeleton_bytes": 550048,
+          "total_code_bytes": 286720,
+          "ratio_vs_raw": 10.025,
+          "mse_inflation_vs_baseline": 1.0474,
+          "bytes_vs_baseline": 0.7357
+        },
+        {
+          "block_size": 2048,
+          "n_blocks": 2,
+          "covered_vecs": 4096,
+          "mean_mse": 0.001009753,
+          "min_mse": 0.000849673,
+          "max_mse": 0.001169834,
+          "mean_d_eff": 158.5,
+          "total_payload_bytes": 672672,
+          "total_skeleton_bytes": 336800,
+          "total_code_bytes": 335872,
+          "ratio_vs_raw": 12.4706,
+          "mse_inflation_vs_baseline": 1.1197,
+          "bytes_vs_baseline": 0.5915
+        }
+      ],
+      "layer_idx": 14,
+      "head_dim": 512
+    }
+  ]
+}
