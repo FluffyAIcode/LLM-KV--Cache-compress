@@ -145,7 +145,18 @@ def run_model(model_path, model_name, ctx, prefill_chunk, block_size, variance_r
               pca_method: str = "exact",
               rsvd_target_rank: int | None = None,
               rsvd_oversample: int = 8,
-              rsvd_power_iters: int = 2):
+              rsvd_power_iters: int = 2,
+              rsvd_target_rank_k: int | None = None,
+              rsvd_target_rank_v: int | None = None,
+              bit_width_k: int | None = None,
+              bit_width_v: int | None = None):
+    """Per-stream overrides:
+      - rsvd_target_rank_k / _v: per-stream PCA rank cap (falls back to
+        rsvd_target_rank when None)
+      - bit_width_k / _v: per-stream Lloyd-Max bit width (falls back to
+        bit_width when None). Useful for MHA models with near-flat V
+        spectra that need b=3 on V while K stays at b=2.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"[{model_name}] ctx={ctx} prefill + capture …", flush=True)
     ks, vs, layer_types, meta = capture(model_path, ctx, prefill_chunk)
@@ -181,20 +192,24 @@ def run_model(model_path, model_name, ctx, prefill_chunk, block_size, variance_r
         write_kktv(kp, k_arr.astype(np.float32, copy=False))
         write_kktv(vp, v_arr.astype(np.float32, copy=False))
 
+        k_tgt = rsvd_target_rank_k if rsvd_target_rank_k is not None else rsvd_target_rank
+        v_tgt = rsvd_target_rank_v if rsvd_target_rank_v is not None else rsvd_target_rank
+        k_bw = bit_width_k if bit_width_k is not None else bit_width
+        v_bw = bit_width_v if bit_width_v is not None else bit_width
         k_rep = bench_one(kp, layer_dir / "k.json",
                           metric="inner_product", share_basis=False,
                           block_size=block_size, variance_ratio=variance_ratio,
-                          k=k, bit_width=bit_width, seed=rotation_seed,
+                          k=k, bit_width=k_bw, seed=rotation_seed,
                           pca_method=pca_method,
-                          rsvd_target_rank=rsvd_target_rank,
+                          rsvd_target_rank=k_tgt,
                           rsvd_oversample=rsvd_oversample,
                           rsvd_power_iters=rsvd_power_iters)
         v_rep = bench_one(vp, layer_dir / "v.json",
                           metric="mse", share_basis=True,
                           block_size=block_size, variance_ratio=variance_ratio,
-                          k=k, bit_width=bit_width, seed=rotation_seed + 1,
+                          k=k, bit_width=v_bw, seed=rotation_seed + 1,
                           pca_method=pca_method,
-                          rsvd_target_rank=rsvd_target_rank,
+                          rsvd_target_rank=v_tgt,
                           rsvd_oversample=rsvd_oversample,
                           rsvd_power_iters=rsvd_power_iters)
 
@@ -251,9 +266,17 @@ def main():
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--pca-method", choices=["exact", "randomized"], default="exact")
     ap.add_argument("--rsvd-target-rank", type=int, default=None,
-                    help="target_rank for randomized SVD (default: head_dim/2)")
+                    help="Symmetric target_rank for both K and V streams")
+    ap.add_argument("--rsvd-target-rank-k", type=int, default=None,
+                    help="K-stream target_rank; falls back to --rsvd-target-rank if unset")
+    ap.add_argument("--rsvd-target-rank-v", type=int, default=None,
+                    help="V-stream target_rank; falls back to --rsvd-target-rank if unset")
     ap.add_argument("--rsvd-oversample", type=int, default=8)
     ap.add_argument("--rsvd-power-iters", type=int, default=2)
+    ap.add_argument("--bit-width-k", type=int, default=None,
+                    help="Per-stream override for K; falls back to --bit-width if unset")
+    ap.add_argument("--bit-width-v", type=int, default=None,
+                    help="Per-stream override for V; falls back to --bit-width if unset")
     args = ap.parse_args()
 
     if not BENCH_BIN.exists():
@@ -266,7 +289,11 @@ def main():
                   pca_method=args.pca_method,
                   rsvd_target_rank=args.rsvd_target_rank,
                   rsvd_oversample=args.rsvd_oversample,
-                  rsvd_power_iters=args.rsvd_power_iters)
+                  rsvd_power_iters=args.rsvd_power_iters,
+                  rsvd_target_rank_k=args.rsvd_target_rank_k,
+                  rsvd_target_rank_v=args.rsvd_target_rank_v,
+                  bit_width_k=args.bit_width_k,
+                  bit_width_v=args.bit_width_v)
     t = s["totals"]
     print(f"\n===== {args.model_name} @ {args.context_tokens} tokens =====")
     print(f"baseline (bf16) total     : {t['baseline_bf16_bytes']/1024/1024:.2f} MiB")
