@@ -46,7 +46,7 @@
 % ----------------------------------------------------------------------
 \title{\textbf{Kakeya Skeleton with Residual Turbo Compression:}\\
   \textbf{A Rate--Distortion Framework for LLM KV Cache Compression}}
-\author{Allen Li\thanks{Individual researcher. Email: \href{mailto:AllenL329@gmail.com}{\texttt{AllenL329@gmail.com}}.}\\[2pt]
+\author{KakeyaTurbo Contributors\\
  \small \url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress}}
 \date{April 19, 2026}
 % ----------------------------------------------------------------------
@@ -101,24 +101,15 @@ Fix the distortion $\rho(x, \hat{x}) = \norm{x - \hat{x}}_2^2$ and $w_i \equiv 1
 \end{equation}
 The set $\mathcal{K}_U = \{\mu + U v : v \in \R^r\}$ is an $r$-dimensional affine subspace of $\R^D$.
 
-In the Kakeya setting \cite{kakeya-problem}, a \emph{Kakeya set} $\mathcal{K} \subset \R^D$ is a set that contains a unit line segment in every direction. The Kakeya conjecture asserts that any such set has Hausdorff dimension $D$. The connection to \emph{harmonic analysis} is deep and long-standing: Fefferman~\cite{fefferman-ball} showed that the ball-multiplier problem reduces to estimates on Kakeya sets; Bourgain~\cite{bourgain-kakeya} introduced arithmetic combinatorics to obtain the first nontrivial lower bounds in high dimensions; Wolff~\cite{wolff-kakeya} proved the $(D+2)/2$-dimensional bound via the geometric hairbrush argument; Katz, {\L}aba, and Tao~\cite{katz-laba-tao} established sharper bounds in $\R^3$; Dvir~\cite{dvir-finite-field} resolved the finite-field analogue with a one-page polynomial-method proof; Guth~\cite{guth-endpoint} proved the endpoint multilinear Kakeya inequality. The three-dimensional Euclidean case was resolved only recently, by Wang and Zahl~\cite{wang-zahl} in 2025, through a multiscale tube-packing analysis: the minimum measure of a $\delta$-neighbourhood of a Kakeya set scales like $\delta^{\epsilon}$ rather than $\delta^{D - \text{dim}\,\mathcal{K}}$.
+In the Kakeya setting \cite{kakeya-problem}, a \emph{Kakeya set} $\mathcal{K} \subset \R^D$ is a set that contains a unit line segment in every direction. The Kakeya conjecture, recently resolved in $\R^3$ by Wang and Zahl~\cite{wang-zahl}, asserts that any such set has Hausdorff dimension $D$. The proof proceeds by a multiscale tube-packing analysis: the minimum measure of a $\delta$-neighbourhood of a Kakeya set scales like $\delta^{\epsilon}$ rather than $\delta^{D - \text{dim}\,\mathcal{K}}$.
 
-Across this thirty-year arc, a single quantity recurs: the minimum covering measure of a union of tubes of length $1$ and radius $\delta$, with one tube in each of $\delta^{-(D-1)}$ directions. Harmonic analysis studies this quantity as a proxy for oscillatory-integral operator norms; we read it as a rate--distortion budget. If we interpret each row $x_i$ of the KV block as a direction in $\R^D$ (via the angle $x_i / \norm{x_i}$), a codec that reconstructs all $n$ vectors with $\ell_2$-error $\varepsilon$ must cover a tube of radius $\varepsilon$ in each such direction. The minimum cost of such a tube-union is the codec byte budget, and this is \emph{exactly} the quantity that the Kakeya-maximal-function estimates bound.
+The connection to compression is not literal but structural. If we interpret each row $x_i$ of the KV block as a direction in $\R^D$ (via the angle $x_i / \norm{x_i}$), then a codec that captures all $n$ vectors up to distortion $\varepsilon$ must contain a tube of radius $\varepsilon$ in each such direction. The minimum cost of such a tube-union is the codec byte budget. The Kakeya conjecture tells us that when the directions are \emph{sufficiently spread}, the byte budget grows like $D$-dimensional measure; when the directions are \emph{concentrated} on a low-dimensional subspace, the budget grows like that subspace's dimension.
 
-\begin{proposition}[Informal]
-\label{prop:kakeya-rd}
-Let $\Theta = \{x_i / \norm{x_i}\}_{i=1}^n \subset S^{D-1}$. If $\Theta$ is $\delta$-separated and the Kakeya-maximal-function conjecture holds, then the minimum byte budget to reconstruct all $x_i$ to $\ell_2$-error $\varepsilon\norm{x_i}$ scales as
-\begin{equation}
-B(\varepsilon, n, D) \;=\; \Theta\!\left(n \cdot \log_2\!\frac{1}{\varepsilon} \,+\, \mathrm{dim}_H(\Theta) \cdot \log_2\frac{1}{\varepsilon}\right),
-\end{equation}
-where $\mathrm{dim}_H(\Theta)$ is the Hausdorff dimension of the direction set. The first term is the per-vector coding cost; the second is the shared skeleton overhead.
-\end{proposition}
-
-This gives a clean design dictum:
+This provides a clean design dictum:
 \begin{quote}
 \emph{A Kakeya-like codec should construct the skeleton that dominates the dimensional scaling behaviour of the direction set, and spend its bit budget on residuals perpendicular to that skeleton.}
 \end{quote}
-When the directions are RoPE-dispersed (Qwen family), the skeleton cannot be the principal subspace alone; it must include the RoPE-induced anisotropy. Section~\ref{sec:rope} makes this concrete via an inverse-RoPE transformation that strips the apparent high-dimensional scaling, exposing the true low-dimensional ``pre-RoPE'' skeleton. The harmonic-analysis literature~\cite{bourgain-kakeya,wolff-kakeya,katz-laba-tao,wang-zahl} provides the structural guarantee that such a low-dimensional skeleton is the right thing to look for.
+When the directions are RoPE-dispersed (Qwen family), the skeleton cannot be the principal subspace alone; it must include the RoPE-induced anisotropy. Section~\ref{sec:rope} makes this concrete via an inverse-RoPE transformation that strips the apparent high-dimensional scaling, exposing the true low-dimensional ``pre-RoPE'' skeleton.
 
 \subsection{Unifying TurboQuant and Kakeya as RD parameterizations}
 
@@ -368,134 +359,6 @@ SmolLM2 is the only benchmark model where no $(b, r)$ configuration simultaneous
 
 The root cause is structural: SmolLM2 is an MHA model with head dimension $64$, and its V-stream PCA spectrum is essentially flat; exact PCA requires $d_{\text{eff}} = 59$ of $D = 64$ to capture $95\%$ variance. There is no rank tail to truncate. Any $r < D$ pays the truncated eigenvalues in full MSE, and $r = D$ loses the compression advantage that lets $b=2$ beat turbo3. This Pareto gap is intrinsic to the architecture, not a codec defect. We document SmolLM2 as a \emph{tier-2 capability} in the product surface.
 
-\subsection{MSE measurements across configurations, models, and codec families}
-\label{sec:mse-detail}
-
-Reconstruction MSE is the primary quality metric throughout this paper. This subsection reports the full MSE picture across three dimensions: (i) codec configuration ($b=3$ exact vs.\ $b=2$ exact vs.\ $b=2$ rsvd), (ii) stream (K vs.\ V), and (iii) codec family (this work vs.\ TurboQuant turbo3). All values are mean per-block reconstruction MSE on real captured tensors, averaged across all full-attention layers excluding layer~0 (RoPE-degenerate).
-
-\paragraph{Configuration sweep (K stream).}
-Table~\ref{tab:mse-k-sweep} reports the transition from the v1.2 baseline ($b=3$ exact PCA) through the bit-width reduction ($b=2$ exact) to the final v1.3 tier-1 configuration ($b=2$ randomized PCA with $r=D/2$).
-
-\begin{table}[H]
-\centering
-\small
-\caption{K-stream MSE across the three codec configurations at ctx=4096.}
-\label{tab:mse-k-sweep}
-\begin{tabular}{lrrrrr}
-  \toprule
-  Model & $b=3$ exact & $b=2$ exact & $b=2$ rsvd & $\frac{b=2e}{b=3e}$ & $\frac{b=2r}{b=3e}$ \\
-  \midrule
-  Qwen2.5-0.5B                  & $9.89\!\cdot\!10^{-1}$ & $1.10\!\cdot\!10^{0}$  & $1.11\!\cdot\!10^{0}$  & $1.11\times$ & $1.13\times$ \\
-  Qwen3-0.6B                    & $1.35\!\cdot\!10^{0}$  & $1.44\!\cdot\!10^{0}$  & $1.46\!\cdot\!10^{0}$  & $1.07\times$ & $1.08\times$ \\
-  Gemma-4-E2B                   & $3.78\!\cdot\!10^{-3}$ & $1.58\!\cdot\!10^{-3}$ & $1.58\!\cdot\!10^{-3}$ & $0.42\times$ & $0.42\times$ \\
-  DeepSeek-R1-Distill           & $5.26\!\cdot\!10^{-1}$ & $5.83\!\cdot\!10^{-1}$ & $5.93\!\cdot\!10^{-1}$ & $1.11\times$ & $1.13\times$ \\
-  GLM-Edge-1.5B                 & $7.65\!\cdot\!10^{-1}$ & $8.35\!\cdot\!10^{-1}$ & $8.49\!\cdot\!10^{-1}$ & $1.09\times$ & $1.11\times$ \\
-  SmolLM2-1.7B                  & $6.73\!\cdot\!10^{-1}$ & $7.63\!\cdot\!10^{-1}$ & $7.80\!\cdot\!10^{-1}$ & $1.13\times$ & $1.16\times$ \\
-  GLM-Edge-4B                   & $6.89\!\cdot\!10^{-1}$ & $7.56\!\cdot\!10^{-1}$ & $7.70\!\cdot\!10^{-1}$ & $1.10\times$ & $1.12\times$ \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-Two observations stand out. First, the transition from exact PCA to randomized PCA at $r=D/2$ adds only $1\%$--$2\%$ additional K-MSE on top of the $b=3 \to b=2$ bit-width change --- the randomized skeleton is essentially exact on the K stream because K is already low-rank (top-$10$ of $D=128$ captures $95\%$ variance on Qwen3 / DeepSeek). Second, Gemma-4 K-MSE is an outlier: $b=2$ \emph{improves} K quality relative to $b=3$ ($0.42\times$), because the $b=3$ Lloyd-Max codebook over-quantizes the near-zero residual on Gemma's high-head-dim K. This is a genuine RDO win, not a measurement artefact, and it is the only ACCEPT-without-tradeoff result in the matrix.
-
-\paragraph{Configuration sweep (V stream).}
-Table~\ref{tab:mse-v-sweep} gives the corresponding V-stream MSE trajectory. V is generally more tolerant than K under MSE distortion, except in SmolLM2's MHA head\_dim=64 regime (see \S\ref{sec:smollm2}).
-
-\begin{table}[H]
-\centering
-\small
-\caption{V-stream MSE across the three codec configurations at ctx=4096.}
-\label{tab:mse-v-sweep}
-\begin{tabular}{lrrrrr}
-  \toprule
-  Model & $b=3$ exact & $b=2$ exact & $b=2$ rsvd & $\frac{b=2e}{b=3e}$ & $\frac{b=2r}{b=3e}$ \\
-  \midrule
-  Qwen2.5-0.5B                  & $2.33\!\cdot\!10^{-1}$ & $2.64\!\cdot\!10^{-1}$ & $2.68\!\cdot\!10^{-1}$ & $1.13\times$ & $1.15\times$ \\
-  Qwen3-0.6B                    & $4.34\!\cdot\!10^{0}$  & $4.73\!\cdot\!10^{0}$  & $5.29\!\cdot\!10^{0}$  & $1.09\times$ & $1.22\times$ \\
-  Gemma-4-E2B                   & $2.81\!\cdot\!10^{-1}$ & $3.07\!\cdot\!10^{-1}$ & $3.03\!\cdot\!10^{-1}$ & $1.09\times$ & $1.08\times$ \\
-  DeepSeek-R1-Distill           & $4.82\!\cdot\!10^{-1}$ & $5.26\!\cdot\!10^{-1}$ & $5.15\!\cdot\!10^{-1}$ & $1.09\times$ & $1.07\times$ \\
-  GLM-Edge-1.5B                 & $3.64\!\cdot\!10^{-1}$ & $3.96\!\cdot\!10^{-1}$ & $4.10\!\cdot\!10^{-1}$ & $1.09\times$ & $1.13\times$ \\
-  SmolLM2-1.7B                  & $2.68\!\cdot\!10^{-1}$ & $3.03\!\cdot\!10^{-1}$ & $\mathbf{4.33\!\cdot\!10^{-1}}$ & $1.13\times$ & $\mathbf{1.61\times}$ \\
-  GLM-Edge-4B                   & $4.17\!\cdot\!10^{-1}$ & $4.55\!\cdot\!10^{-1}$ & $4.93\!\cdot\!10^{-1}$ & $1.09\times$ & $1.18\times$ \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-The SmolLM2 V-MSE inflation of $1.61\times$ is the REJECT signal that creates the tier-2 fallback documented in \S\ref{sec:smollm2}. On all other models V-MSE inflation stays $\leq 1.22\times$, within the MARGINAL band.
-
-\paragraph{Inverse-RoPE K-MSE (tier-1.5).}
-Table~\ref{tab:mse-rope} reports the full per-model pre/post-RoPE K-MSE numbers underlying the tier-1.5 decision. Layer~0 is excluded (RoPE is identity at position $0$).
-
-\begin{table}[H]
-\centering
-\small
-\caption{K-stream MSE under the inverse-RoPE preprocessor versus post-RoPE (ctx=4096). $\downarrow$ means MSE decreased; $\uparrow$ means it increased.}
-\label{tab:mse-rope}
-\begin{tabular}{lrrrl}
-  \toprule
-  Model & post-RoPE K-MSE & pre-RoPE K-MSE & ratio & Verdict \\
-  \midrule
-  Qwen2.5-0.5B                  & $1.33\!\cdot\!10^{0}$  & $6.50\!\cdot\!10^{-1}$ & $0.49\times\downarrow$  & ACCEPT \\
-  Qwen3-0.6B                    & $2.36\!\cdot\!10^{0}$  & $2.03\!\cdot\!10^{0}$  & $0.86\times\downarrow$  & ACCEPT \\
-  DeepSeek-R1-Distill           & $6.53\!\cdot\!10^{-1}$ & $3.76\!\cdot\!10^{-1}$ & $0.58\times\downarrow$  & ACCEPT \\
-  SmolLM2-1.7B                  & $1.63\!\cdot\!10^{0}$  & $1.50\!\cdot\!10^{0}$  & $0.92\times\downarrow$  & MARGINAL \\
-  Gemma-4-E2B                   & $1.58\!\cdot\!10^{-3}$ & $1.51\!\cdot\!10^{-3}$ & $0.95\times\downarrow$  & REJECT (bytes worsen) \\
-  GLM-Edge-1.5B                 & $9.52\!\cdot\!10^{-1}$ & $1.07\!\cdot\!10^{0}$  & $1.13\times\uparrow$    & REJECT \\
-  GLM-Edge-4B                   & $9.00\!\cdot\!10^{-1}$ & $1.01\!\cdot\!10^{0}$  & $1.12\times\uparrow$    & REJECT \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-The clean bifurcation (halfsplit-RoPE-without-QK-norm models accept; all others reject) is the foundation of the tier-1.5 capability table in \S\ref{sec:benchmark}.
-
-\paragraph{Head-to-head K-MSE against TurboQuant turbo3.}
-Table~\ref{tab:mse-vs-turbo3} compares K-stream MSE head-to-head against TurboQuant turbo3 on the identical captured tensors. The turbo3 numbers come from our prior comparison~\cite{kakeya-kv}; both codecs ran on the exact same bf16 KV tensors.
-
-\begin{table}[H]
-\centering
-\small
-\caption{K-stream MSE: v1.3 tier-1 vs.\ TurboQuant turbo3, same captured tensors (ctx=4096). Positive ratio $>1$ means \textsc{KakeyaTurbo} has lower K-MSE.}
-\label{tab:mse-vs-turbo3}
-\begin{tabular}{lrrrl}
-  \toprule
-  Model & \textsc{Turbo} K-MSE & turbo3 K-MSE & turbo3 / \textsc{Turbo} & Interpretation \\
-  \midrule
-  Qwen2.5-0.5B                  & $1.11\!\cdot\!10^{0}$  & $2.07\!\cdot\!10^{2}$  & $\mathbf{186\times}$   & we much better \\
-  Qwen3-0.6B                    & $1.46\!\cdot\!10^{0}$  & $8.99\!\cdot\!10^{1}$  & $\mathbf{62\times}$    & we much better \\
-  DeepSeek-R1-Distill           & $5.93\!\cdot\!10^{-1}$ & $1.44\!\cdot\!10^{3}$  & $\mathbf{2428\times}$  & we much better \\
-  Gemma-4-E2B                   & $1.58\!\cdot\!10^{-3}$ & $2.96\!\cdot\!10^{-3}$ & $1.87\times$           & we better \\
-  GLM-Edge-1.5B                 & $8.49\!\cdot\!10^{-1}$ & $2.81\!\cdot\!10^{-1}$ & $0.33\times$           & turbo3 better \\
-  GLM-Edge-4B                   & $7.70\!\cdot\!10^{-1}$ & $1.48\!\cdot\!10^{-1}$ & $0.19\times$           & turbo3 better \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-On the Qwen/DeepSeek family (RoPE with halfsplit pairing), \textsc{KakeyaTurbo} has K-MSE $62\times$ to $\mathbf{2428\times}$ lower than turbo3. This gap corresponds exactly to the asymmetric-rescue configurations (q8\_0-K + turbo-V) that the TurboQuant documentation recommends for these architectures. On GLM-Edge (adjacent-RoPE + QK-norm), turbo3 has lower K-MSE because the K representation is already norm-stabilised by QK-norm, and the Gaussianised scalar quantization handles it cleanly. Gemma-4 is in between: \textsc{KakeyaTurbo} K-MSE is $1.87\times$ lower, reflecting the low-rank structure of Gemma's high-head-dim K.
-
-\paragraph{Per-layer K-MSE distribution.}
-Beyond the aggregate mean, the per-layer MSE distribution is informative because attention-critical layers may sit at distribution tails. Table~\ref{tab:mse-perlayer} gives the Qwen3-0.6B K-stream quantiles under v1.3 tier-1.
-
-\begin{table}[H]
-\centering
-\small
-\caption{Per-layer K-MSE distribution on Qwen3-0.6B under v1.3 tier-1, over 27 full-attention layers (L0 excluded).}
-\label{tab:mse-perlayer}
-\begin{tabular}{lr}
-  \toprule
-  Statistic & K-MSE \\
-  \midrule
-  min (layer 13) & $8.08\!\cdot\!10^{-1}$ \\
-  25th percentile & $9.70\!\cdot\!10^{-1}$ \\
-  median          & $1.14\!\cdot\!10^{0}$  \\
-  75th percentile & $1.89\!\cdot\!10^{0}$  \\
-  max (layer 4)   & $3.15\!\cdot\!10^{0}$  \\
-  mean            & $1.46\!\cdot\!10^{0}$  \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-The max-to-min spread is $3.9\times$, smaller than the $200\times$ cross-layer spread that turbo3 exhibits on the same tensor set. This is a direct consequence of v1.3's per-block PCA: each layer fits its own low-rank structure, so worst-case layers do not diverge as dramatically as under a fixed rotation.
-
 \subsection{Quality vs compression Pareto summary}
 
 Ranking the codec configurations on the $(\text{ratio}, \text{quality})$ plane:
@@ -540,7 +403,7 @@ DeepSeek-V3.1 and Kimi-K2 use Multi-Latent Attention (MLA); the reported ratios 
 
 \paragraph{Randomized numerical linear algebra.} The Halko--Martinsson--Tropp randomized SVD~\cite{halko-martinsson-tropp} is a textbook algorithm; we use it as a drop-in for exact PCA and observe that the implicit rank cap is the structural win. Frequent Directions~\cite{frequent-directions} is a related streaming PCA sketch we defer to future work.
 
-\paragraph{Kakeya geometry and harmonic analysis.} The Kakeya problem originates in~\cite{kakeya-problem}. Its deep role in harmonic analysis began with Fefferman~\cite{fefferman-ball} (ball multiplier), continued through Bourgain's arithmetic-combinatorial bounds~\cite{bourgain-kakeya}, Wolff's geometric hairbrush argument~\cite{wolff-kakeya}, and Katz--{\L}aba--Tao's $\R^3$ improvements~\cite{katz-laba-tao}. The finite-field analogue was settled by Dvir's polynomial method~\cite{dvir-finite-field}; Guth's multilinear-Kakeya endpoint~\cite{guth-endpoint} introduced the tools eventually used by Wang and Zahl~\cite{wang-zahl} to resolve the Euclidean three-dimensional case. Our use of the Kakeya estimates is intuitional rather than a formal proof transfer: the scaling of the minimum tube-union measure (the common quantity across this literature) is the geometric sibling of the rate--distortion budget for a direction-covering code, and it motivates why the weighted PCA skeleton is the ``right'' dominant direction set to extract. Proposition~\ref{prop:kakeya-rd} states the analogy formally.
+\paragraph{Kakeya geometry.} The Kakeya conjecture has a rich history~\cite{kakeya-problem}; the three-dimensional case was recently resolved by Wang and Zahl~\cite{wang-zahl}. Our use is intuitional: the scaling of the minimum tube-union measure is the geometric sibling of the rate--distortion budget for a direction-covering code.
 
 \section{Limitations and future work}
 \label{sec:limitations}
@@ -599,36 +462,6 @@ KakeyaKV Contributors.
 Kakeya, S.
 \newblock {Some problems on maxima and minima regarding ovals.}
 \newblock \emph{Tohoku Science Reports}, 6:71--88, 1917.
-
-\bibitem{fefferman-ball}
-Fefferman, C.
-\newblock {The multiplier problem for the ball.}
-\newblock \emph{Annals of Mathematics}, 94(2):330--336, 1971.
-
-\bibitem{bourgain-kakeya}
-Bourgain, J.
-\newblock {Besicovitch type maximal operators and applications to Fourier analysis.}
-\newblock \emph{Geometric and Functional Analysis}, 1(2):147--187, 1991.
-
-\bibitem{wolff-kakeya}
-Wolff, T.
-\newblock {An improved bound for Kakeya type maximal functions.}
-\newblock \emph{Revista Matem\'atica Iberoamericana}, 11(3):651--674, 1995.
-
-\bibitem{katz-laba-tao}
-Katz, N.~H., {\L}aba, I., Tao, T.
-\newblock {An improved bound on the Minkowski dimension of Besicovitch sets in $\R^3$.}
-\newblock \emph{Annals of Mathematics}, 152(2):383--446, 2000.
-
-\bibitem{dvir-finite-field}
-Dvir, Z.
-\newblock {On the size of Kakeya sets in finite fields.}
-\newblock \emph{Journal of the American Mathematical Society}, 22(4):1093--1097, 2009.
-
-\bibitem{guth-endpoint}
-Guth, L.
-\newblock {The endpoint case of the Bennett-Carbery-Tao multilinear Kakeya conjecture.}
-\newblock \emph{Acta Mathematica}, 205(2):263--286, 2010.
 
 \bibitem{wang-zahl}
 Wang, H., Zahl, J.
