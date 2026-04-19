@@ -7,6 +7,13 @@ turboquant_plus/
 kakeyaturbo/target/
 # Cargo.lock IS tracked for reproducible binary builds
 
+# LaTeX build artifacts (paper sources live at reports/v1_3_rsvd_rope/paper/)
+/paper/
+*.aux
+*.log
+*.out
+*.toc
+
 # KV cache tensor dumps (can be multi-GB)
 *.kktv
 /tmp/*.log
