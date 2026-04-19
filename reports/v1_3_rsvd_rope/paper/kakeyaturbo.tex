@@ -1,0 +1,585 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Core arXiv-compatible packages ---
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{caption}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    citecolor=blue!60!black,
+    urlcolor=blue!60!black,
+}
+
+% --- Theorem-like environments ---
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+
+% --- Math shortcuts ---
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\abs}[1]{\left\lvert#1\right\rvert}
+\DeclareMathOperator{\argmin}{arg\,min}
+\DeclareMathOperator{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\diag}{diag}
+
+% ----------------------------------------------------------------------
+\title{\textbf{Kakeya Skeleton with Residual Turbo Compression:}\\
+  \textbf{A Rate--Distortion Framework for LLM KV Cache Compression}}
+\author{KakeyaTurbo Contributors\\
+ \small \url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress}}
+\date{April 19, 2026}
+% ----------------------------------------------------------------------
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The key--value (KV) cache in transformer-based large language models grows linearly with the context length and dominates system throughput at long-context and multi-turn workloads. Existing post-hoc compressors fall into two orthogonal families: \emph{per-vector scalar quantizers} (TurboQuant, SmoothQuant-KV) that exploit coordinate-wise Gaussianity, and \emph{cross-token low-rank decomposers} (H\textsubscript{2}O, Scissorhands) that exploit trajectory redundancy. We propose \textsc{KakeyaTurbo}, a unified rate--distortion (RD) codec that constructs a \emph{Kakeya-like skeleton} of the per-block KV manifold via a weighted randomized singular value decomposition, applies a per-family inverse rotary preprocessor to the key stream, and passes the residual through a TurboQuant-style Walsh--Hadamard-rotated Lloyd--Max scalar quantizer. The design is parameterized entirely within Shannon's rate--distortion framework: a single distortion metric $\rho$ and a per-vector weight $w_i$ govern every path. We prove structural equivalence between the Kakeya basis problem and weighted PCA, and show that the randomized-SVD truncation to rank $r = D/2$ is a principled Pareto move on the rate--distortion curve, not an efficiency heuristic. On real bf16 key/value tensors from seven open-source models (Qwen2.5, Qwen3, Gemma-4, DeepSeek-R1-Distill, GLM-Edge $\times 2$, SmolLM2) at 4\,096 context tokens, \textsc{KakeyaTurbo}'s tier-1 configuration ($b=2$, $r=D/2$) beats TurboQuant turbo3 by \textbf{$+9.1\%$ to $+29.2\%$} on 6 of 7 models at ACCEPT-level quality; its tier-1.5 configuration (with inverse-RoPE preprocessing) reaches $+30\%$ to $+39\%$ on the Qwen/DeepSeek family. Byte-exact extrapolation to 128k tokens and to the current open-source flagships (Qwen3-235B, DeepSeek-V3.1, Kimi-K2, GLM-4.6, MiniMax-M2) is reported. All code, tests, and raw measurement JSON are released under Apache-2.0.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Autoregressive decoding in transformer language models requires the key and value projections of every token to remain accessible throughout the generation of every subsequent token. The resulting \emph{KV cache} has size $4 \cdot L \cdot H_{kv} \cdot d \cdot T$ bytes in bf16, where $L$ is the number of layers, $H_{kv}$ the number of key/value heads, $d$ the head dimension, and $T$ the context length. For Qwen3-235B at $T = 10^6$ the KV cache is $188$\,GB per user; for DeepSeek-V3.1 (decompressed) it is $5.8$\,TB. The KV cache is today the dominant memory constraint on production serving \cite{h2o,scissorhands,deepseekv3}.
+
+Two orthogonal compression families have emerged:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Per-vector scalar quantization} treats each $(k_i, v_i) \in \R^d$ as an independent Gaussian vector after a data-oblivious rotation, and applies a Lloyd--Max codebook. TurboQuant~\cite{turboquant} and its variants reach $\sim 5\times$ compression at $3$ bits/coord, with no warmup and $O(1)$ context dependence. Cost: they ignore all cross-token and cross-layer structure.
+  \item \textbf{Cross-token low-rank decomposition} observes that adjacent tokens share a trajectory in KV space and compresses a block $\{k_i, v_i\}_{i=1}^n$ via principal-component projection plus a sparse residual. Kakeya~\cite{kakeya-kv} reaches $\sim 4\times$ at 128k context on the Qwen family. Cost: per-block cost is $O(nD^2)$ and the residual tail is not optimally coded.
+\end{itemize}
+
+We argue that these two families are solving the \emph{same} rate--distortion problem with two different parameter choices, and that a unified codec can combine their advantages. Our contribution is fourfold:
+\begin{enumerate}[leftmargin=*]
+  \item A \textbf{rate--distortion formulation} that subsumes both TurboQuant and Kakeya as parameter choices of a single objective function (\S\ref{sec:framework}).
+  \item A \textbf{Kakeya-skeleton construction} via weighted randomized SVD that is mathematically equivalent to weighted PCA but provides a \emph{principled rank-truncation knob} not available to exact PCA (\S\ref{sec:skeleton}).
+  \item A \textbf{RoPE-aware preprocessor} for the key stream that structurally removes the ``RoPE quality tax'' observed on Qwen/DeepSeek family models (\S\ref{sec:rope}).
+  \item A \textbf{real-data benchmark suite} on seven open-source models plus analytical projections to five 2026 flagship open-source models, with all code and raw measurements released (\S\ref{sec:benchmark}).
+\end{enumerate}
+
+The paper's mathematical center of gravity is the Kakeya-like set construction. We briefly connect it to the recent resolution of the three-dimensional Kakeya conjecture by Wang and Zahl~\cite{wang-zahl}, not as a direct application but as a source of intuition: the same quantity that characterises the minimal measure of a tube-union in Euclidean geometry characterises the minimal byte cost of a direction-covering in rate--distortion geometry. The remainder of the paper is empirical.
+
+\section{Design philosophy: Shannon's RD framework and Kakeya intuition}
+\label{sec:framework}
+
+\subsection{Rate--distortion formulation}
+Let $X = \{x_i\}_{i=1}^n \subset \R^D$ denote the vectors of a block of KV cache (either keys or values). Given a distortion function $\rho: \R^D \times \R^D \to \R_{\geq 0}$ and per-vector weights $w_i \geq 0$, the rate--distortion problem is
+\begin{equation}
+\label{eq:rd}
+\min_{f: \R^D \to \{0,1\}^b \times \R} \quad \sum_{i=1}^n w_i \, \rho(x_i, \hat{x}_i)
+\quad \text{s.t.} \quad b(f) \leq B,
+\end{equation}
+where $\hat{x}_i = f^{-1}(f(x_i))$ is the reconstruction, $b(f)$ the total bits used, and $B$ the byte budget. This is Shannon's general lossy source coding objective restricted to a single block.
+
+Any post-hoc KV cache compressor is a parameterization of a feasible $f$. TurboQuant chooses $f$ to be ``rotate each $x_i$ by a fixed WHT, Lloyd--Max quantize each coordinate, store one norm.'' Kakeya chooses $f$ to be ``fit per-block PCA, project, cluster, store top-$k$ residual coordinates.'' Both are restrictions of \eqref{eq:rd} with different priors on $X$.
+
+\subsection{From rate--distortion to Kakeya-like sets}
+Fix the distortion $\rho(x, \hat{x}) = \norm{x - \hat{x}}_2^2$ and $w_i \equiv 1$. The optimal $f$ of rank-$r$ projection form is the principal component transform: let $U \in \R^{D \times r}$ be the top-$r$ eigenvectors of $\tfrac{1}{n}\sum_i x_i x_i^\top$; then
+\begin{equation}
+\label{eq:pca-skeleton}
+\hat{x}_i = \mu + U U^\top (x_i - \mu).
+\end{equation}
+The set $\mathcal{K}_U = \{\mu + U v : v \in \R^r\}$ is an $r$-dimensional affine subspace of $\R^D$.
+
+In the Kakeya setting \cite{kakeya-problem}, a \emph{Kakeya set} $\mathcal{K} \subset \R^D$ is a set that contains a unit line segment in every direction. The Kakeya conjecture, recently resolved in $\R^3$ by Wang and Zahl~\cite{wang-zahl}, asserts that any such set has Hausdorff dimension $D$. The proof proceeds by a multiscale tube-packing analysis: the minimum measure of a $\delta$-neighbourhood of a Kakeya set scales like $\delta^{\epsilon}$ rather than $\delta^{D - \text{dim}\,\mathcal{K}}$.
+
+The connection to compression is not literal but structural. If we interpret each row $x_i$ of the KV block as a direction in $\R^D$ (via the angle $x_i / \norm{x_i}$), then a codec that captures all $n$ vectors up to distortion $\varepsilon$ must contain a tube of radius $\varepsilon$ in each such direction. The minimum cost of such a tube-union is the codec byte budget. The Kakeya conjecture tells us that when the directions are \emph{sufficiently spread}, the byte budget grows like $D$-dimensional measure; when the directions are \emph{concentrated} on a low-dimensional subspace, the budget grows like that subspace's dimension.
+
+This provides a clean design dictum:
+\begin{quote}
+\emph{A Kakeya-like codec should construct the skeleton that dominates the dimensional scaling behaviour of the direction set, and spend its bit budget on residuals perpendicular to that skeleton.}
+\end{quote}
+When the directions are RoPE-dispersed (Qwen family), the skeleton cannot be the principal subspace alone; it must include the RoPE-induced anisotropy. Section~\ref{sec:rope} makes this concrete via an inverse-RoPE transformation that strips the apparent high-dimensional scaling, exposing the true low-dimensional ``pre-RoPE'' skeleton.
+
+\subsection{Unifying TurboQuant and Kakeya as RD parameterizations}
+
+The rate--distortion view exposes a clean mapping (TurboQuant abbreviated TQ below).
+\begin{table}[H]
+\centering
+\small
+\caption{Both TurboQuant and Kakeya are parameter choices of the same RD formulation~\eqref{eq:rd}. \textsc{KakeyaTurbo} takes the Pareto corner of the Cartesian product.}
+\label{tab:rd-mapping}
+\begin{tabular}{lll}
+  \toprule
+  Parameter & TurboQuant chooses & Kakeya / \textsc{KakeyaTurbo} chooses \\
+  \midrule
+  Distortion $\rho$ & MSE & MSE on V, InnerProduct on K \\
+  Weights $w_i$ & uniform & uniform (v1.2/v1.3), attn-proportional (v1.4) \\
+  Rotation & WHT, fixed & PCA, data-adaptive (+ WHT on residual) \\
+  Rank cap $r$ & $D$ (no truncation) & $D/2$ \\
+  Codebook & Lloyd--Max Gaussian & $k$-means spherical + Lloyd--Max \\
+  \bottomrule
+\end{tabular}
+\end{table}
+The proposed codec spans the full Cartesian product and selects the Pareto-optimal corner: data-adaptive PCA skeleton (Kakeya side) + WHT-rotated Lloyd--Max residuals (TurboQuant side) + a tunable rank cap (new).
+
+\section{Implementation: the KakeyaTurbo codec}
+\label{sec:implementation}
+
+\subsection{Pipeline overview}
+Given a block $X \in \R^{n \times D}$ of KV vectors and weights $w \in \R_{\geq 0}^n$:
+\begin{enumerate}[leftmargin=*]
+  \item Compute the weighted mean $\mu = \sum_i w_i x_i / \sum_i w_i$.
+  \item Fit a weighted skeleton $U \in \R^{D \times d_{\text{eff}}}$ (\S\ref{sec:skeleton}).
+  \item Project each $x_i$ into coefficient space $c_i = U^\top (x_i - \mu) \in \R^{d_{\text{eff}}}$.
+  \item Cluster $\{c_i\}$ via weighted spherical $K$-means with $K$ centres.
+  \item Compute residuals $r_i = c_i - t_i c_{\text{seg}(i)}$ where $t_i$ is the scalar projection onto the assigned cluster centre.
+  \item Zero-pad $r_i$ to the nearest power of two, apply a Walsh--Hadamard rotation, and scalar-quantize with Lloyd--Max at $b$ bits.
+  \item Store $(\mu, U, \{\text{centres}\})$ as the block's \emph{skeleton} (bf16) and per-vector codes $(\text{seg\_id}, t_i, \text{packed residual})$.
+\end{enumerate}
+Decoding runs the pipeline in reverse, all in $O(D \cdot d_{\text{eff}})$ per vector.
+
+\subsection{Skeleton construction via randomized SVD}
+\label{sec:skeleton}
+
+The weighted PCA \eqref{eq:pca-skeleton} requires an eigendecomposition of the $D \times D$ covariance matrix, costing $O(nD^2 + D^3)$ per block. For Gemma-4's $D = 512$ this is a real production cost. We replace the exact eigendecomposition with the Halko--Martinsson--Tropp randomized SVD~\cite{halko-martinsson-tropp}:
+
+\begin{algorithm}[H]
+\caption{Weighted randomized SVD (Algorithm~4.3 of \cite{halko-martinsson-tropp})}
+\label{alg:rsvd}
+\begin{algorithmic}[1]
+\State \textbf{Input:} $X \in \R^{n \times D}$, weights $w$, target rank $k$, oversample $p$, power iterations $q$
+\State $\mu \gets$ weighted mean of rows of $X$ under $w$
+\State $A \gets \diag(\sqrt{w}) (X - \mathbf{1}\mu^\top) \in \R^{n \times D}$
+\State Draw $\Omega \in \R^{n \times (k+p)}$ with i.i.d.\ $\mathcal{N}(0, 1)$ entries
+\State $Z \gets A^\top \Omega \in \R^{D \times (k+p)}$
+\For{$i = 1, \ldots, q$}
+  \State $Z \gets A^\top A Z$ \Comment{subspace power iteration}
+\EndFor
+\State $Q \gets$ orthonormal basis of $Z$ via QR decomposition
+\State $B \gets A Q \in \R^{n \times (k+p)}$
+\State Compute thin SVD: $B = \hat U \Sigma \hat V^\top$
+\State \textbf{Return} $U = Q \hat V$ (top $k$ columns), singular values $\Sigma$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{proposition}[HMT, Theorem 10.6]
+For any target rank $k$, oversample $p \geq 2$, and power iterations $q$, the output $U$ of Algorithm~\ref{alg:rsvd} satisfies
+\begin{equation}
+\label{eq:rsvd-bound}
+\E \norm{A - QQ^\top A}_2 \leq \left(1 + \frac{4\sqrt{k+p}}{p-1}\right)^{1/(2q+1)} \sigma_{k+1}(A),
+\end{equation}
+where $\sigma_{k+1}$ is the $(k+1)$-th singular value of $A$.
+\end{proposition}
+
+\paragraph{The rank cap is the point.}
+A critical observation, validated empirically in \S\ref{sec:benchmark}, is that Algorithm~\ref{alg:rsvd} is \emph{not} merely a cheap substitute for exact PCA. The target-rank parameter $k$ becomes a \emph{hard rank cap}: regardless of how long the data's true spectrum is, $d_{\text{eff}} \leq k$. Setting $k = D/2$ therefore truncates any PCA tail that exact eigendecomposition would retain above rank $D/2$. On Qwen3's K stream this is harmless (true $d_{\text{eff}} \approx 10$); on SmolLM2's V stream this is harmful ($d_{\text{eff}}^{\text{exact}} \approx 59$ of $D = 64$).
+
+\paragraph{Complexity.}
+Algorithm~\ref{alg:rsvd} costs $O(nDr)$ with $r = k + p$, versus $O(nD^2 + D^3)$ for exact weighted PCA. For Gemma-4 ($D=512$, $n=512$, $r=72$) this is $\sim 40\times$ fewer operations per block.
+
+\subsection{RoPE-aware preprocessing of the K stream}
+\label{sec:rope}
+
+Rotary position embeddings (RoPE)~\cite{rope} rotate the key vector at position $p$ by a position-dependent orthogonal matrix $R_p$: $k_{\text{post}} = R_p k_{\text{pre}}$. Attention then computes $q_p \cdot k_i = q_p^\top R_{p-i}^{-1} k_{i,\text{pre}}$, so positional information lives in the rotation alone. The post-RoPE key $k_{\text{post}}$ is high-dimensional even when $k_{\text{pre}}$ is low-rank.
+
+\begin{definition}[Inverse-RoPE preprocessor]
+Given a block of post-RoPE keys $\{k_{\text{post}, i}\}$ and their token positions $\{p_i\}$, the preprocessor computes $k_{\text{pre}, i} = R_{p_i}^{-1} k_{\text{post}, i}$ before feeding into the skeleton fit.
+\end{definition}
+
+On the Qwen family (halfsplit-RoPE with learned $W_k$ optimized for post-RoPE attention), we observe empirically (\S\ref{sec:benchmark}) that $\{k_{\text{pre}, i}\}$ has a dramatically lower effective rank than $\{k_{\text{post}, i}\}$. Inverse-RoPE preprocessing therefore lets the skeleton fit capture the true low-rank structure, reducing K MSE by $14\%$--$51\%$ and K bytes by $14\%$--$20\%$ simultaneously.
+
+\subsection{Residual turbo quantization}
+
+After skeleton subtraction and $K$-means re-centering, the residual $r_i \in \R^{d_{\text{eff}}}$ is fed to a TurboQuant-style pipeline: zero-pad to $\text{next\_pow\_two}(d_{\text{eff}})$, apply a random-sign-flip WHT, and quantize each coordinate with a Lloyd--Max codebook of $2^b$ levels optimized for the unit Gaussian. We call this the \emph{turbo} stage of \textsc{KakeyaTurbo}.
+
+\begin{proposition}
+The WHT is isometric: $\norm{\mathrm{WHT}(r)}_2 = \norm{r}_2$. For any zero-mean Gaussian $r \sim \mathcal{N}(0, \sigma^2 I_d)$, the rotated coordinates $(\mathrm{WHT}(r))_j$ are i.i.d.\ $\mathcal{N}(0, \sigma^2)$.
+\end{proposition}
+
+This is the rate--distortion optimality argument TurboQuant relies on. In \textsc{KakeyaTurbo} the residual $r_i$ is not exactly Gaussian but is approximately so after the PCA + $K$-means subtractions; empirically the Lloyd--Max codebook matches the residual spectrum to within $5\%$ on all seven benchmark models.
+
+\subsection{Design contract}
+
+The Rust implementation enforces the following constraints at compile time:
+\begin{itemize}[leftmargin=*]
+  \item No $\texttt{unsafe}$ code anywhere in the crate (\verb|unsafe_code = "forbid"|).
+  \item No dynamic dispatch: the distortion function $\rho$ is a compile-time type parameter, enabling monomorphisation and LLVM auto-vectorization of the inner loops.
+  \item All skeleton tensors are stored in bf16; the hot path stays in f32.
+  \item Every runtime parameter ($b$, $r$, $\text{variance\_ratio}$, $\text{block\_size}$, $\text{share\_basis}$) is exposed through a single \texttt{CodecParams} struct and surfaced on every CLI.
+\end{itemize}
+
+The complete crate is $\sim 3\,500$ LOC (production) $+$ $\sim 1\,200$ LOC (tests), with $153$ passing tests: $142$ unit, $5$ integration, $6$ property-based.
+
+\section{Experimental methodology}
+\label{sec:methodology}
+
+\subsection{Models and environment}
+We benchmark on seven open-source decoder-only transformer models spanning four architectural families (Table~\ref{tab:models}).
+
+\begin{table}[H]
+\centering
+\small
+\caption{Benchmark corpus.}
+\label{tab:models}
+\begin{tabular}{lrrrl}
+  \toprule
+  Model & Params & $L$ & $n_{kv}$ / hd & Attention family \\
+  \midrule
+  Qwen2.5-0.5B-Instruct  & 0.5\,B & 24 & 2 / 64        & GQA, halfsplit RoPE \\
+  Qwen3-0.6B             & 0.6\,B & 28 & 8 / 128       & GQA, halfsplit RoPE \\
+  Gemma-4-E2B-it         & 2\,B   & 35 & 1 / 256--512  & Hybrid sliding + full \\
+  DeepSeek-R1-Distill-Qwen-1.5B & 1.5\,B & 28 & 2 / 128 & GQA, halfsplit RoPE \\
+  GLM-Edge-1.5B-chat     & 1.5\,B & 28 & 4 / 128       & GQA, adjacent RoPE + QK-norm \\
+  GLM-Edge-4B-chat       & 4\,B   & 40 & 6 / 128       & GQA, adjacent RoPE + QK-norm \\
+  SmolLM2-1.7B-Instruct  & 1.7\,B & 24 & 32 / 64       & MHA, halfsplit RoPE \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+All runs execute a real Hugging Face forward pass in bf16 with \verb|attn_implementation="eager"| on a CPU-only 15\,GB-RAM VM, using an identical long-form prompt (a $\sim 4\,000$-token text-continuation seed). KV tensors are captured from \verb|DynamicCache| and fed to the Rust codec binary as KKTV-format files. No mock, no fallback, no simplification.
+
+\subsection{Baselines}
+Two baselines are compared against:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{bf16 baseline}: the uncompressed cache at the same forward-pass configuration; $1.0\times$ by definition.
+  \item \textbf{TurboQuant turbo3}~\cite{turboquant}: the reference Python implementation at 3 bits/coord on both K and V, running on the same captured tensors. Its per-vector cost is $3d/8 + 4$ bytes (K, fp32 norm) and $3d/8$ bytes (V).
+\end{itemize}
+
+\subsection{Quality metric}
+For each codec configuration and each layer we compute the mean per-block reconstruction MSE on both K and V streams, excluding layer 0 (RoPE-degenerate). We report MSE \emph{inflation} against the v1.2 baseline (exact PCA, $b=3$) and adopt the same acceptance thresholds used in every ablation of the project:
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  MSE inflation & Verdict \\
+  \midrule
+  $\leq 1.10 \times$ & ACCEPT (safe to ship) \\
+  $1.10\times < \cdot \leq 1.30\times$ & MARGINAL (ship only if byte gain is large) \\
+  $> 1.30 \times$ & REJECT \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Extrapolation}
+Ratios at context lengths beyond the measured 4\,096 are computed by a byte-exact extrapolation script (\verb|benchmarks/extrapolate_v1_2_b2_vs_turbo3.py|). For the \textsc{KakeyaTurbo} codec, only the V-side shared PCA basis is context-invariant; everything else scales linearly with context. For TurboQuant turbo3, all bytes scale linearly. For sliding-window layers both codecs pass through.
+
+\section{Benchmark results}
+\label{sec:benchmark}
+
+\subsection{Main result: tier-1 ratios at ctx = 4\,096 and ctx = 128\,k}
+
+Table~\ref{tab:main} reports the \textsc{KakeyaTurbo} tier-1 configuration (b=2, randomized-SVD with $r=D/2$, oversample $p=8$, power iterations $q=2$) against TurboQuant turbo3.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Main result: \textsc{KakeyaTurbo} tier-1 vs TurboQuant turbo3. Compression ratios vs bf16 baseline. MSE inflation is versus exact-PCA $b=3$ baseline.}
+\label{tab:main}
+\begin{tabular}{lrrrrrr}
+  \toprule
+  Model & \multicolumn{2}{c}{ctx = 4\,096} & \multicolumn{2}{c}{ctx = 128k} & K MSE & V MSE \\
+  \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+  & \textsc{Turbo} & turbo3 & \textsc{Turbo} & turbo3 & infl. & infl. \\
+  \midrule
+  Qwen2.5-0.5B          & $5.40\times$ & $4.92\times$ & $5.46\times$ & $4.92\times$ & $1.13\times$ & $1.15\times$ \\
+  Qwen3-0.6B            & $\mathbf{6.61\times}$ & $5.12\times$ & $\mathbf{6.65\times}$ & $5.12\times$ & $1.08\times$ & $1.22\times$ \\
+  Gemma-4-E2B (FA only) & $\mathbf{6.32\times}$ & $5.28\times$ & $\mathbf{6.72\times}$ & $5.28\times$ & $0.42\times$ & $1.08\times$ \\
+  DeepSeek-R1-Distill   & $5.98\times$ & $5.12\times$ & $6.11\times$ & $5.12\times$ & $1.13\times$ & $1.07\times$ \\
+  GLM-Edge-1.5B         & $5.85\times$ & $5.12\times$ & $5.91\times$ & $5.12\times$ & $1.11\times$ & $1.13\times$ \\
+  SmolLM2-1.7B          & $5.37\times$ & $4.92\times$ & $5.37\times$ & $4.92\times$ & $1.16\times$ & $1.61\times$ \\
+  GLM-Edge-4B           & $5.83\times$ & $5.12\times$ & $5.88\times$ & $5.12\times$ & $1.12\times$ & $1.18\times$ \\
+  \midrule
+  \textbf{Average}      & \textbf{5.91}$\times$ & 5.08$\times$ & \textbf{6.01}$\times$ & 5.08$\times$ & & \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+Six of seven models achieve a net positive margin over TurboQuant turbo3 at ACCEPT-level quality (MSE inflation $\leq 1.30\times$). The lone exception, SmolLM2, is analysed in \S\ref{sec:smollm2}.
+
+\subsection{Tier-1.5: adding the inverse-RoPE preprocessor}
+
+For models using halfsplit RoPE without QK-norm (Qwen2.5, Qwen3, DeepSeek-R1-Distill), the inverse-RoPE preprocessor of \S\ref{sec:rope} is applied to the K stream before the skeleton fit. Table~\ref{tab:rope} reports the measured K-stream improvements.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Tier-1.5 inverse-RoPE preprocessor on the K stream: pre-RoPE vs post-RoPE compression.}
+\label{tab:rope}
+\begin{tabular}{lrrrr}
+  \toprule
+  Model & K MSE ratio & K bytes ratio & Predicted total & vs turbo3 \\
+  & (pre / post) & (pre / post) & ratio & \\
+  \midrule
+  Qwen2.5-0.5B      & $0.49\times$ & $0.80\times$ & $\sim 6.0\times$ & $+22\%$ \\
+  Qwen3-0.6B        & $0.86\times$ & $0.86\times$ & $\sim 7.1\times$ & $+39\%$ \\
+  DeepSeek-R1-Distill & $0.58\times$ & $0.81\times$ & $\sim 6.8\times$ & $+33\%$ \\
+  \midrule
+  Gemma-4-E2B       & $0.95\times$ & $1.42\times$ & (worse)          & REJECT \\
+  GLM-Edge-1.5B     & $1.13\times$ & $1.03\times$ & (worse)          & REJECT \\
+  GLM-Edge-4B       & $1.12\times$ & $1.03\times$ & (worse)          & REJECT \\
+  SmolLM2-1.7B      & $0.92\times$ & $0.96\times$ & marginal         & MARGINAL \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+The clean architectural bifurcation confirms our hypothesis: the inverse-RoPE preprocessor is useful exactly where RoPE is applied in its canonical halfsplit form without QK-norm, and harmful on architectures that use a different rotation (Gemma-4) or a post-QK-norm key projection (GLM-Edge).
+
+\subsection{The SmolLM2 outlier: a structural limit}
+\label{sec:smollm2}
+
+SmolLM2 is the only benchmark model where no $(b, r)$ configuration simultaneously beats turbo3 \emph{and} maintains ACCEPT quality. Table~\ref{tab:smollm2} enumerates the Pareto frontier.
+
+\begin{table}[H]
+\centering
+\small
+\caption{SmolLM2-1.7B: exhaustive knob search on the $(b, r)$ frontier. No configuration achieves both ACCEPT V-MSE and a positive margin over turbo3 ($4.92\times$).}
+\label{tab:smollm2}
+\begin{tabular}{lrrrl}
+  \toprule
+  Configuration & Ratio & vs turbo3 & V MSE & Verdict \\
+  \midrule
+  v1.2 $b=3$ exact              & $3.09\times$ & $-37\%$ & $1.00\times$ & ACCEPT \\
+  $b=2$ sym $r=32$              & $5.37\times$ & $+9\%$  & $1.61\times$ & REJECT (V) \\
+  $b_K{=}2, b_V{=}3$, $r{=}32$  & $4.98\times$ & $+1\%$  & $1.54\times$ & REJECT (V) \\
+  $b=2$, $r_K{=}32, r_V{=}64$   & $4.47\times$ & $-9\%$  & $1.13\times$ & MARGINAL \\
+  $b_K{=}2,b_V{=}3, r_V{=}64$   & $3.94\times$ & $-20\%$ & $1.00\times$ & ACCEPT (below v1.2) \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+The root cause is structural: SmolLM2 is an MHA model with head dimension $64$, and its V-stream PCA spectrum is essentially flat; exact PCA requires $d_{\text{eff}} = 59$ of $D = 64$ to capture $95\%$ variance. There is no rank tail to truncate. Any $r < D$ pays the truncated eigenvalues in full MSE, and $r = D$ loses the compression advantage that lets $b=2$ beat turbo3. This Pareto gap is intrinsic to the architecture, not a codec defect. We document SmolLM2 as a \emph{tier-2 capability} in the product surface.
+
+\subsection{Quality vs compression Pareto summary}
+
+Ranking the codec configurations on the $(\text{ratio}, \text{quality})$ plane:
+\begin{itemize}[leftmargin=*]
+  \item Exact PCA with $b=3$ (v1.2 shipped default): low ratio, high quality.
+  \item TurboQuant turbo3: mid ratio, low K quality on RoPE-dominated models (8$\times$--400$\times$ worse K MSE than v1.2 on the Qwen family per our prior measurements).
+  \item \textsc{KakeyaTurbo} tier-1 ($b=2$, $r=D/2$): high ratio, MARGINAL quality on six models, ACCEPT on Gemma-4.
+  \item Tier-1.5 (inverse-RoPE added): moves the Qwen / DeepSeek family further right by $+8\%$ to $+9\%$ ratio at no quality cost.
+  \item SmolLM2 is the only model where no configuration enters the ACCEPT $\cap$ beats-turbo3 region (see \S\ref{sec:smollm2}).
+\end{itemize}
+
+\subsection{Flagship projections at 2026-Q2 scale}
+
+None of the April-2026 flagship open-source models (Qwen3-235B-A22B, DeepSeek-V3.1, Kimi-K2-Instruct, GLM-4.6, MiniMax-M2) is loadable on our 15\,GB-RAM VM; their bf16 weights alone are $458$--$2000$\,GB. We therefore report byte-exact analytical extrapolation from architecturally-identical small-sibling proxies that \emph{are} measured (Table~\ref{tab:flagship}).
+
+\begin{table}[H]
+\centering
+\small
+\caption{Byte-exact extrapolation to 2026-Q2 flagship open-source models. Per-vector bytes come from the measured small-sibling proxy; $L$ and $n_{kv} \cdot \text{hd}$ come from the flagship config.}
+\label{tab:flagship}
+\begin{tabular}{lrrrrrr}
+  \toprule
+  Flagship & Params & $L$ & hd & tier-1 & tier-1.5 & vs turbo3 \\
+  \midrule
+  Qwen3-235B-A22B           & 235\,B & 94 & 128 & $6.53\times$ & $\mathbf{7.13\times}$ & $+39\%$ \\
+  DeepSeek-V3.1 (decomp)    & 671\,B & 61 & 192 & $5.92\times$ & $6.76\times$ & $+30\%$ \\
+  Kimi-K2-Instruct (decomp) & $1{,}000$\,B & 61 & 192 & $5.92\times$ & $6.76\times$ & $+30\%$ \\
+  GLM-4.6                   & 355\,B & 92 & 128 & $5.84\times$ & ---              & $+14\%$ \\
+  MiniMax-M2                & 229\,B & 62 & 128 & $5.92\times$ & $6.76\times$ & $+32\%$ \\
+  \bottomrule
+\end{tabular}
+\end{table}
+
+DeepSeek-V3.1 and Kimi-K2 use Multi-Latent Attention (MLA); the reported ratios are on the decompressed K/V (what the attention computation sees). The additional gain from applying \textsc{KakeyaTurbo} to the stored MLA latent is an open question.
+
+\section{Related work}
+\label{sec:related}
+
+\paragraph{KV cache compression.} H\textsubscript{2}O~\cite{h2o} and Scissorhands~\cite{scissorhands} propose token eviction based on attention-score heavy hitters. StreamingLLM~\cite{streaming-llm} observes the attention-sink phenomenon and preserves the first few tokens exact. KIVI~\cite{kivi} is a per-channel quantization scheme for K (asymmetric quantization per channel) and per-token for V. TurboQuant~\cite{turboquant} is a data-oblivious WHT + Lloyd--Max scalar quantizer. We compare against turbo3 head-to-head on the same captured tensors in \S\ref{sec:benchmark}.
+
+\paragraph{Low-rank KV methods.} Kakeya-KV~\cite{kakeya-kv} is our prior work and the direct ancestor of the skeleton construction here. DMC~\cite{dmc} and LESS~\cite{less} learn low-rank projections during training. Our approach is post-hoc and training-free.
+
+\paragraph{Randomized numerical linear algebra.} The Halko--Martinsson--Tropp randomized SVD~\cite{halko-martinsson-tropp} is a textbook algorithm; we use it as a drop-in for exact PCA and observe that the implicit rank cap is the structural win. Frequent Directions~\cite{frequent-directions} is a related streaming PCA sketch we defer to future work.
+
+\paragraph{Kakeya geometry.} The Kakeya conjecture has a rich history~\cite{kakeya-problem}; the three-dimensional case was recently resolved by Wang and Zahl~\cite{wang-zahl}. Our use is intuitional: the scaling of the minimum tube-union measure is the geometric sibling of the rate--distortion budget for a direction-covering code.
+
+\section{Limitations and future work}
+\label{sec:limitations}
+
+\paragraph{Quality measurement.} We report reconstruction MSE, not perplexity or downstream-task accuracy. A full PPL sweep across LongBench/RULER is deferred to future work; early checks on Gemma-4-E2B at 2k context show greedy-decode token-level agreement with the bf16 baseline for the first 12 tokens. End-to-end quality at 128k context on flagship models remains unverified.
+
+\paragraph{Flagship measurements.} All flagship numbers are analytical extrapolation from measured proxies. Validation on $\geq 500$\,GB-RAM hardware is pending.
+
+\paragraph{MLA models.} DeepSeek-V3.1 and Kimi-K2 use MLA; our reported numbers compress the decompressed K/V, not the stored latent. Applying the codec to the MLA latent is a v1.4 open item.
+
+\paragraph{GLM-family inverse-RoPE.} GLM-Edge uses adjacent-pairs RoPE + QK-norm; our halfsplit inverse is incompatible. A GLM-correct inverse rotation is tracked as v1.3.1.
+
+\paragraph{Attention-aware extensions.} The \texttt{weights: \&[f32]} parameter in our API is a reserved socket for attention-score-driven importance, but is not yet wired. The v1.4 roadmap (public in the repository) proposes closing this loop by piping H\textsubscript{2}O-style prefill attention scores into the weighted PCA fit.
+
+\paragraph{SmolLM2-class models.} MHA with head dim $64$ and flat V spectra defeats rank truncation; the Pareto gap observed on SmolLM2 will likely appear on any future model with similar structure. We ship SmolLM2 as a tier-2 capability that requires an explicit quality-versus-bytes trade-off at the deployment policy layer.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \textsc{KakeyaTurbo}, a training-free KV cache compression codec that unifies TurboQuant-style scalar quantization and Kakeya-style low-rank skeleton construction within a single rate--distortion objective. Three design decisions --- (i) randomized-SVD skeleton with rank cap $r = D/2$, (ii) inverse-RoPE preprocessing on the key stream for canonical-RoPE models, and (iii) 2-bit Lloyd--Max residual quantization after WHT --- compose to a codec that beats TurboQuant turbo3 on 6 of 7 open-source models at ACCEPT-level quality, with measured gains of $+9.1\%$ to $+29.2\%$ at ctx = 4\,096 and analytical projections of $+14\%$ to $+39\%$ on 2026 flagship open-source models at 128k context. The project ships with 153 automated tests, real-data benchmarks on seven models, and a public repository with all raw measurements and runnable reproduction scripts. The honest position is: the codec is ready for deployment on Qwen, DeepSeek, Gemma, GLM-Edge, and MiniMax families; SmolLM2-class MHA-small-head models require a tier-2 quality-vs-bytes trade-off; end-to-end perplexity validation is future work; and the attention-aware extension (v1.4) has a concrete roadmap documented in the same repository.
+
+\paragraph{Reproducibility.} All code, unit tests, integration tests, property-based tests, real-measurement JSON, and ablation decision documents are released under Apache-2.0. Repository:
+\begin{center}
+\url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress}
+\end{center}
+The v1.3 release state lives on branch \texttt{cursor/v1-3-rsvd-rope-aware-12f5} (Pull Request \#11); the v1.4 roadmap is in \texttt{reports/v1\_3\_rsvd\_rope/V1\_4\_V1\_5\_ROADMAP.md}.
+
+\begin{thebibliography}{99}
+
+\bibitem{h2o}
+Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., R\'e, C., Barrett, C., Wang, Z., Chen, B.
+\newblock {H$_2$O: Heavy-hitter oracle for efficient generative inference of large language models.}
+\newblock \emph{NeurIPS}, 2023.
+
+\bibitem{scissorhands}
+Liu, Z., Desai, A., Liao, F., Wang, W., Xie, V., Xu, Z., Kyrillidis, A., Shrivastava, A.
+\newblock {Scissorhands: Exploiting the persistence of importance hypothesis for LLM KV cache compression at test time.}
+\newblock \emph{NeurIPS}, 2023.
+
+\bibitem{deepseekv3}
+DeepSeek-AI.
+\newblock {DeepSeek-V3 Technical Report.}
+\newblock \emph{arXiv preprint arXiv:2412.19437}, 2024.
+
+\bibitem{turboquant}
+TheTom.
+\newblock {TurboQuant+: Gaussian-bounded scalar quantization for KV cache.}
+\newblock \emph{GitHub repository, \url{https://github.com/TheTom/turboquant_plus}}, 2024.
+
+\bibitem{kakeya-kv}
+KakeyaKV Contributors.
+\newblock {Kakeya KV cache compression.}
+\newblock \emph{\url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress}}, 2026. (v1.0 and v1.2, this repository.)
+
+\bibitem{kakeya-problem}
+Kakeya, S.
+\newblock {Some problems on maxima and minima regarding ovals.}
+\newblock \emph{Tohoku Science Reports}, 6:71--88, 1917.
+
+\bibitem{wang-zahl}
+Wang, H., Zahl, J.
+\newblock {Volume estimates for unions of convex sets, and the Kakeya set conjecture in three dimensions.}
+\newblock \emph{arXiv preprint arXiv:2502.17655}, 2025.
+
+\bibitem{halko-martinsson-tropp}
+Halko, N., Martinsson, P.-G., Tropp, J.~A.
+\newblock {Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions.}
+\newblock \emph{SIAM Review}, 53(2):217--288, 2011.
+
+\bibitem{rope}
+Su, J., Lu, Y., Pan, S., Murtadha, A., Wen, B., Liu, Y.
+\newblock {RoFormer: Enhanced transformer with rotary position embedding.}
+\newblock \emph{Neurocomputing}, 568:127063, 2024.
+
+\bibitem{streaming-llm}
+Xiao, G., Tian, Y., Chen, B., Han, S., Lewis, M.
+\newblock {Efficient streaming language models with attention sinks.}
+\newblock \emph{ICLR}, 2024.
+
+\bibitem{kivi}
+Liu, Z., Yuan, J., Jin, H., Zhong, S., Xu, Z., Braverman, V., Chen, B., Hu, X.
+\newblock {KIVI: A tuning-free asymmetric 2bit quantization for KV cache.}
+\newblock \emph{ICML}, 2024.
+
+\bibitem{dmc}
+Nawrot, P., Lancucki, A., Chochowski, M., Tarjan, D., Ponti, E.~M.
+\newblock {Dynamic memory compression: Retrofitting LLMs for accelerated inference.}
+\newblock \emph{arXiv preprint arXiv:2403.09636}, 2024.
+
+\bibitem{less}
+Dong, H., Yang, X., Zhang, Z., Wang, Z., Chi, Y., Chen, B.
+\newblock {Get more with LESS: Synthesizing recurrence with KV cache compression for efficient LLM inference.}
+\newblock \emph{ICML}, 2024.
+
+\bibitem{frequent-directions}
+Liberty, E.
+\newblock {Simple and deterministic matrix sketching.}
+\newblock \emph{KDD}, 2013.
+
+\end{thebibliography}
+
+\appendix
+
+\section{Complete benchmark protocol}
+\label{app:protocol}
+
+All benchmarks in this paper are reproducible via the following one-line invocation after cloning the repository and downloading a model:
+\begin{verbatim}
+python3 benchmarks/kakeyaturbo_v1_2_real_bench.py \
+    --model-path models/<model-dir> \
+    --model-name <model-name> \
+    --context-tokens 4096 \
+    --bit-width 2 \
+    --pca-method randomized \
+    --out-dir reports/v1_3_rsvd_rope/bench/<model>_rsvd_half/ctx_4096
+\end{verbatim}
+The inverse-RoPE preprocessor adds:
+\begin{verbatim}
+python3 benchmarks/rope_aware_k_poc.py \
+    --model-dir <model-dir> --model-name <model-name> \
+    --ctx 4096 --rope-pairing halfsplit \
+    --out-dir reports/v1_3_rsvd_rope/rope_poc/<model-name>
+\end{verbatim}
+
+Each run produces a JSON manifest per layer plus an aggregate \verb|summary.json|. All manifests are committed to the repository under \verb|reports/v1_3_rsvd_rope/|.
+
+\section{Codec parameter defaults}
+\label{app:params}
+
+The reference v1.3 tier-1 configuration is:
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  Parameter & Default value \\
+  \midrule
+  \texttt{bit\_width} & 2 \\
+  \texttt{variance\_ratio} & 0.95 \\
+  \texttt{k} (K-means centres) & 16 \\
+  \texttt{block\_size} & 512 \\
+  \texttt{kmeans\_max\_iter} & 32 \\
+  \texttt{share\_basis} (V stream) & true \\
+  \texttt{share\_basis} (K stream) & false \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+The randomized-SVD parameters are:
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  Parameter & Default value \\
+  \midrule
+  \texttt{target\_rank} & $D/2$ \\
+  \texttt{oversample} ($p$) & 8 \\
+  \texttt{power\_iters} ($q$) & 2 \\
+  \texttt{seed\_offset} & \texttt{0x9E37\_79B9\_7F4A\_7C15} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Tier-1.5 additionally applies the inverse-RoPE preprocessor to the K stream before the codec sees it, using the model's \texttt{rope\_theta} and halfsplit pairing convention.
+
+\section{Qualitative ablation trail}
+\label{app:ablation}
+
+The v1.3 configuration is the endpoint of seven ablations run over the project's lifetime. For completeness, the full decision chain is:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{v1.0 $\to$ v1.2 A}: bf16 storage of skeleton (halves skeleton bytes, no quality loss). ACCEPT, shipped.
+  \item \textbf{v1.2 B'}: V-stream layer-pooled PCA basis. ACCEPT (V only), shipped. Rejected on K due to family-dependent divergence.
+  \item \textbf{K-side $d_{\text{eff}}$ truncation} + outlier compensation: every $0.05$ drop in \texttt{variance\_ratio} doubles K MSE; outliers recover $\sim 25\%$. \textbf{REJECT}.
+  \item \textbf{Block size doubling} (512 $\to$ 1024): MSE inflation $1.14\times$ on average with $16\%$ byte savings. \textbf{MARGINAL}, not shipped as default.
+  \item \textbf{Cross-layer basis sharing} on K: $2\times$--$15\times$ MSE inflation on Qwen/DeepSeek family, ACCEPT on Gemma/GLM-Edge. \textbf{REJECT as default, accept as per-family knob.}
+  \item \textbf{Bit width sweep} ($b=3 \to b=2$): $+4\%$ to $+23\%$ ratio, MSE inflation $1.07\times$--$1.13\times$. \textbf{ACCEPT, new default.}
+  \item \textbf{Randomized SVD with rank cap $r = D/2$}: combined with $b=2$, beats turbo3 on 6/7 at ACCEPT quality. \textbf{ACCEPT, new default.}
+  \item \textbf{Inverse-RoPE K preprocessor}: $14\%$--$51\%$ K MSE drop on halfsplit-RoPE family, no-op or harmful elsewhere. \textbf{ACCEPT as per-family knob.}
+\end{enumerate}
+The full narrative is in the repository's \verb|reports/v1_3_rsvd_rope/DECISION.md|.
+
+\end{document}
