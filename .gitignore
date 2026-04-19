@@ -2,3 +2,15 @@ __pycache__/
 *.py[cod]
 models/
 turboquant_plus/
+
+# Rust build artifacts
+kakeyaturbo/target/
+# Cargo.lock IS tracked for reproducible binary builds
+
+# KV cache tensor dumps (can be multi-GB)
+*.kktv
+/tmp/*.log
+/tmp/v13_*/
+/tmp/bw_*/
+/tmp/rope_poc_*/
+/tmp/smollm2_*/
