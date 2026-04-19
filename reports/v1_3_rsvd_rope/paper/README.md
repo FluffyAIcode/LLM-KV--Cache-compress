@@ -12,8 +12,8 @@
 
 | File | Size | Purpose |
 |---|---:|---|
-| `kakeyaturbo.tex` | ~62 KB | single-file LaTeX source (arXiv-compatible, no custom style files) |
-| `kakeyaturbo.pdf` | ~410 KB | compiled 18-page PDF for preview |
+| `kakeyaturbo.tex` | ~64 KB | single-file LaTeX source (arXiv-compatible, no custom style files) |
+| `kakeyaturbo.pdf` | ~399 KB | compiled 18-page PDF for preview |
 
 ## Reproducibility
 
