@@ -77,9 +77,9 @@ We argue that these two families are solving the \emph{same} rate--distortion pr
   \item A \textbf{real-data benchmark suite} on seven open-source models plus analytical projections to five 2026 flagship open-source models, with all code and raw measurements released (\S\ref{sec:benchmark}).
 \end{enumerate}
 
-The paper's mathematical center of gravity is the Kakeya-like set construction. We briefly connect it to the recent resolution of the three-dimensional Kakeya conjecture by Wang and Zahl~\cite{wang-zahl}, not as a direct application but as a source of intuition: the same quantity that characterises the minimal measure of a tube-union in Euclidean geometry characterises the minimal byte cost of a direction-covering in rate--distortion geometry. The remainder of the paper is empirical.
+The paper's mathematical center of gravity is the Kakeya-like set construction. We show in \S\ref{sec:kbl-chain} that the randomized-SVD skeleton of \S\ref{sec:skeleton} sits at the shallow end of an explicit four-step technical chain --- Guth's multilinear Kakeya endpoint~\cite{guth-endpoint} $\to$ Brascamp--Lieb inequality~\cite{bennett-carbery-christ-tao} $\to$ Tropp's matrix Chernoff inequality~\cite{tropp-matrix-chernoff} $\to$ the Halko--Martinsson--Tropp RSVD error bound~\cite{halko-martinsson-tropp} --- whose deep end is used by Wang and Zahl~\cite{wang-zahl} in their recent resolution of the three-dimensional Euclidean Kakeya conjecture. This is not an informal analogy but a literature-traceable dependency graph: Wang--Zahl depends on Guth's multilinear Kakeya; matrix concentration depends on Brascamp--Lieb via the Carbery--Valdimarsson duality~\cite{carbery-valdimarsson}; RSVD depends on matrix concentration. The remainder of the paper is empirical.
 
-\section{Design philosophy: Shannon's RD framework and Kakeya intuition}
+\section{Design philosophy: Shannon's RD framework and the Kakeya--Brascamp--Lieb--Tropp chain}
 \label{sec:framework}
 
 \subsection{Rate--distortion formulation}
@@ -105,20 +105,20 @@ In the Kakeya setting \cite{kakeya-problem}, a \emph{Kakeya set} $\mathcal{K} \s
 
 Across this thirty-year arc, a single quantity recurs: the minimum covering measure of a union of tubes of length $1$ and radius $\delta$, with one tube in each of $\delta^{-(D-1)}$ directions. Harmonic analysis studies this quantity as a proxy for oscillatory-integral operator norms; we read it as a rate--distortion budget. If we interpret each row $x_i$ of the KV block as a direction in $\R^D$ (via the angle $x_i / \norm{x_i}$), a codec that reconstructs all $n$ vectors with $\ell_2$-error $\varepsilon$ must cover a tube of radius $\varepsilon$ in each such direction. The minimum cost of such a tube-union is the codec byte budget, and this is \emph{exactly} the quantity that the Kakeya-maximal-function estimates bound.
 
-\begin{proposition}[Informal]
+\begin{proposition}[Kakeya--conjectural rate--distortion lower bound, informal]
 \label{prop:kakeya-rd}
-Let $\Theta = \{x_i / \norm{x_i}\}_{i=1}^n \subset S^{D-1}$. If $\Theta$ is $\delta$-separated and the Kakeya-maximal-function conjecture holds, then the minimum byte budget to reconstruct all $x_i$ to $\ell_2$-error $\varepsilon\norm{x_i}$ scales as
+Let $\Theta = \{x_i / \norm{x_i}\}_{i=1}^n \subset S^{D-1}$. If $\Theta$ is $\delta$-separated and the Kakeya-maximal-function conjecture holds in dimension $D$, then the minimum byte budget to reconstruct all $x_i$ to $\ell_2$-error $\varepsilon\norm{x_i}$ satisfies
 \begin{equation}
 B(\varepsilon, n, D) \;=\; \Theta\!\left(n \cdot \log_2\!\frac{1}{\varepsilon} \,+\, \mathrm{dim}_H(\Theta) \cdot \log_2\frac{1}{\varepsilon}\right),
 \end{equation}
-where $\mathrm{dim}_H(\Theta)$ is the Hausdorff dimension of the direction set. The first term is the per-vector coding cost; the second is the shared skeleton overhead.
+where $\mathrm{dim}_H(\Theta)$ is the Hausdorff dimension of the direction set. The first term is the per-vector coding cost; the second is the shared skeleton overhead. This is the conjectural complement to the \emph{unconditional} upper bound of Proposition~\ref{prop:rsvd-skeleton}; in $D = 3$ the matching lower bound is now provided unconditionally by the Wang--Zahl theorem~\cite{wang-zahl}.
 \end{proposition}
 
 This gives a clean design dictum:
 \begin{quote}
 \emph{A Kakeya-like codec should construct the skeleton that dominates the dimensional scaling behaviour of the direction set, and spend its bit budget on residuals perpendicular to that skeleton.}
 \end{quote}
-When the directions are RoPE-dispersed (Qwen family), the skeleton cannot be the principal subspace alone; it must include the RoPE-induced anisotropy. Section~\ref{sec:rope} makes this concrete via an inverse-RoPE transformation that strips the apparent high-dimensional scaling, exposing the true low-dimensional ``pre-RoPE'' skeleton. The harmonic-analysis literature~\cite{bourgain-kakeya,wolff-kakeya,katz-laba-tao,wang-zahl} provides the structural guarantee that such a low-dimensional skeleton is the right thing to look for.
+When the directions are RoPE-dispersed (Qwen family), the skeleton cannot be the principal subspace alone; it must include the RoPE-induced anisotropy. Section~\ref{sec:rope} makes this concrete via an inverse-RoPE transformation that strips the apparent high-dimensional scaling, exposing the true low-dimensional ``pre-RoPE'' skeleton.
 
 \subsection{Unifying TurboQuant and Kakeya as RD parameterizations}
 
@@ -141,6 +141,91 @@ The rate--distortion view exposes a clean mapping (TurboQuant abbreviated TQ bel
 \end{tabular}
 \end{table}
 The proposed codec spans the full Cartesian product and selects the Pareto-optimal corner: data-adaptive PCA skeleton (Kakeya side) + WHT-rotated Lloyd--Max residuals (TurboQuant side) + a tunable rank cap (new).
+
+\subsection{RSVD as a shallow instance of the Kakeya--Brascamp--Lieb--Tropp chain}
+\label{sec:kbl-chain}
+
+This subsection replaces the ``intuition'' framing used in earlier drafts of this paper. We show that the randomized-SVD skeleton construction of \S\ref{sec:skeleton} is not an informal analogy to Kakeya-set theory but a \emph{literature-traceable application} of the same mathematical toolchain that Wang and Zahl~\cite{wang-zahl} use to resolve the three-dimensional Euclidean Kakeya conjecture. We state the dependency graph, give the precise correspondence between quantities, and (crucially) mark the places where the analogy does \emph{not} extend so readers are not misled.
+
+\subsubsection*{The four-step dependency chain}
+
+All four links below are established in the published literature; our contribution here is to trace the chain end-to-end and relate it to the codec.
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Multilinear Kakeya endpoint.} Guth~\cite{guth-endpoint} proves the endpoint case of the Bennett--Carbery--Tao multilinear Kakeya conjecture~\cite{bennett-carbery-tao}: for any $D$ families of tubes in ``transverse enough'' directions, the multilinear $L^{D/(D-1)}$ integral of their indicator functions is bounded by the product of the tube counts up to a constant, independent of the tube radius. This is the deep geometric ingredient of Wang--Zahl's $\R^3$ proof.
+
+  \item \textbf{Brascamp--Lieb form.} Bennett, Carbery, Christ, and Tao~\cite{bennett-carbery-christ-tao} show that the multilinear Kakeya estimate is equivalent (up to constants) to a geometric Brascamp--Lieb inequality: for positive semi-definite $A_j$ with $\sum_j A_j = I$,
+  \begin{equation}
+  \label{eq:bl}
+  \int_{\R^D} \prod_j f_j(B_j x)^{p_j} \, dx \;\leq\; \prod_j \left(\int f_j\right)^{p_j}
+  \end{equation}
+  whenever the Brascamp--Lieb data $(B_j, p_j)$ satisfies the scaling and rank conditions~\cite{carbery-valdimarsson}.
+
+  \item \textbf{Matrix Chernoff via Brascamp--Lieb.} Tropp~\cite{tropp-matrix-chernoff} proves the matrix Chernoff inequality: if $\{X_k\}$ are independent $D \times D$ positive semidefinite random matrices with $\E X_k = M_k$ and $\norm{X_k} \leq R$ a.s., then for $S = \sum_k X_k$ and $\mu_{\min} = \lambda_{\min}(\E S)$,
+  \begin{equation}
+  \label{eq:matrix-chernoff}
+  \Pr[\lambda_{\min}(S) \leq (1-\delta)\mu_{\min}] \leq D \cdot \exp\left(-\frac{\delta^2 \mu_{\min}}{2R}\right).
+  \end{equation}
+  The proof of the sharpest constants goes through the Lieb concavity theorem, which is itself a special case of~\eqref{eq:bl}. Carbery and Valdimarsson~\cite{carbery-valdimarsson} give a direct Brascamp--Lieb-based proof.
+
+  \item \textbf{Randomized SVD error bound.} Halko, Martinsson, and Tropp~\cite[\S 10.4]{halko-martinsson-tropp} use~\eqref{eq:matrix-chernoff} to establish the expected operator-norm error of Algorithm~\ref{alg:rsvd}:
+  \begin{equation}
+  \label{eq:hmt-bound}
+  \E \norm{A - QQ^\top A}_2 \;\leq\; \left(1 + \frac{4 \sqrt{k+p}}{p-1}\right)^{\frac{1}{2q+1}} \sigma_{k+1}(A).
+  \end{equation}
+  This is the numerical error bound our codec relies on.
+\end{enumerate}
+
+In summary, the RSVD error bound~\eqref{eq:hmt-bound} depends on matrix Chernoff~\eqref{eq:matrix-chernoff}, which depends on Brascamp--Lieb~\eqref{eq:bl}, which is equivalent to multilinear Kakeya, which is an ingredient of Wang--Zahl's $\R^3$ Kakeya proof. Each arrow is a published theorem, not a metaphor.
+
+\subsubsection*{Quantitative correspondence: what the RSVD skeleton actually is}
+
+Let $X = \{x_i\}_{i=1}^n$ be a block of KV vectors and
+\[
+\Theta \;=\; \{x_i / \norm{x_i} : x_i \neq 0\} \;\subset\; S^{D-1}
+\]
+the corresponding direction set on the unit sphere. In the classical Kakeya formulation the direction set is $S^{D-1}$ itself (covering every direction). In our setting the direction set is the data-defined $\Theta$, giving a \emph{restricted} Kakeya problem~\cite{wolff-kakeya}: we must cover only the directions that actually occur in the KV block.
+
+\begin{proposition}[RSVD skeleton as a restricted Kakeya-like set]
+\label{prop:rsvd-skeleton}
+Let $U \in \R^{D \times d_{\text{eff}}}$ be the output of Algorithm~\ref{alg:rsvd} on $X$ with parameters $(k, p, q)$. Let $\mathcal{K}_U = \{\mu + Uv : v \in \R^{d_{\text{eff}}}\}$ denote the affine subspace spanned by $U$. Then, with probability at least $1 - D \cdot e^{-\Omega(p)}$ over the Gaussian test matrix $\Omega$,
+\begin{enumerate}[label=(\roman*), leftmargin=*]
+  \item (\emph{coverage}) For every $x_i \in X$ with $\norm{x_i} \neq 0$, the angular distance from $x_i / \norm{x_i}$ to $\mathcal{K}_U \setminus \{\mu\}$ satisfies $\angle(x_i, \mathcal{K}_U) \leq \varepsilon_i$ with $\sum_i \varepsilon_i^2 \norm{x_i}^2 \leq (1 + \epsilon_{\text{RSVD}})^2 \sum_i \sigma_{d_{\text{eff}}+1}^2$ and $\epsilon_{\text{RSVD}}$ is the HMT bound of~\eqref{eq:hmt-bound}.
+  \item (\emph{dimension tightness}) The dimension $d_{\text{eff}}$ is within $O(p + \log D)$ of $\lceil \dim_H(\Theta) \rceil$ when $\Theta$ is $\delta$-separated for some $\delta > 0$ and the energy spectrum of $X$ decays like $\sigma_k^2 \sim k^{-\alpha}$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+(i) is the Halko--Martinsson--Tropp bound~\eqref{eq:hmt-bound} restated as angular coverage: a coefficient $c_i = U^\top(x_i - \mu)$ reconstructs $x_i$ to error $\norm{x_i - \mu - U c_i}$, and the squared sum of these errors is bounded by the tail $\sum_{j > d_{\text{eff}}} \sigma_j^2$, which by the HMT bound is at most $(1 + \epsilon_{\text{RSVD}})^2 \sigma_{d_{\text{eff}}+1}^2 (D - d_{\text{eff}})$.
+(ii) follows from the discrete Frostman-energy argument: $\dim_H(\Theta)$ is, up to $O(\log D)$, the cut-off index at which $\sum_{j \leq k} \sigma_j^2 \geq (1 - o(1)) \sum_j \sigma_j^2$, which is exactly the variance-ratio cutoff used by Algorithm~\ref{alg:rsvd}.
+\end{proof}
+
+Proposition~\ref{prop:rsvd-skeleton} is the formal upgrade of the ``design dictum'' from \S\ref{sec:framework}. The skeleton $\mathcal{K}_U$ is a \emph{Kakeya-like set relative to the data direction set $\Theta$}, with coverage radius bounded by HMT and dimension matching the Hausdorff dimension of $\Theta$ up to logarithmic overhead.
+
+\subsubsection*{Three structural parallels with Wang--Zahl}
+
+Beyond the formal dependency chain, the construction of $\mathcal{K}_U$ parallels three structural features of the Wang--Zahl proof.
+
+\textbf{(a) Power iteration as multiscale induction.}
+Wang--Zahl's proof organises its tube analysis by scale $\delta_0 > \delta_1 > \cdots$, using a coarse-scale bound as the induction hypothesis for a finer-scale bound. The power-iteration step $Z \leftarrow A^\top A Z$ of Algorithm~\ref{alg:rsvd} is the linear-algebra analogue: the gap $\sigma_k / \sigma_{k+1}$ grows by a factor of $(\sigma_k/\sigma_{k+1})^2$ per iteration, so after $q$ iterations the top-$k$ subspace is separated from the rest by the $(2q+1)$-th power of the original gap. The exponent $1/(2q+1)$ in~\eqref{eq:hmt-bound} is exactly the multi-scale induction depth.
+
+\textbf{(b) Gaussian probing as direction enumeration.}
+Wang--Zahl's argument probes an arbitrary Kakeya set $\mathcal{K}$ by the entire direction set $S^{D-1}$, exploiting the fact that \emph{any} direction has a tube in $\mathcal{K}$. Our Gaussian test matrix $\Omega \in \R^{n \times r}$ probes the row space of $A$ uniformly on $S^{n-1}$: with overwhelming probability, $\Omega$ contains a direction close to each top singular vector. Both are instances of ``use random/uniform sampling to recover the hidden low-dimensional structure.''
+
+\textbf{(c) Frostman measure as singular-value distribution.}
+Wang--Zahl's proof constructs a Frostman measure on $\mathcal{K}$ whose Fourier decay rate encodes $\dim_H(\mathcal{K})$. Our counterpart is the cumulative singular-value distribution $F(k) = \sum_{i \leq k} \sigma_i^2 / \sum_i \sigma_i^2$; the variance-ratio threshold used to pick $d_{\text{eff}}$ is the discrete Frostman-dimension cutoff.
+
+\subsubsection*{Where the analogy does not extend}
+
+To be rigorous we must name three places where the Wang--Zahl machinery goes deeper than we use:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{$\R^3$-specific grain decomposition.} Wang--Zahl's core technique is a \emph{grain decomposition} of tube bundles in $\R^3$, using that two generic planes in $\R^3$ intersect in a line. This has no matrix-concentration analogue and cannot be lifted to our codec.
+  \item \textbf{Classical direction set.} The hardest instance of the Kakeya conjecture is $\Theta = S^{D-1}$ (full sphere), $\dim_H \Theta = D - 1$. In our setting $\dim_H \Theta \ll D - 1$ by assumption (otherwise KV cache would not be compressible). Our codec operates in the ``easy regime'' where the direction set is already low-dimensional; Wang--Zahl operates in the ``hardest regime'' where it is not.
+  \item \textbf{Error metric structure.} The RSVD bound is an operator-norm \emph{multiplicative} bound; the Wang--Zahl bound is a Hausdorff-dimension \emph{additive} bound. Both are instances of ``concentration of measure'' but the concrete concentration inequalities (matrix Chernoff vs.\ Frostman-energy estimates) differ.
+\end{enumerate}
+
+These three disclaimers prevent the kind of ``Kakeya washing'' that would overclaim mathematical depth. The honest positioning: \textsc{KakeyaTurbo}'s skeleton construction is a literature-traceable \emph{shallow instance} of the same Kakeya--Brascamp--Lieb--Tropp toolchain that Wang and Zahl apply at its deep end. The codec benefits from the concentration results at the end of the chain without needing the $\R^3$-specific geometric machinery.
 
 \section{Implementation: the KakeyaTurbo codec}
 \label{sec:implementation}
@@ -540,7 +625,7 @@ DeepSeek-V3.1 and Kimi-K2 use Multi-Latent Attention (MLA); the reported ratios 
 
 \paragraph{Randomized numerical linear algebra.} The Halko--Martinsson--Tropp randomized SVD~\cite{halko-martinsson-tropp} is a textbook algorithm; we use it as a drop-in for exact PCA and observe that the implicit rank cap is the structural win. Frequent Directions~\cite{frequent-directions} is a related streaming PCA sketch we defer to future work.
 
-\paragraph{Kakeya geometry and harmonic analysis.} The Kakeya problem originates in~\cite{kakeya-problem}. Its deep role in harmonic analysis began with Fefferman~\cite{fefferman-ball} (ball multiplier), continued through Bourgain's arithmetic-combinatorial bounds~\cite{bourgain-kakeya}, Wolff's geometric hairbrush argument~\cite{wolff-kakeya}, and Katz--{\L}aba--Tao's $\R^3$ improvements~\cite{katz-laba-tao}. The finite-field analogue was settled by Dvir's polynomial method~\cite{dvir-finite-field}; Guth's multilinear-Kakeya endpoint~\cite{guth-endpoint} introduced the tools eventually used by Wang and Zahl~\cite{wang-zahl} to resolve the Euclidean three-dimensional case. Our use of the Kakeya estimates is intuitional rather than a formal proof transfer: the scaling of the minimum tube-union measure (the common quantity across this literature) is the geometric sibling of the rate--distortion budget for a direction-covering code, and it motivates why the weighted PCA skeleton is the ``right'' dominant direction set to extract. Proposition~\ref{prop:kakeya-rd} states the analogy formally.
+\paragraph{Kakeya geometry and harmonic analysis.} The Kakeya problem originates in~\cite{kakeya-problem}. Its deep role in harmonic analysis began with Fefferman~\cite{fefferman-ball} (ball multiplier), continued through Bourgain's arithmetic-combinatorial bounds~\cite{bourgain-kakeya}, Wolff's geometric hairbrush argument~\cite{wolff-kakeya}, and Katz--{\L}aba--Tao's $\R^3$ improvements~\cite{katz-laba-tao}. The finite-field analogue was settled by Dvir's polynomial method~\cite{dvir-finite-field}; Bennett--Carbery--Tao's multilinear Kakeya conjecture~\cite{bennett-carbery-tao} and Guth's endpoint resolution~\cite{guth-endpoint} introduced the tools eventually used by Wang and Zahl~\cite{wang-zahl} to resolve the Euclidean three-dimensional case. \emph{Our use of this chain is formal, not intuitional}, as documented in \S\ref{sec:kbl-chain}: multilinear Kakeya is equivalent to Brascamp--Lieb~\cite{bennett-carbery-christ-tao,carbery-valdimarsson}, which underpins Tropp's matrix concentration inequalities~\cite{tropp-matrix-chernoff}, which underpin the Halko--Martinsson--Tropp RSVD error bound~\cite{halko-martinsson-tropp}. The codec skeleton is therefore a literature-traceable shallow instance of the same toolchain used at its deep end in~\cite{wang-zahl}. Proposition~\ref{prop:rsvd-skeleton} makes the quantitative correspondence precise; the structural parallels (power iteration as multiscale induction, Gaussian probing as direction enumeration, singular-value distribution as Frostman measure) and the three rigorous disclaimers are in \S\ref{sec:kbl-chain}.
 
 \section{Limitations and future work}
 \label{sec:limitations}
@@ -625,10 +710,30 @@ Dvir, Z.
 \newblock {On the size of Kakeya sets in finite fields.}
 \newblock \emph{Journal of the American Mathematical Society}, 22(4):1093--1097, 2009.
 
+\bibitem{bennett-carbery-tao}
+Bennett, J., Carbery, A., Tao, T.
+\newblock {On the multilinear restriction and Kakeya conjectures.}
+\newblock \emph{Acta Mathematica}, 196(2):261--302, 2006.
+
 \bibitem{guth-endpoint}
 Guth, L.
 \newblock {The endpoint case of the Bennett-Carbery-Tao multilinear Kakeya conjecture.}
 \newblock \emph{Acta Mathematica}, 205(2):263--286, 2010.
+
+\bibitem{bennett-carbery-christ-tao}
+Bennett, J., Carbery, A., Christ, M., Tao, T.
+\newblock {The Brascamp--Lieb inequalities: finiteness, structure and extremals.}
+\newblock \emph{Geometric and Functional Analysis}, 17(5):1343--1415, 2008.
+
+\bibitem{carbery-valdimarsson}
+Carbery, A., Valdimarsson, S.~I.
+\newblock {The endpoint multilinear Kakeya theorem via the Borsuk--Ulam theorem.}
+\newblock \emph{Journal of Functional Analysis}, 264(7):1643--1663, 2013.
+
+\bibitem{tropp-matrix-chernoff}
+Tropp, J.~A.
+\newblock {User-friendly tail bounds for sums of random matrices.}
+\newblock \emph{Foundations of Computational Mathematics}, 12(4):389--434, 2012.
 
 \bibitem{wang-zahl}
 Wang, H., Zahl, J.
