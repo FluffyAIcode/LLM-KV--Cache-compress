@@ -63,7 +63,8 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                    pca_method: str = "randomized",
                    variance_ratio: float = 0.95,
                    skeleton_dtype: str = "fp16",
-                   exact_rank_cap: int | None = None):
+                   exact_rank_cap: int | None = None,
+                   centroids_file: str | None = None):
     import tempfile
     with tempfile.TemporaryDirectory(dir="/tmp") as td:
         tdp = Path(td)
@@ -87,6 +88,8 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                     "--rsvd-oversample", "8", "--rsvd-power-iters", "2"]
         if exact_rank_cap is not None and pca_method == "exact":
             cmd += ["--exact-rank-cap", str(exact_rank_cap)]
+        if centroids_file is not None:
+            cmd += ["--centroids-file", str(centroids_file)]
         if share_basis:
             cmd.append("--share-basis")
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -121,7 +124,12 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     codec: str = "kakeyaturbo",
                     bit_width_v: int | None = None,
                     exact_rank_cap_v: int | None = None,
-                    pca_method_v: str | None = None) -> tuple[DynamicCache, dict]:
+                    pca_method_v: str | None = None,
+                    k_centroids_file: str | None = None,
+                    v_centroids_file: str | None = None,
+                    boundary_skip_layers: list[int] | None = None,
+                    boundary_mode: str = "bf16",
+                    boundary_bit_width: int = 4) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -138,6 +146,12 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
     cache_alt = DynamicCache(config=model.config)
     stats = {"per_layer": [], "n_full": 0}
 
+    # Resolve boundary_skip_layers: these layers are kept at bf16 (fully
+    # uncompressed) regardless of compression config.  Mirrors
+    # TurboQuant+'s documented production trick: first 2 + last 2 layers
+    # at q8_0 to recover 37-91% of the K-compression quality gap.
+    boundary_skip_set = set(boundary_skip_layers or [])
+
     for i, layer_kv in enumerate(cache_ref.layers):
         if not hasattr(layer_kv, "keys") or layer_kv.keys is None or layer_kv.keys.numel() == 0:
             continue
@@ -147,6 +161,20 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
         if layer_types[i] != "full_attention":
             cache_alt.layers[i].update(k_ref.clone(), v_ref.clone(), 0)
             continue
+
+        if i in boundary_skip_set:
+            # Boundary layer protection. The user's choice:
+            #   boundary_mode="bf16": keep full precision, no codec applied
+            #   boundary_mode="conservative": apply codec at conservative bit_width
+            #     (e.g. b_K=4, b_V=4) instead of the user's aggressive b=2 recipe.
+            if boundary_mode == "bf16":
+                cache_alt.layers[i].update(k_ref.clone(), v_ref.clone(), 0)
+                stats["per_layer"].append({
+                    "layer": i, "boundary_uncompressed": True,
+                })
+                continue
+            # "conservative" mode falls through to normal compression but
+            # with bit_width override below.
 
         bsz, n_kv, seq, hd = k_ref.shape
         assert bsz == 1
@@ -171,6 +199,19 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
 
         bit_width_k_eff = bit_width
         bit_width_v_eff = bit_width if bit_width_v is None else bit_width_v
+        # Centroid files are calibrated for a specific bit width; override
+        # to None on boundary layers where we change bit_width.
+        k_centroids_eff = k_centroids_file
+        v_centroids_eff = v_centroids_file
+        # Conservative boundary protection: override both K and V bit widths
+        # to `boundary_bit_width` on boundary layers only.
+        is_boundary = i in boundary_skip_set and boundary_mode == "conservative"
+        if is_boundary:
+            bit_width_k_eff = boundary_bit_width
+            bit_width_v_eff = boundary_bit_width
+            # Don't use mid-layer calibrated centroids at a different bit width.
+            k_centroids_eff = None
+            v_centroids_eff = None
         if n_comp > 0:
             if codec == "kakeyaturbo":
                 if compress in ("kv", "k_only"):
@@ -185,6 +226,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                         variance_ratio=variance_ratio,
                         skeleton_dtype=skeleton_dtype,
                         exact_rank_cap=exact_rank_cap,
+                        centroids_file=k_centroids_eff,
                     )
                 else:
                     k_dec = k_flat[:n_comp].copy()
@@ -201,6 +243,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                         variance_ratio=variance_ratio,
                         skeleton_dtype=skeleton_dtype,
                         exact_rank_cap=rank_cap_v_eff,
+                        centroids_file=v_centroids_eff,
                     )
                 else:
                     v_dec = v_flat[:n_comp].copy()
@@ -308,7 +351,9 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              q_precond=None, rsvd_rank_factor=0.5,
              exact_rank_cap=None, codec="kakeyaturbo",
              bit_width_v=None, exact_rank_cap_v=None,
-             pca_method_v=None):
+             pca_method_v=None,
+             k_centroids_file=None, v_centroids_file=None,
+             boundary_skip_layers=None, boundary_mode="bf16", boundary_bit_width=4):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -327,6 +372,11 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         bit_width_v=bit_width_v,
         exact_rank_cap_v=exact_rank_cap_v,
         pca_method_v=pca_method_v,
+        k_centroids_file=k_centroids_file,
+        v_centroids_file=v_centroids_file,
+        boundary_skip_layers=boundary_skip_layers,
+        boundary_mode=boundary_mode,
+        boundary_bit_width=boundary_bit_width,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -374,6 +424,22 @@ def main():
                          "at target_rank = D/2, which combined with share_basis "
                          "can amortise V skeleton bytes beyond what exact PCA "
                          "can achieve at vr=1.0.")
+    ap.add_argument("--k-centroids-file", type=Path, default=None,
+                    help="Calibrated Lloyd-Max centroids for K-stream residual "
+                         "quantiser (output of benchmarks/lloyd_max_calibration.py "
+                         "--stream K).")
+    ap.add_argument("--v-centroids-file", type=Path, default=None,
+                    help="Calibrated Lloyd-Max centroids for V-stream.")
+    ap.add_argument("--boundary-skip-layers", type=int, nargs="+", default=None,
+                    help="Layers that get boundary protection. Typical: "
+                         "[0, 1, L-2, L-1] where L = num_hidden_layers.")
+    ap.add_argument("--boundary-mode", choices=["bf16", "conservative"], default="bf16",
+                    help="Protection mode for boundary layers. "
+                         "'bf16': no codec (full precision). "
+                         "'conservative': apply codec at --boundary-bit-width "
+                         "(default 4) instead of --bit-width on these layers.")
+    ap.add_argument("--boundary-bit-width", type=int, default=4,
+                    help="Bit width for boundary layers when --boundary-mode=conservative.")
     ap.add_argument("--compress", choices=["kv", "k_only", "v_only"], default="kv")
     ap.add_argument("--skeleton-dtype", choices=["fp16", "fp32"], default="fp16")
     ap.add_argument("--share-basis-k", action="store_true",
@@ -443,6 +509,11 @@ def main():
             args.exact_rank_cap, args.codec,
             args.bit_width_v, args.exact_rank_cap_v,
             args.pca_method_v,
+            str(args.k_centroids_file) if args.k_centroids_file else None,
+            str(args.v_centroids_file) if args.v_centroids_file else None,
+            args.boundary_skip_layers,
+            args.boundary_mode,
+            args.boundary_bit_width,
         )
         if res is None:
             print("    skipped (too short)"); continue

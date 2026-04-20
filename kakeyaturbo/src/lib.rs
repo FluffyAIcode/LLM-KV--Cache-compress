@@ -50,8 +50,9 @@ pub mod skeleton;
 pub mod wht;
 
 pub use codec::{
-    decode_block, decode_layer, encode_block, encode_layer, layer_nbytes, Code, CodecParams,
-    LayerEncoding, PcaMethod, SkeletonDtype,
+    decode_block, decode_block_with_centroids, decode_layer, decode_layer_with_centroids,
+    encode_block, encode_layer, layer_nbytes, Code, CodecParams, LayerEncoding, PcaMethod,
+    SkeletonDtype,
 };
 pub use distortion::{Distortion, InnerProduct, LInf, NormMode, MSE};
 pub use skeleton::Skeleton;

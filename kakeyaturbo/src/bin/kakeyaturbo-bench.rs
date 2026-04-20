@@ -25,7 +25,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use kakeyaturbo::{
-    decode_block, decode_layer, encode_block, encode_layer, CodecParams, Code, Distortion,
+    decode_block_with_centroids, decode_layer_with_centroids, encode_block, encode_layer,
+    CodecParams, Code, Distortion,
     InnerProduct, LInf, LayerEncoding, PcaMethod, SkeletonDtype, MSE,
 };
 
@@ -59,6 +60,11 @@ struct Args {
     /// KKTV format so downstream Python drivers can measure end-to-end
     /// downstream quality (next-token KL, PPL) against the original.
     dump_decoded: Option<PathBuf>,
+    /// If set, path to a .f32 binary file containing the calibrated
+    /// Lloyd-Max centroid table (exactly `1 << bit_width` f32 values,
+    /// little-endian, sorted).  When present, replaces the codec's
+    /// unit-variance-Gaussian defaults on both encode and decode.
+    centroids_file: Option<PathBuf>,
 }
 
 fn print_help() {
@@ -99,6 +105,7 @@ fn parse_args() -> Result<Args, String> {
     let mut rsvd_target_rank: Option<usize> = None;
     let mut rsvd_oversample: usize = 8;
     let mut rsvd_power_iters: u32 = 2;
+    let mut centroids_file: Option<PathBuf> = None;
     let mut dump_decoded: Option<PathBuf> = None;
 
     let mut i = 1;
@@ -176,6 +183,10 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 dump_decoded = Some(PathBuf::from(&argv[i]));
             }
+            "--centroids-file" => {
+                i += 1;
+                centroids_file = Some(PathBuf::from(&argv[i]));
+            }
             other => return Err(format!("unknown flag {other}; try --help")),
         }
         i += 1;
@@ -201,7 +212,33 @@ fn parse_args() -> Result<Args, String> {
         rsvd_oversample,
         rsvd_power_iters,
         dump_decoded,
+        centroids_file,
     })
+}
+
+fn load_centroids(path: &PathBuf, expected_count: usize) -> Result<Vec<f32>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    if bytes.len() != expected_count * 4 {
+        return Err(format!(
+            "centroids file {} has {} bytes, expected {} (= {} × 4)",
+            path.display(), bytes.len(), expected_count * 4, expected_count
+        ));
+    }
+    let mut out = Vec::with_capacity(expected_count);
+    for chunk in bytes.chunks_exact(4) {
+        let arr = [chunk[0], chunk[1], chunk[2], chunk[3]];
+        out.push(f32::from_le_bytes(arr));
+    }
+    // Validate sorted ascending
+    for w in out.windows(2) {
+        if w[0] >= w[1] {
+            return Err(format!(
+                "centroids must be sorted ascending; {} violates at {} >= {}",
+                path.display(), w[0], w[1]
+            ));
+        }
+    }
+    Ok(out)
 }
 
 fn read_u32_le(r: &mut impl Read) -> std::io::Result<u32> {
@@ -263,6 +300,15 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         "fp32" | "f32" | "float" => SkeletonDtype::Fp32,
         other => panic!("unknown --skeleton-dtype {other}, expected 'fp16' or 'fp32'"),
     };
+    let custom_centroids = if let Some(path) = &args.centroids_file {
+        let expected = 1usize << args.bit_width;
+        let c = load_centroids(path, expected)
+            .unwrap_or_else(|e| panic!("loading centroids: {e}"));
+        eprintln!("[bench] loaded {} calibrated centroids from {}", c.len(), path.display());
+        Some(c)
+    } else {
+        None
+    };
     let params = CodecParams {
         variance_ratio: args.variance_ratio,
         k: args.k,
@@ -272,6 +318,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         pca_method,
         skeleton_dtype,
         exact_rank_cap: args.exact_rank_cap,
+        custom_centroids,
     };
 
     let bs = args.block_size;
@@ -306,7 +353,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
 
         if args.verify {
             let t1 = Instant::now();
-            let recs = decode_layer::<R>(&enc);
+            let recs = decode_layer_with_centroids::<R>(&enc, params.custom_centroids.as_deref());
             decode_ns += t1.elapsed().as_nanos();
             for (i, rec) in recs.iter().enumerate() {
                 let orig = &block_vecs[i];
@@ -349,7 +396,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
 
             if args.verify {
                 let t1 = Instant::now();
-                let rec = decode_block::<R>(&sk, &codes);
+                let rec = decode_block_with_centroids::<R>(&sk, &codes, params.custom_centroids.as_deref());
                 decode_ns += t1.elapsed().as_nanos();
                 let mut sq = 0.0_f64;
                 for i in 0..bs * dim {

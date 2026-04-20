@@ -21,7 +21,9 @@ use crate::pca::{
     fit_weighted_pca_randomized_with_storage, fit_weighted_pca_with_storage_capped, project,
     unproject, PcaFit, PcaStorage,
 };
-use crate::quantize::{dequantize_vector, pack_bits, quantize_vector, unpack_bits};
+use crate::quantize::{
+    dequantize_vector_with_centroids, pack_bits, quantize_vector_with_centroids, unpack_bits,
+};
 use crate::skeleton::Skeleton;
 use crate::wht::{inverse_rotate, rotate};
 
@@ -136,6 +138,13 @@ pub struct CodecParams {
     /// components — useful to match RSVD's rank budget while using exact
     /// (un-approximated) eigenvectors.
     pub exact_rank_cap: Option<usize>,
+    /// Optional caller-supplied Lloyd-Max centroid table for the residual
+    /// quantiser. When `Some`, must contain exactly `1 << bit_width`
+    /// sorted floats — typically the output of offline empirical Lloyd-Max
+    /// calibration on the model's real residual distribution.  When
+    /// `None`, the codec uses the unit-variance-Gaussian centroids from
+    /// [`crate::quantize::centroids_gaussian`].
+    pub custom_centroids: Option<Vec<f32>>,
 }
 
 impl Default for CodecParams {
@@ -149,6 +158,7 @@ impl Default for CodecParams {
             pca_method: PcaMethod::Exact,
             skeleton_dtype: SkeletonDtype::Fp16,
             exact_rank_cap: None,
+            custom_centroids: None,
         }
     }
 }
@@ -329,7 +339,9 @@ pub fn encode_block<R: Distortion>(
         };
         let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
 
-        let q = quantize_vector::<R>(&scaled, params.bit_width);
+        let q = quantize_vector_with_centroids::<R>(
+            &scaled, params.bit_width, params.custom_centroids.as_deref(),
+        );
         let packed = pack_bits(&q, params.bit_width);
 
         let norm = match R::NORM_MODE {
@@ -358,17 +370,33 @@ pub fn encode_block<R: Distortion>(
 
 /// Decode a block of codes back into approximate vectors.
 ///
+/// Uses the unit-variance-Gaussian Lloyd-Max centroids.  For calibrated
+/// codebooks use [`decode_block_with_centroids`].
+///
 /// # Output
 ///
 /// Row-major `[n, d]` where `n = codes.len()` and `d = skeleton.pca.mean.len()`.
 pub fn decode_block<R: Distortion>(skeleton: &Skeleton, codes: &[Code]) -> Vec<f32> {
+    decode_block_with_centroids::<R>(skeleton, codes, None)
+}
+
+/// Variant of [`decode_block`] that accepts an optional caller-supplied
+/// centroid table, to be used in tandem with
+/// [`crate::quantize::quantize_vector_with_centroids`] on the encode side.
+pub fn decode_block_with_centroids<R: Distortion>(
+    skeleton: &Skeleton,
+    codes: &[Code],
+    custom_centroids: Option<&[f32]>,
+) -> Vec<f32> {
     let d = skeleton.pca.d();
     let d_eff = skeleton.pca.d_eff;
     let wht_len = skeleton.wht_len;
     let mut out = Vec::with_capacity(codes.len() * d);
     for code in codes {
         let indices = unpack_bits(&code.residual_packed, skeleton.bit_width, wht_len);
-        let q_vals = dequantize_vector(&indices, skeleton.bit_width);
+        let q_vals = dequantize_vector_with_centroids(
+            &indices, skeleton.bit_width, custom_centroids,
+        );
 
         // Inverse scale: match what encode_block did.
         // We stored 1/scale in `norm` when NORM_MODE == Absorbed.
@@ -474,7 +502,7 @@ pub fn encode_layer<R: Distortion>(
     // inner ops (kmeans, rotation, quantise) are identical.
     use crate::kmeans::{assign_and_project, residual};
     use crate::pca::project;
-    use crate::quantize::{pack_bits, quantize_vector};
+    use crate::quantize::{pack_bits, quantize_vector_with_centroids};
     use crate::wht::rotate;
     use half::f16;
 
@@ -530,7 +558,9 @@ pub fn encode_layer<R: Distortion>(
             let res_norm = l2_norm(&res);
             let scale = if res_norm > f32::EPSILON { 1.0 / res_norm } else { 1.0 };
             let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
-            let q = quantize_vector::<R>(&scaled, params.bit_width);
+            let q = quantize_vector_with_centroids::<R>(
+                &scaled, params.bit_width, params.custom_centroids.as_deref(),
+            );
             let packed = pack_bits(&q, params.bit_width);
             let norm = match R::NORM_MODE {
                 NormMode::Explicit => f16::from_f32(l2_norm(x)),
@@ -563,9 +593,18 @@ pub fn encode_layer<R: Distortion>(
 
 /// Decode a whole layer. Dual of [`encode_layer`].
 pub fn decode_layer<R: Distortion>(enc: &LayerEncoding) -> Vec<Vec<f32>> {
+    decode_layer_with_centroids::<R>(enc, None)
+}
+
+/// Variant of [`decode_layer`] that accepts an optional caller-supplied
+/// centroid table — pass the same table used at encode time.
+pub fn decode_layer_with_centroids<R: Distortion>(
+    enc: &LayerEncoding,
+    custom_centroids: Option<&[f32]>,
+) -> Vec<Vec<f32>> {
     enc.per_block
         .iter()
-        .map(|(sk, codes)| decode_block::<R>(sk, codes))
+        .map(|(sk, codes)| decode_block_with_centroids::<R>(sk, codes, custom_centroids))
         .collect()
 }
 
@@ -641,6 +680,7 @@ mod tests {
             pca_method: PcaMethod::Exact,
             skeleton_dtype: SkeletonDtype::Fp16,
             exact_rank_cap: None,
+            custom_centroids: None,
         };
         let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
         let recovered = decode_block::<MSE>(&sk, &codes);
@@ -1134,6 +1174,7 @@ mod tests {
             pca_method: PcaMethod::Exact,
             skeleton_dtype: SkeletonDtype::Fp16,
             exact_rank_cap: None,
+            custom_centroids: None,
         };
         let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
         assert!(enc.shared_pca.is_none());
