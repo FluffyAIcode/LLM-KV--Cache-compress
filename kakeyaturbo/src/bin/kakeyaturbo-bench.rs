@@ -26,7 +26,7 @@ use std::time::Instant;
 
 use kakeyaturbo::{
     decode_block, decode_layer, encode_block, encode_layer, CodecParams, Code, Distortion,
-    InnerProduct, LInf, LayerEncoding, PcaMethod, MSE,
+    InnerProduct, LInf, LayerEncoding, PcaMethod, SkeletonDtype, MSE,
 };
 
 const MAGIC: u32 = 0x4B4B_5456;
@@ -46,6 +46,8 @@ struct Args {
     share_basis: bool,
     /// One of "exact" or "randomized".
     pca_method: String,
+    /// One of "fp16" or "fp32" — skeleton (PCA mean+basis, K-means centres) storage precision.
+    skeleton_dtype: String,
     /// Randomized-SVD knobs. Ignored when pca_method == "exact".
     rsvd_target_rank: Option<usize>,
     rsvd_oversample: usize,
@@ -64,6 +66,7 @@ fn print_help() {
             [--k K] [--bit-width B] [--rotation-seed S] \\\n    \
             [--share-basis] [--verify] \\\n    \
             [--pca-method exact|randomized] \\\n    \
+            [--skeleton-dtype fp16|fp32] \\\n    \
             [--rsvd-target-rank N] [--rsvd-oversample N] [--rsvd-power-iters N] \\\n    \
             [--dump-decoded PATH]\n\n\
             Compresses a KV tensor file block-by-block using the\n\
@@ -87,6 +90,7 @@ fn parse_args() -> Result<Args, String> {
     let mut verify = false;
     let mut share_basis = false;
     let mut pca_method = "exact".to_string();
+    let mut skeleton_dtype = "fp16".to_string();
     let mut rsvd_target_rank: Option<usize> = None;
     let mut rsvd_oversample: usize = 8;
     let mut rsvd_power_iters: u32 = 2;
@@ -141,6 +145,10 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 pca_method = argv[i].clone();
             }
+            "--skeleton-dtype" => {
+                i += 1;
+                skeleton_dtype = argv[i].clone();
+            }
             "--rsvd-target-rank" => {
                 i += 1;
                 rsvd_target_rank = Some(argv[i].parse().map_err(|e| format!("bad --rsvd-target-rank: {e}"))?);
@@ -176,6 +184,7 @@ fn parse_args() -> Result<Args, String> {
         verify,
         share_basis,
         pca_method,
+        skeleton_dtype,
         rsvd_target_rank,
         rsvd_oversample,
         rsvd_power_iters,
@@ -237,6 +246,11 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         },
         other => panic!("unknown --pca-method {other}, expected 'exact' or 'randomized'"),
     };
+    let skeleton_dtype = match args.skeleton_dtype.as_str() {
+        "fp16" | "f16" | "half" => SkeletonDtype::Fp16,
+        "fp32" | "f32" | "float" => SkeletonDtype::Fp32,
+        other => panic!("unknown --skeleton-dtype {other}, expected 'fp16' or 'fp32'"),
+    };
     let params = CodecParams {
         variance_ratio: args.variance_ratio,
         k: args.k,
@@ -244,6 +258,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         rotation_seed: args.rotation_seed,
         kmeans_max_iter: 32,
         pca_method,
+        skeleton_dtype,
     };
 
     let bs = args.block_size;
@@ -387,6 +402,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         share_basis: args.share_basis,
         shared_pca_bytes,
         pca_method: args.pca_method.clone(),
+        skeleton_dtype: args.skeleton_dtype.clone(),
         rsvd_target_rank: match pca_method {
             PcaMethod::Randomized { target_rank, .. } => target_rank,
             PcaMethod::Exact => 0,
@@ -425,6 +441,7 @@ struct Report {
     share_basis: bool,
     shared_pca_bytes: usize,
     pca_method: String,
+    skeleton_dtype: String,
     rsvd_target_rank: usize,
     rsvd_oversample: usize,
     rsvd_power_iters: u32,
@@ -456,6 +473,7 @@ impl Report {
                 \"share_basis\":{sb},\
                 \"shared_pca_bytes\":{spb},\
                 \"pca_method\":\"{pm}\",\
+                \"skeleton_dtype\":\"{sd}\",\
                 \"rsvd_target_rank\":{rtr},\
                 \"rsvd_oversample\":{ros},\
                 \"rsvd_power_iters\":{rpi}\
@@ -482,6 +500,7 @@ impl Report {
             sb = self.share_basis,
             spb = self.shared_pca_bytes,
             pm = self.pca_method,
+            sd = self.skeleton_dtype,
             rtr = self.rsvd_target_rank,
             ros = self.rsvd_oversample,
             rpi = self.rsvd_power_iters,

@@ -14,8 +14,13 @@
 use half::f16;
 
 use crate::distortion::{Distortion, NormMode};
-use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
-use crate::pca::{fit_weighted_pca, fit_weighted_pca_randomized, project, unproject, PcaFit};
+use crate::kmeans::{
+    assign_and_project, fit_spherical_kmeans_with_storage, residual,
+};
+use crate::pca::{
+    fit_weighted_pca_randomized_with_storage, fit_weighted_pca_with_storage, project, unproject,
+    PcaFit, PcaStorage,
+};
 use crate::quantize::{dequantize_vector, pack_bits, quantize_vector, unpack_bits};
 use crate::skeleton::Skeleton;
 use crate::wht::{inverse_rotate, rotate};
@@ -82,6 +87,27 @@ impl Default for PcaMethod {
     }
 }
 
+/// Storage precision for the Kakeya skeleton (PCA mean, PCA basis, K-means
+/// centres).  The residual quantiser (Lloyd-Max) is **not** affected.
+///
+/// `Fp16` is the v1.2/v1.3 default and matches the paper's byte accounting.
+/// `Fp32` doubles skeleton bytes; used only for ablation of the "f16
+/// skeleton as structural PPL floor" hypothesis raised in the pre-RoPE
+/// cache ablation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkeletonDtype {
+    /// IEEE-754 binary16 (v1.2/v1.3 default).
+    Fp16,
+    /// IEEE-754 binary32 (doubles skeleton bytes; ablation-only).
+    Fp32,
+}
+
+impl Default for SkeletonDtype {
+    fn default() -> Self {
+        Self::Fp16
+    }
+}
+
 /// Runtime parameters for a single `encode_block` call.
 ///
 /// Compile-time parameters (dimensions, distortion) are passed via
@@ -101,6 +127,9 @@ pub struct CodecParams {
     pub kmeans_max_iter: u32,
     /// PCA fit strategy (exact vs randomized SVD).
     pub pca_method: PcaMethod,
+    /// Storage precision for PCA mean, PCA basis, and K-means centres.
+    /// Does not affect the residual Lloyd-Max quantiser.
+    pub skeleton_dtype: SkeletonDtype,
 }
 
 impl Default for CodecParams {
@@ -112,25 +141,42 @@ impl Default for CodecParams {
             rotation_seed: 0xCAFE_BABE,
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
+            skeleton_dtype: SkeletonDtype::Fp16,
         }
     }
 }
 
-/// Dispatch helper: fit the requested PCA variant.
+/// Convert the codec's skeleton-dtype flag to the PCA layer's storage flag.
+fn pca_storage(params: &CodecParams) -> PcaStorage {
+    match params.skeleton_dtype {
+        SkeletonDtype::Fp16 => PcaStorage::Fp16,
+        SkeletonDtype::Fp32 => PcaStorage::Fp32,
+    }
+}
+
+/// Dispatch helper: fit the requested PCA variant with the requested
+/// skeleton dtype.
 fn fit_pca_dispatch(
     vectors: &[f32],
     weights: &[f32],
     d: usize,
     params: &CodecParams,
 ) -> PcaFit {
+    let storage = pca_storage(params);
     match params.pca_method {
-        PcaMethod::Exact => fit_weighted_pca(vectors, weights, d, params.variance_ratio),
+        PcaMethod::Exact => fit_weighted_pca_with_storage(
+            vectors,
+            weights,
+            d,
+            params.variance_ratio,
+            storage,
+        ),
         PcaMethod::Randomized {
             target_rank,
             oversample,
             power_iters,
             seed_offset,
-        } => fit_weighted_pca_randomized(
+        } => fit_weighted_pca_randomized_with_storage(
             vectors,
             weights,
             d,
@@ -139,8 +185,29 @@ fn fit_pca_dispatch(
             oversample,
             power_iters,
             u64::from(params.rotation_seed) ^ seed_offset,
+            storage,
         ),
     }
+}
+
+/// Dispatch helper for K-means: routes the codec's skeleton dtype into
+/// the K-means fp32-skeleton flag.
+fn fit_kmeans_dispatch(
+    coeffs: &[f32],
+    weights: &[f32],
+    d_eff: usize,
+    k: usize,
+    params: &CodecParams,
+) -> crate::kmeans::KmeansFit {
+    fit_spherical_kmeans_with_storage(
+        coeffs,
+        weights,
+        d_eff,
+        k,
+        params.rotation_seed,
+        params.kmeans_max_iter,
+        matches!(params.skeleton_dtype, SkeletonDtype::Fp32),
+    )
 }
 
 /// Round up to the nearest power of two, with a minimum of 1.
@@ -216,14 +283,7 @@ pub fn encode_block<R: Distortion>(
         .count();
     let effective_k = params.k.min(valid_rows.max(1));
 
-    let kmeans = fit_spherical_kmeans(
-        &coeffs,
-        weights,
-        pca.d_eff,
-        effective_k,
-        params.rotation_seed,
-        params.kmeans_max_iter,
-    );
+    let kmeans = fit_kmeans_dispatch(&coeffs, weights, pca.d_eff, effective_k, params);
 
     // --- Stage 2: Residual coding ---
     let wht_len = next_pow2(pca.d_eff);
@@ -294,7 +354,7 @@ pub fn encode_block<R: Distortion>(
 ///
 /// Row-major `[n, d]` where `n = codes.len()` and `d = skeleton.pca.mean.len()`.
 pub fn decode_block<R: Distortion>(skeleton: &Skeleton, codes: &[Code]) -> Vec<f32> {
-    let d = skeleton.pca.mean.len();
+    let d = skeleton.pca.d();
     let d_eff = skeleton.pca.d_eff;
     let wht_len = skeleton.wht_len;
     let mut out = Vec::with_capacity(codes.len() * d);
@@ -404,7 +464,7 @@ pub fn encode_layer<R: Distortion>(
     // that tells it "the PCA is already fit" — but since encode_block's
     // signature doesn't expose that, we inline the pipeline here. The
     // inner ops (kmeans, rotation, quantise) are identical.
-    use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
+    use crate::kmeans::{assign_and_project, residual};
     use crate::pca::project;
     use crate::quantize::{pack_bits, quantize_vector};
     use crate::wht::rotate;
@@ -445,10 +505,7 @@ pub fn encode_layer<R: Distortion>(
                     .any(|c| c.abs() > f32::EPSILON)
         }).count();
         let effective_k = params.k.min(valid_rows.max(1));
-        let kmeans = fit_spherical_kmeans(
-            &coeffs, w, shared_pca.d_eff, effective_k,
-            params.rotation_seed, params.kmeans_max_iter,
-        );
+        let kmeans = fit_kmeans_dispatch(&coeffs, w, shared_pca.d_eff, effective_k, params);
 
         let mut codes = Vec::with_capacity(n);
         for i in 0..n {
@@ -463,7 +520,7 @@ pub fn encode_layer<R: Distortion>(
             let res_padded = pad_zero(&res, wht_len);
             let rotated = rotate(&res_padded, params.rotation_seed);
             let res_norm = l2_norm(&res);
-            let scale = if res_norm > f32::EPSILON { (wht_len as f32).sqrt() / res_norm } else { 1.0 };
+            let scale = if res_norm > f32::EPSILON { 1.0 / res_norm } else { 1.0 };
             let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
             let q = quantize_vector::<R>(&scaled, params.bit_width);
             let packed = pack_bits(&q, params.bit_width);
@@ -574,6 +631,7 @@ mod tests {
             rotation_seed: 0xABCD,
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
+            skeleton_dtype: SkeletonDtype::Fp16,
         };
         let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
         let recovered = decode_block::<MSE>(&sk, &codes);
@@ -816,6 +874,125 @@ mod tests {
         assert!(p.k >= 1);
         assert!((1..=4).contains(&p.bit_width));
         assert!(p.kmeans_max_iter > 0);
+        assert_eq!(p.skeleton_dtype, SkeletonDtype::Fp16);
+    }
+
+    // -------------------- skeleton_dtype ablation --------------------
+
+    /// FP32 skeleton must preserve the PCA mean and basis to full float
+    /// precision — no f16 rounding on the way in or out.
+    #[test]
+    fn skeleton_fp32_preserves_precision() {
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(0xABCD);
+        let n = 64;
+        let d = 32;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block {
+            *v = rng.gen_range(-1.0_f32..1.0);
+        }
+        let w = vec![1.0_f32; n];
+        let base = CodecParams {
+            variance_ratio: 0.99,
+            k: 4,
+            bit_width: 3,
+            ..Default::default()
+        };
+        let p_fp16 = CodecParams { skeleton_dtype: SkeletonDtype::Fp16, ..base.clone() };
+        let p_fp32 = CodecParams { skeleton_dtype: SkeletonDtype::Fp32, ..base };
+        let (sk16, _) = encode_block::<MSE>(&block, &w, d, &p_fp16);
+        let (sk32, _) = encode_block::<MSE>(&block, &w, d, &p_fp32);
+
+        // Same d_eff (fit is numerically identical; only storage differs).
+        assert_eq!(sk16.pca.d_eff, sk32.pca.d_eff);
+
+        // fp16 path: mean/basis are f16-rounded; mean_fp32 / basis_fp32 are None.
+        assert!(sk16.pca.mean_fp32.is_none());
+        assert!(sk16.pca.basis_fp32.is_none());
+
+        // fp32 path: mean_fp32 / basis_fp32 are Some; f16 buffers are empty.
+        let mean32 = sk32.pca.mean_fp32.as_ref().expect("fp32 mean");
+        let basis32 = sk32.pca.basis_fp32.as_ref().expect("fp32 basis");
+        assert!(sk32.pca.mean.is_empty());
+        assert!(sk32.pca.basis.is_empty());
+
+        // fp32 mean/basis must match the unrounded fp32 values exactly,
+        // while fp16 storage round-trips through f16 with non-zero error.
+        let mean16 = sk16.pca.mean_f32();
+        assert_eq!(mean32.len(), mean16.len());
+        let mean_delta: f32 = mean32
+            .iter()
+            .zip(&mean16)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0, f32::max);
+        // mean_delta > 0 would show f16 was doing some rounding; but if the
+        // mean happens to fall exactly on f16-representable grid points it
+        // may be zero. Either way the structural check above is the real
+        // guarantee. We include this loose sanity check without asserting.
+        let _ = mean_delta;
+
+        // K-means centres follow the same storage contract.
+        assert!(sk32.kmeans.centers_fp32.is_some());
+        assert!(sk32.kmeans.centers.is_empty());
+
+        // Byte accounting: fp32 skeleton must be ~2× fp16.
+        assert!(
+            sk32.pca.nbytes() >= 2 * sk16.pca.nbytes() - 8,
+            "fp32 PCA should be ~2× fp16 ({} vs {})",
+            sk32.pca.nbytes(),
+            sk16.pca.nbytes()
+        );
+
+        // basis32 values should have full fp32 precision (no rounding to f16
+        // grid); verify at least some value has more than 10 bits of mantissa
+        // beyond the f16 nearest.
+        let basis16 = sk16.pca.basis_f32();
+        let mut saw_finer = false;
+        for (a, b) in basis32.iter().zip(&basis16) {
+            if (a - b).abs() > 1e-6 {
+                saw_finer = true;
+                break;
+            }
+        }
+        assert!(
+            saw_finer,
+            "fp32 basis must differ from f16-rounded version in at least one coordinate"
+        );
+    }
+
+    /// Round-trip must still work under fp32 skeleton storage.
+    #[test]
+    fn skeleton_fp32_round_trip() {
+        let n = 16;
+        let d = 8;
+        let mut block = vec![0.0_f32; n * d];
+        for i in 0..n {
+            for j in 0..d {
+                block[i * d + j] = ((i + j) as f32).sin();
+            }
+        }
+        let w = vec![1.0_f32; n];
+        let params = CodecParams {
+            variance_ratio: 0.95,
+            k: 4,
+            bit_width: 3,
+            skeleton_dtype: SkeletonDtype::Fp32,
+            ..Default::default()
+        };
+        let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
+        let r = decode_block::<MSE>(&sk, &codes);
+        assert_eq!(r.len(), block.len());
+        for v in r {
+            assert!(v.is_finite());
+        }
+        // fp32 skeleton: mean_fp32 / basis_fp32 should be Some, f16 buffers empty.
+        assert!(sk.pca.mean_fp32.is_some());
+        assert!(sk.pca.basis_fp32.is_some());
+        assert!(sk.pca.mean.is_empty());
+        assert!(sk.pca.basis.is_empty());
+        assert!(sk.kmeans.centers_fp32.is_some());
+        assert!(sk.kmeans.centers.is_empty());
     }
 
     // -------------------- all-zero input --------------------
@@ -946,6 +1123,7 @@ mod tests {
             rotation_seed: 0xA5A5_A5A5,
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
+            skeleton_dtype: SkeletonDtype::Fp16,
         };
         let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
         assert!(enc.shared_pca.is_none());

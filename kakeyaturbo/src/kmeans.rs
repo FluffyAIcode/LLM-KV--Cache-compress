@@ -22,8 +22,11 @@ use rand::{Rng, SeedableRng};
 /// are fit in f32 (iterative); the final result is converted once.
 #[derive(Debug, Clone)]
 pub struct KmeansFit {
-    /// Unit-norm centres row-major `[K, d_eff]`, stored as bf16.
+    /// Unit-norm centres row-major `[K, d_eff]`, stored as f16 (empty if fp32 skeleton selected).
     pub centers: Vec<f16>,
+    /// Optional fp32 centres buffer — populated iff the caller asked for
+    /// `PcaStorage::Fp32` (via the codec's skeleton dtype flag).
+    pub centers_fp32: Option<Vec<f32>>,
     /// Number of centres.
     pub k: usize,
     /// Coefficient dimension.
@@ -34,6 +37,9 @@ impl KmeansFit {
     /// Get a freshly-allocated f32 copy of the `i`-th centre.
     #[must_use]
     pub fn center(&self, i: usize) -> Vec<f32> {
+        if let Some(ref c) = self.centers_fp32 {
+            return c[i * self.d_eff..(i + 1) * self.d_eff].to_vec();
+        }
         self.centers[i * self.d_eff..(i + 1) * self.d_eff]
             .iter()
             .map(|&v| v.to_f32())
@@ -44,13 +50,28 @@ impl KmeansFit {
     #[must_use]
     pub fn nbytes(&self) -> usize {
         self.centers.len() * std::mem::size_of::<f16>()
+            + self.centers_fp32.as_ref().map(Vec::len).unwrap_or(0)
+                * std::mem::size_of::<f32>()
     }
 
-    /// Construct directly from f32 centres (e.g. for tests).
+    /// Construct directly from f32 centres (e.g. for tests). Defaults to
+    /// f16 skeleton storage for backward compatibility.
     #[must_use]
     pub fn from_f32(centers: Vec<f32>, k: usize, d_eff: usize) -> Self {
         Self {
             centers: centers.iter().map(|&v| f16::from_f32(v)).collect(),
+            centers_fp32: None,
+            k,
+            d_eff,
+        }
+    }
+
+    /// Construct with fp32 skeleton storage.
+    #[must_use]
+    pub fn from_f32_skeleton_fp32(centers: Vec<f32>, k: usize, d_eff: usize) -> Self {
+        Self {
+            centers: Vec::new(),
+            centers_fp32: Some(centers),
             k,
             d_eff,
         }
@@ -127,6 +148,21 @@ pub fn fit_spherical_kmeans(
     k: usize,
     seed: u32,
     max_iter: u32,
+) -> KmeansFit {
+    fit_spherical_kmeans_with_storage(coeffs, weights, d_eff, k, seed, max_iter, false)
+}
+
+/// Storage-aware variant: when `fp32_skeleton` is true, keep the fitted
+/// centres in full fp32 precision instead of rounding to f16.
+#[must_use]
+pub fn fit_spherical_kmeans_with_storage(
+    coeffs: &[f32],
+    weights: &[f32],
+    d_eff: usize,
+    k: usize,
+    seed: u32,
+    max_iter: u32,
+    fp32_skeleton: bool,
 ) -> KmeansFit {
     assert!(k > 0, "k must be positive");
     assert!(d_eff > 0, "d_eff must be positive");
@@ -213,7 +249,11 @@ pub fn fit_spherical_kmeans(
         centers = new_centers;
     }
 
-    KmeansFit::from_f32(centers, k, d_eff)
+    if fp32_skeleton {
+        KmeansFit::from_f32_skeleton_fp32(centers, k, d_eff)
+    } else {
+        KmeansFit::from_f32(centers, k, d_eff)
+    }
 }
 
 /// Assign a coefficient row to the centre that minimises the residual

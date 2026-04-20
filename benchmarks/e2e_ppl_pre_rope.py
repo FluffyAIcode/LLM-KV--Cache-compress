@@ -57,7 +57,8 @@ def read_kktv(path: Path) -> np.ndarray:
 def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                    rsvd_target_rank: int, metric: str, share_basis: bool,
                    pca_method: str = "randomized",
-                   variance_ratio: float = 0.95):
+                   variance_ratio: float = 0.95,
+                   skeleton_dtype: str = "fp16"):
     import tempfile
     with tempfile.TemporaryDirectory(dir="/tmp") as td:
         tdp = Path(td)
@@ -71,7 +72,9 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
             "--variance-ratio", str(variance_ratio),
             "--k", "16", "--bit-width", str(bit_width),
             "--rotation-seed", "3405691582",
-            "--pca-method", pca_method, "--verify",
+            "--pca-method", pca_method,
+            "--skeleton-dtype", skeleton_dtype,
+            "--verify",
             "--dump-decoded", str(dec_p),
         ]
         if pca_method == "randomized":
@@ -79,7 +82,7 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                     "--rsvd-oversample", "8", "--rsvd-power-iters", "2"]
         if share_basis:
             cmd.append("--share-basis")
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
             raise RuntimeError(r.stderr)
         return read_kktv(dec_p), json.loads(rep_p.read_text())
@@ -102,7 +105,10 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     pca_method: str = "randomized",
                     variance_ratio: float = 0.95,
                     rsvd_target_rank_factor: float = 0.5,
-                    compress: str = "kv") -> tuple[DynamicCache, dict]:
+                    compress: str = "kv",
+                    skeleton_dtype: str = "fp16",
+                    share_basis_k: bool = False,
+                    share_basis_v: bool = True) -> tuple[DynamicCache, dict]:
     """Build an alt cache whose full-attention-layer K,V are round-tripped
     through the codec. K is PRE-RoPE (cache already holds it that way)."""
     cfg = model.config.get_text_config(decoder=True)
@@ -139,8 +145,9 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                 k_dec, k_rep = rust_roundtrip(
                     k_flat[:n_comp], block_size=block_size, bit_width=bit_width,
                     rsvd_target_rank=target_rank, metric="inner_product",
-                    share_basis=False, pca_method=pca_method,
+                    share_basis=share_basis_k, pca_method=pca_method,
                     variance_ratio=variance_ratio,
+                    skeleton_dtype=skeleton_dtype,
                 )
             else:
                 k_dec = k_flat[:n_comp].copy()
@@ -149,8 +156,9 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                 v_dec, v_rep = rust_roundtrip(
                     v_flat[:n_comp], block_size=block_size, bit_width=bit_width,
                     rsvd_target_rank=target_rank, metric="mse",
-                    share_basis=True, pca_method=pca_method,
+                    share_basis=share_basis_v, pca_method=pca_method,
                     variance_ratio=variance_ratio,
+                    skeleton_dtype=skeleton_dtype,
                 )
             else:
                 v_dec = v_flat[:n_comp].copy()
@@ -226,7 +234,8 @@ def logits_with_cache(model, cache, cont_ids):
 
 
 def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
-             prefill_chunk, pca_method, vr, compress):
+             prefill_chunk, pca_method, vr, compress,
+             skeleton_dtype, share_basis_k, share_basis_v):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -237,6 +246,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
     cache_alt, stats = roundtrip_cache(
         model, cache_ref, block_size=block_size, bit_width=bit_width,
         pca_method=pca_method, variance_ratio=vr, compress=compress,
+        skeleton_dtype=skeleton_dtype,
+        share_basis_k=share_basis_k, share_basis_v=share_basis_v,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -259,6 +270,11 @@ def main():
     ap.add_argument("--pca-method", choices=["exact", "randomized"], default="randomized")
     ap.add_argument("--variance-ratio", type=float, default=0.95)
     ap.add_argument("--compress", choices=["kv", "k_only", "v_only"], default="kv")
+    ap.add_argument("--skeleton-dtype", choices=["fp16", "fp32"], default="fp16")
+    ap.add_argument("--share-basis-k", action="store_true",
+                    help="Layer-shared PCA basis on K stream (default off: per-block)")
+    ap.add_argument("--share-basis-v", action="store_true",
+                    help="Layer-shared PCA basis on V stream (default off; use explicit flag)")
     ap.add_argument("--skip-sanity", action="store_true")
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -291,6 +307,7 @@ def main():
             model, tok, p, args.ctx_len, args.n_eval, args.block_size,
             args.bit_width, args.prefill_chunk, args.pca_method,
             args.variance_ratio, args.compress,
+            args.skeleton_dtype, args.share_basis_k, args.share_basis_v,
         )
         if res is None:
             print("    skipped (too short)"); continue
@@ -307,15 +324,24 @@ def main():
         verdict = "ACCEPT" if abs(md) <= 0.01 and mt >= 0.95 else \
                   "MARGINAL" if abs(md) <= 0.03 and mt >= 0.85 else "REJECT"
         print(f"\n[{args.model_name}] PRE-ROPE CACHE  VERDICT = {verdict}")
-        print(f"  compress={args.compress} bit_width={args.bit_width} vr={args.variance_ratio} pca={args.pca_method}")
+        print(f"  compress={args.compress} bit_width={args.bit_width} vr={args.variance_ratio} "
+              f"pca={args.pca_method} skeleton={args.skeleton_dtype} "
+              f"share_k={args.share_basis_k} share_v={args.share_basis_v}")
         print(f"  Δppl mean = {md*100:+.3f}%")
         print(f"  top1 mean = {mt*100:.2f}%")
         print(f"  KL mean   = {mk:.5f}")
 
-    (args.out_dir / f"{args.model_name}_prerope_{args.compress}_b{args.bit_width}.json").write_text(json.dumps({
+    out_name = (
+        f"{args.model_name}_prerope_{args.compress}_b{args.bit_width}"
+        f"_{args.pca_method}_{args.skeleton_dtype}"
+        f"_sk{int(args.share_basis_k)}_sv{int(args.share_basis_v)}.json"
+    )
+    (args.out_dir / out_name).write_text(json.dumps({
         "model_name": args.model_name, "ctx_len": args.ctx_len,
         "n_eval": args.n_eval, "bit_width": args.bit_width,
         "pca_method": args.pca_method, "variance_ratio": args.variance_ratio,
+        "skeleton_dtype": args.skeleton_dtype,
+        "share_basis_k": args.share_basis_k, "share_basis_v": args.share_basis_v,
         "compress": args.compress, "architecture": "pre_rope_cache",
         "per_passage": per_passage,
     }, indent=2))
