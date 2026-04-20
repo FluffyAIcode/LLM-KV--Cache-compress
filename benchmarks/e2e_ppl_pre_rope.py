@@ -119,10 +119,12 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     q_precond: QPrecond | None = None,
                     exact_rank_cap: int | None = None,
                     codec: str = "kakeyaturbo",
-                    bit_width_v: int | None = None) -> tuple[DynamicCache, dict]:
+                    bit_width_v: int | None = None,
+                    exact_rank_cap_v: int | None = None) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
-    asymmetric K/V codec operation."""
+    asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
+    V-side override for the PCA rank cap (K keeps `exact_rank_cap`)."""
     """Build an alt cache whose full-attention-layer K,V are round-tripped
     through the codec. K is PRE-RoPE (cache already holds it that way)."""
     cfg = model.config.get_text_config(decoder=True)
@@ -186,13 +188,15 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     k_dec = k_flat[:n_comp].copy()
                     k_rep = {"mean_block_mse": 0.0, "skipped": True}
                 if compress in ("kv", "v_only"):
+                    rank_cap_v_eff = (exact_rank_cap_v if exact_rank_cap_v is not None
+                                      else exact_rank_cap)
                     v_dec, v_rep = rust_roundtrip(
                         v_flat[:n_comp], block_size=block_size, bit_width=bit_width_v_eff,
                         rsvd_target_rank=target_rank, metric="mse",
                         share_basis=share_basis_v, pca_method=pca_method,
                         variance_ratio=variance_ratio,
                         skeleton_dtype=skeleton_dtype,
-                        exact_rank_cap=exact_rank_cap,
+                        exact_rank_cap=rank_cap_v_eff,
                     )
                 else:
                     v_dec = v_flat[:n_comp].copy()
@@ -299,7 +303,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              skeleton_dtype, share_basis_k, share_basis_v,
              q_precond=None, rsvd_rank_factor=0.5,
              exact_rank_cap=None, codec="kakeyaturbo",
-             bit_width_v=None):
+             bit_width_v=None, exact_rank_cap_v=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -316,6 +320,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         exact_rank_cap=exact_rank_cap,
         codec=codec,
         bit_width_v=bit_width_v,
+        exact_rank_cap_v=exact_rank_cap_v,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -353,6 +358,10 @@ def main():
                     help="If set, overrides --bit-width for the V stream "
                          "(asymmetric K/V codec).  Default: V uses --bit-width "
                          "(symmetric).")
+    ap.add_argument("--exact-rank-cap-v", type=int, default=None,
+                    help="If set, overrides --exact-rank-cap for the V stream. "
+                         "V tolerates aggressive rank caps better than K because "
+                         "attention consumes V linearly (no softmax non-linearity).")
     ap.add_argument("--compress", choices=["kv", "k_only", "v_only"], default="kv")
     ap.add_argument("--skeleton-dtype", choices=["fp16", "fp32"], default="fp16")
     ap.add_argument("--share-basis-k", action="store_true",
@@ -420,7 +429,7 @@ def main():
             args.skeleton_dtype, args.share_basis_k, args.share_basis_v,
             q_precond, args.rsvd_rank_factor,
             args.exact_rank_cap, args.codec,
-            args.bit_width_v,
+            args.bit_width_v, args.exact_rank_cap_v,
         )
         if res is None:
             print("    skipped (too short)"); continue
