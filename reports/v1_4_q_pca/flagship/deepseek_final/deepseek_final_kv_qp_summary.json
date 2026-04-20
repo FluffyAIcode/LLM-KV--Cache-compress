@@ -1,0 +1,187 @@
+{
+  "model_name": "deepseek_final",
+  "compress": "kv",
+  "ctx_len": 2048,
+  "rows": [
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": false,
+      "ppl_delta": 3.467759907245636,
+      "kl": 1.4930210411548615,
+      "top1": 0.4325396865606308,
+      "seconds": 45.655773401260376
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": true,
+      "ppl_delta": 0.3061204142868519,
+      "kl": 0.33912257850170135,
+      "top1": 0.6984127163887024,
+      "seconds": 53.987934827804565
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": false,
+      "ppl_delta": 5.119133859872818,
+      "kl": 1.742355227470398,
+      "top1": 0.420634925365448,
+      "seconds": 47.45326256752014
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": true,
+      "ppl_delta": 0.3778997496701777,
+      "kl": 0.370283767580986,
+      "top1": 0.6944444626569748,
+      "seconds": 55.939138650894165
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 2048,
+      "q_precond": false,
+      "ppl_delta": 6.437374651432037,
+      "kl": 2.0100821256637573,
+      "top1": 0.3452381007373333,
+      "seconds": 49.29551887512207
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 2048,
+      "q_precond": true,
+      "ppl_delta": 0.45852425694465637,
+      "kl": 0.4176442176103592,
+      "top1": 0.6746031939983368,
+      "seconds": 57.820029497146606
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": false,
+      "ppl_delta": 3.372866451740265,
+      "kl": 1.4604058861732483,
+      "top1": 0.4285714328289032,
+      "seconds": 46.454702377319336
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": true,
+      "ppl_delta": 0.23635408468544483,
+      "kl": 0.23467258363962173,
+      "top1": 0.7380952537059784,
+      "seconds": 54.143184185028076
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": false,
+      "ppl_delta": 4.853829443454742,
+      "kl": 1.7197878956794739,
+      "top1": 0.4246031790971756,
+      "seconds": 47.91929364204407
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": true,
+      "ppl_delta": 0.22875086218118668,
+      "kl": 0.24281296879053116,
+      "top1": 0.7539682686328888,
+      "seconds": 56.26889109611511
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 2048,
+      "q_precond": false,
+      "ppl_delta": 6.133689224720001,
+      "kl": 1.945130169391632,
+      "top1": 0.3531746082007885,
+      "seconds": 49.69628548622131
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 2048,
+      "q_precond": true,
+      "ppl_delta": 0.22938985377550125,
+      "kl": 0.25565554201602936,
+      "top1": 0.7539682686328888,
+      "seconds": 58.220518350601196
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": false,
+      "ppl_delta": 3.218002110719681,
+      "kl": 1.4311155378818512,
+      "top1": 0.4404762014746666,
+      "seconds": 46.78170943260193
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": true,
+      "ppl_delta": 0.1780522509943694,
+      "kl": 0.19698555022478104,
+      "top1": 0.7380952537059784,
+      "seconds": 54.458821058273315
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": false,
+      "ppl_delta": 4.844660073518753,
+      "kl": 1.7195163369178772,
+      "top1": 0.4126984179019928,
+      "seconds": 47.978341579437256
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": true,
+      "ppl_delta": 0.18567564905970357,
+      "kl": 0.19841182604432106,
+      "top1": 0.7460317611694336,
+      "seconds": 56.43769598007202
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 2048,
+      "q_precond": false,
+      "ppl_delta": 5.914666056632996,
+      "kl": 1.9288524091243744,
+      "top1": 0.3571428619325161,
+      "seconds": 49.32249093055725
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 2048,
+      "q_precond": true,
+      "ppl_delta": 0.17182842455804348,
+      "kl": 0.20317221246659756,
+      "top1": 0.742063507437706,
+      "seconds": 58.34730935096741
+    }
+  ]
+}

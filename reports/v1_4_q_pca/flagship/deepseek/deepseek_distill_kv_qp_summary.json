@@ -1,0 +1,87 @@
+{
+  "model_name": "deepseek_distill",
+  "compress": "kv",
+  "ctx_len": 2048,
+  "rows": [
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": false,
+      "ppl_delta": 2.0327981412410736,
+      "kl": 1.369825303554535,
+      "top1": 0.4841269999742508,
+      "seconds": 22.286189079284668
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": true,
+      "ppl_delta": 0.14998225681483746,
+      "kl": 0.41278427839279175,
+      "top1": 0.6984127163887024,
+      "seconds": 27.230660915374756
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": false,
+      "ppl_delta": 3.582386076450348,
+      "kl": 1.7380698919296265,
+      "top1": 0.4285714328289032,
+      "seconds": 23.457467079162598
+    },
+    {
+      "bit_width": 2,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": true,
+      "ppl_delta": 0.08945918083190918,
+      "kl": 0.4067755341529846,
+      "top1": 0.642857164144516,
+      "seconds": 28.838554620742798
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": false,
+      "ppl_delta": 1.9118790030479431,
+      "kl": 1.3448517322540283,
+      "top1": 0.4841269999742508,
+      "seconds": 22.871289014816284
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 512,
+      "q_precond": true,
+      "ppl_delta": 0.10541375540196896,
+      "kl": 0.255002461373806,
+      "top1": 0.6904762089252472,
+      "seconds": 27.652025938034058
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": false,
+      "ppl_delta": 3.2182363271713257,
+      "kl": 1.671813189983368,
+      "top1": 0.4444444477558136,
+      "seconds": 23.955500602722168
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 1024,
+      "q_precond": true,
+      "ppl_delta": 0.03191708028316498,
+      "kl": 0.2512020394206047,
+      "top1": 0.7142857313156128,
+      "seconds": 28.50248408317566
+    }
+  ]
+}

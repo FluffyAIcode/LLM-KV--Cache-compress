@@ -34,20 +34,27 @@ class QPrecond:
     Shapes:
         chol[l]     : [n_kv, D, D]  lower triangular
         inv_chol[l] : [n_kv, D, D]  lower triangular (L^{-1})
+
+    Layers not present in the dict (e.g. skipped via `skip_layers`) use
+    an identity transform (no-op), so the codec falls back to its plain
+    Euclidean behaviour on those layers.
     """
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, skip_layers: list[int] | None = None):
         path = Path(path)
         cfg = json.loads(path.with_suffix(".json").read_text())
         self.head_dim = cfg["head_dim"]
         self.n_kv = cfg["num_kv_heads"]
         self.n_layers = cfg["num_layers"]
         self.layer_types = cfg["layer_types"]
+        self.skip_layers = set(skip_layers or [])
         from safetensors.torch import load_file
         tensors = load_file(str(path))
         self.chol: dict[int, np.ndarray] = {}
         self.inv_chol: dict[int, np.ndarray] = {}
         for l in range(self.n_layers):
+            if l in self.skip_layers:
+                continue
             k_chol = f"layer_{l}_chol"
             k_inv = f"layer_{l}_inv_chol"
             if k_chol in tensors:
@@ -58,12 +65,19 @@ class QPrecond:
     def n_calibrated_layers(self) -> int:
         return len(self.chol)
 
+    def is_active(self, layer: int) -> bool:
+        """Layer has a calibrated Cholesky; whiten/unwhiten are non-trivial."""
+        return layer in self.chol
+
     def whiten(self, k_per_head: np.ndarray, layer: int) -> np.ndarray:
         """Input: K with shape [seq, n_kv, D] (pre-RoPE, one passage, one layer).
-        Output: same shape, whitened per kv-head."""
+        Output: same shape, whitened per kv-head. No-op for layers not
+        in the calibration (e.g. layer 0 when skip_layers=[0])."""
         assert k_per_head.ndim == 3
         assert k_per_head.shape[1] == self.n_kv
         assert k_per_head.shape[2] == self.head_dim
+        if layer not in self.chol:
+            return k_per_head.astype(np.float32, copy=False)
         L = self.chol[layer]                # [n_kv, D, D]
         # K[t, h, :] @ L[h, :, :]  → K_tilde[t, h, :]
         return np.einsum("thj,hjk->thk", k_per_head, L, optimize=True).astype(
@@ -71,8 +85,11 @@ class QPrecond:
         )
 
     def unwhiten(self, k_tilde_per_head: np.ndarray, layer: int) -> np.ndarray:
-        """Inverse of `whiten`.  Applies L^{-1} on the right per kv-head."""
+        """Inverse of `whiten`.  Applies L^{-1} on the right per kv-head.
+        No-op for layers not in the calibration."""
         assert k_tilde_per_head.ndim == 3
+        if layer not in self.inv_chol:
+            return k_tilde_per_head.astype(np.float32, copy=False)
         Linv = self.inv_chol[layer]
         return np.einsum("thj,hjk->thk", k_tilde_per_head, Linv, optimize=True).astype(
             np.float32, copy=False
@@ -101,10 +118,11 @@ def sanity_check(qp: QPrecond) -> dict:
     }
 
 
-def load(path: Optional[str | Path]) -> Optional[QPrecond]:
+def load(path: Optional[str | Path],
+         skip_layers: list[int] | None = None) -> Optional[QPrecond]:
     if path is None:
         return None
-    return QPrecond(path)
+    return QPrecond(path, skip_layers=skip_layers)
 
 
 if __name__ == "__main__":

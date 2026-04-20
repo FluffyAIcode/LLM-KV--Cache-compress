@@ -90,6 +90,9 @@ def main():
     ap.add_argument("--model-name", required=True)
     ap.add_argument("--q-precondition", required=True, type=Path,
                     help="Path to Sigma_q calibration .safetensors")
+    ap.add_argument("--q-precond-skip-layers", type=int, nargs="+", default=[0],
+                    help="Layer indices to exclude from Q-preconditioning "
+                         "(default=[0], attention-sink layer)")
     ap.add_argument("--ctx-len", type=int, default=1024)
     ap.add_argument("--n-eval", type=int, default=64)
     ap.add_argument("--prefill-chunk", type=int, default=1024)
@@ -114,9 +117,10 @@ def main():
     info = prc.install(model)
     print(f"  patched {info['patched_layers']} attention layers", flush=True)
 
-    qp = load_q_precond(args.q_precondition)
+    qp = load_q_precond(args.q_precondition, skip_layers=args.q_precond_skip_layers)
     san = sanity_check(qp)
     print(f"  Q-precondition: {qp.n_calibrated_layers} layers, n_kv={qp.n_kv}, D={qp.head_dim}")
+    print(f"  skip_layers={sorted(qp.skip_layers)}")
     print(f"  sanity: whiten∘unwhiten round-trip max_abs={san['max_abs_err']:.3e}, "
           f"max_rel={san['max_rel_err']:.3e}")
 

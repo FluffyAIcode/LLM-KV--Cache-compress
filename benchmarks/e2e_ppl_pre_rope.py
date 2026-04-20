@@ -318,6 +318,12 @@ def main():
                          "un-whitened by L^{-1} after decode, converting the "
                          "codec's MSE into a faithful proxy for Sigma_q-weighted "
                          "(attention-importance) distortion on K.")
+    ap.add_argument("--q-precond-skip-layers", type=int, nargs="+", default=[0],
+                    help="Layer indices to EXCLUDE from Q-preconditioning. "
+                         "Layer 0 is skipped by default because on many models "
+                         "it carries attention-sink K values whose Sigma_q "
+                         "has huge eigenvalues, causing L^{-1} unwhitening "
+                         "to amplify codec error beyond f16 range.")
     ap.add_argument("--skip-sanity", action="store_true")
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -340,10 +346,12 @@ def main():
         k0 = cache_s.layers[0].keys
         print(f"  sanity: logits finite = {torch.isfinite(lo).all().item()},  K_pre[0] norm = {k0.norm().item():.3f}")
 
-    q_precond = load_q_precond(args.q_precondition)
+    q_precond = load_q_precond(args.q_precondition,
+                                skip_layers=args.q_precond_skip_layers)
     if q_precond is not None:
         print(f"  Q-preconditioning: loaded {q_precond.n_calibrated_layers} layers, "
-              f"n_kv={q_precond.n_kv}, D={q_precond.head_dim}")
+              f"n_kv={q_precond.n_kv}, D={q_precond.head_dim}, "
+              f"skip_layers={sorted(q_precond.skip_layers)}")
         from benchmarks.q_precondition import sanity_check
         san = sanity_check(q_precond)
         print(f"  Q-precondition sanity: max_abs={san['max_abs_err']:.3e}, "
