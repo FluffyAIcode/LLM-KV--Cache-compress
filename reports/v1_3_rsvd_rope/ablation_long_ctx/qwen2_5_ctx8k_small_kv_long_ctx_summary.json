@@ -1,0 +1,67 @@
+{
+  "model_name": "qwen2_5_ctx8k_small",
+  "compress": "kv",
+  "ctx_len": 8192,
+  "rows": [
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 16,
+      "share_basis": false,
+      "ppl_delta": 0.015336367767304182,
+      "kl": 0.037512052804231644,
+      "top1": 0.9365079402923584,
+      "seconds": 29.271811723709106
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 16,
+      "share_basis": true,
+      "ppl_delta": 0.010669613257050514,
+      "kl": 0.025559034198522568,
+      "top1": 0.9126984179019928,
+      "seconds": 38.359806537628174
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 32,
+      "share_basis": false,
+      "ppl_delta": 0.1451977863907814,
+      "kl": 0.14055036380887032,
+      "top1": 0.8730158805847168,
+      "seconds": 29.44812512397766
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 32,
+      "share_basis": true,
+      "ppl_delta": 0.2160448357462883,
+      "kl": 0.18082333356142044,
+      "top1": 0.8253968358039856,
+      "seconds": 38.65613102912903
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 64,
+      "share_basis": false,
+      "ppl_delta": 0.6233773082494736,
+      "kl": 0.5548463016748428,
+      "top1": 0.7380952537059784,
+      "seconds": 43.43600916862488
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 64,
+      "share_basis": true,
+      "ppl_delta": 0.7488341927528381,
+      "kl": 0.6290134489536285,
+      "top1": 0.7301587462425232,
+      "seconds": 39.40456986427307
+    }
+  ]
+}

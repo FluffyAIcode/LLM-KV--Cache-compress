@@ -53,6 +53,15 @@ def _rotate_half_split(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) ->
 def _build_pre_rope_forward(eager_attention_forward: Callable):
     """Factory: return a forward() that stores K_pre in cache and applies
     RoPE on the full stacked K at read time.
+
+    Q-calibration hook
+    ------------------
+    If `self.config._q_recorder` is set to a dict of lists
+    (one per layer_idx), the patched forward appends every `q_pre`
+    tensor seen by this attention module.  This is cheap because it's
+    just a list append; no extra compute.  The calibration driver
+    installs the recorder, runs forward on calibration data, and
+    consumes the lists to build Σ_q per (layer, kv-head).
     """
 
     def forward(
@@ -69,6 +78,12 @@ def _build_pre_rope_forward(eager_attention_forward: Callable):
         q_pre = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
         k_pre_new = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
         v_new = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+
+        recorder = getattr(self.config, "_q_recorder", None)
+        if recorder is not None:
+            recorder.setdefault(self.layer_idx, []).append(
+                q_pre.detach().to(torch.float32).cpu()
+            )
 
         if past_key_values is not None:
             k_pre_all, v_all = past_key_values.update(

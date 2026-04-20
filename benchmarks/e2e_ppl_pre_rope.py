@@ -27,6 +27,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 import benchmarks.pre_rope_cache as prc
+from benchmarks.q_precondition import QPrecond, load as load_q_precond
 
 BENCH_BIN = REPO / "kakeyaturbo" / "target" / "release" / "kakeyaturbo-bench"
 KKTV_MAGIC = 0x4B4B5456
@@ -108,7 +109,8 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     compress: str = "kv",
                     skeleton_dtype: str = "fp16",
                     share_basis_k: bool = False,
-                    share_basis_v: bool = True) -> tuple[DynamicCache, dict]:
+                    share_basis_v: bool = True,
+                    q_precond: QPrecond | None = None) -> tuple[DynamicCache, dict]:
     """Build an alt cache whose full-attention-layer K,V are round-tripped
     through the codec. K is PRE-RoPE (cache already holds it that way)."""
     cfg = model.config.get_text_config(decoder=True)
@@ -132,9 +134,20 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
 
         bsz, n_kv, seq, hd = k_ref.shape
         assert bsz == 1
-        k_np = k_ref[0].to(torch.float32).permute(1, 0, 2).cpu().numpy()
+        k_np = k_ref[0].to(torch.float32).permute(1, 0, 2).cpu().numpy()  # [seq, n_kv, hd]
         v_np = v_ref[0].to(torch.float32).permute(1, 0, 2).cpu().numpy()
-        k_flat = k_np.reshape(-1, hd).astype(np.float32, copy=False)
+        # Q-precondition: apply whitening BEFORE flattening so every row
+        # goes through the codec already in Sigma_q-whitened coordinates.
+        # The codec sees "an attention-importance-normalised K stream" and
+        # its MSE loss is now a faithful proxy for the true InnerProduct
+        # distortion.  The untouched tail is also whitened (no info loss —
+        # unwhiten∘whiten = I to fp32 precision, ~6e-6 relative).
+        use_qp = q_precond is not None and compress in ("kv", "k_only")
+        if use_qp:
+            k_np_enc = q_precond.whiten(k_np, layer=i)
+        else:
+            k_np_enc = k_np
+        k_flat = k_np_enc.reshape(-1, hd).astype(np.float32, copy=False)
         v_flat = v_np.reshape(-1, hd).astype(np.float32, copy=False)
         n_total = k_flat.shape[0]
         n_comp = (n_total // block_size) * block_size
@@ -142,9 +155,13 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
 
         if n_comp > 0:
             if compress in ("kv", "k_only"):
+                # When Q-preconditioned, the codec input is isotropic (in the
+                # Sigma_q metric), so the residual-side metric reverts to MSE
+                # — otherwise we'd double-apply the inner-product weighting.
+                k_metric = "mse" if use_qp else "inner_product"
                 k_dec, k_rep = rust_roundtrip(
                     k_flat[:n_comp], block_size=block_size, bit_width=bit_width,
-                    rsvd_target_rank=target_rank, metric="inner_product",
+                    rsvd_target_rank=target_rank, metric=k_metric,
                     share_basis=share_basis_k, pca_method=pca_method,
                     variance_ratio=variance_ratio,
                     skeleton_dtype=skeleton_dtype,
@@ -171,6 +188,10 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
         v_full = np.concatenate([v_dec, v_flat[n_comp:]]) if n_comp < n_total else v_dec
         k_full = k_full.reshape(seq, n_kv, hd)
         v_full = v_full.reshape(seq, n_kv, hd)
+        # Un-whiten the K stream (entire sequence, including the untouched
+        # tail — unwhiten∘whiten = I for uncompressed rows).
+        if use_qp:
+            k_full = q_precond.unwhiten(k_full, layer=i)
 
         k_tensor = torch.from_numpy(np.ascontiguousarray(k_full.transpose(1, 0, 2))).unsqueeze(0).to(k_ref.dtype).to(k_ref.device)
         v_tensor = torch.from_numpy(np.ascontiguousarray(v_full.transpose(1, 0, 2))).unsqueeze(0).to(v_ref.dtype).to(v_ref.device)
@@ -235,7 +256,8 @@ def logits_with_cache(model, cache, cont_ids):
 
 def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              prefill_chunk, pca_method, vr, compress,
-             skeleton_dtype, share_basis_k, share_basis_v):
+             skeleton_dtype, share_basis_k, share_basis_v,
+             q_precond=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -248,6 +270,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         pca_method=pca_method, variance_ratio=vr, compress=compress,
         skeleton_dtype=skeleton_dtype,
         share_basis_k=share_basis_k, share_basis_v=share_basis_v,
+        q_precond=q_precond,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -275,6 +298,13 @@ def main():
                     help="Layer-shared PCA basis on K stream (default off: per-block)")
     ap.add_argument("--share-basis-v", action="store_true",
                     help="Layer-shared PCA basis on V stream (default off; use explicit flag)")
+    ap.add_argument("--q-precondition", type=Path, default=None,
+                    help="Path to Q-precondition calibration .safetensors (from "
+                         "benchmarks/q_calibration.py).  When set, K stream is "
+                         "whitened by L = chol(Sigma_q) before the codec and "
+                         "un-whitened by L^{-1} after decode, converting the "
+                         "codec's MSE into a faithful proxy for Sigma_q-weighted "
+                         "(attention-importance) distortion on K.")
     ap.add_argument("--skip-sanity", action="store_true")
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -297,6 +327,17 @@ def main():
         k0 = cache_s.layers[0].keys
         print(f"  sanity: logits finite = {torch.isfinite(lo).all().item()},  K_pre[0] norm = {k0.norm().item():.3f}")
 
+    q_precond = load_q_precond(args.q_precondition)
+    if q_precond is not None:
+        print(f"  Q-preconditioning: loaded {q_precond.n_calibrated_layers} layers, "
+              f"n_kv={q_precond.n_kv}, D={q_precond.head_dim}")
+        from benchmarks.q_precondition import sanity_check
+        san = sanity_check(q_precond)
+        print(f"  Q-precondition sanity: max_abs={san['max_abs_err']:.3e}, "
+              f"max_rel={san['max_rel_err']:.3e}")
+    else:
+        print("  Q-preconditioning: OFF")
+
     passages = load_wikitext_passages(tok, args.ctx_len + args.n_eval, args.n_passages)
     print(f"  got {len(passages)} WikiText passages")
 
@@ -308,6 +349,7 @@ def main():
             args.bit_width, args.prefill_chunk, args.pca_method,
             args.variance_ratio, args.compress,
             args.skeleton_dtype, args.share_basis_k, args.share_basis_v,
+            q_precond,
         )
         if res is None:
             print("    skipped (too short)"); continue

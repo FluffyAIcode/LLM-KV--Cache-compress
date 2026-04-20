@@ -39,30 +39,53 @@ from benchmarks.e2e_ppl_pre_rope import (
 )
 
 
-def run_one(model, tok, passages, *, ctx_len, n_eval, block_size, bit_width,
-            variance_ratio, prefill_chunk, compress):
-    per_passage = []
-    for p in passages:
+def build_prefills(model, tok, passages, ctx_len, n_eval, prefill_chunk):
+    """Prefill the reference caches once per passage and cache both the
+    DynamicCache and the reference logits on the continuation (also once,
+    independent of the codec config).  This amortises the most expensive
+    work across every cell of the sweep.
+    """
+    entries = []
+    for i, p in enumerate(passages):
         ids = tok(p, return_tensors="pt")["input_ids"]
         if ids.shape[-1] < ctx_len + n_eval:
             continue
         prefix = ids[:, :ctx_len]
         cont = ids[:, ctx_len:ctx_len + n_eval]
         cache_ref = prefill_cache(model, prefix, prefill_chunk)
+        c_ref_fwd = copy.deepcopy(cache_ref)
+        lo_ref = logits_with_cache(model, c_ref_fwd, cont)
+        entries.append({"idx": i, "cache_ref": cache_ref, "cont": cont,
+                        "logits_ref": lo_ref.detach().clone()})
+        print(f"  passage {i+1}: prefilled ctx={prefix.shape[-1]}, "
+              f"cont={cont.shape[-1]}", flush=True)
+    return entries
+
+
+def run_one_cached(model, entries, *, block_size, bit_width,
+                   variance_ratio, compress):
+    """Run one cell of the sweep using pre-built per-passage entries.
+
+    For each passage, only the codec round-trip + the alt forward pass
+    through the model on the continuation is executed (reference prefill
+    and reference logits are taken from `entries`).
+    """
+    per_passage = []
+    for e in entries:
         cache_alt, stats = roundtrip_cache(
-            model, cache_ref,
+            model, e["cache_ref"],
             block_size=block_size, bit_width=bit_width,
             pca_method="exact", variance_ratio=variance_ratio,
             compress=compress,
             skeleton_dtype="fp16",
             share_basis_k=False, share_basis_v=False,
         )
-        c_ref = copy.deepcopy(cache_ref)
         c_alt = copy.deepcopy(cache_alt)
-        lo_ref = logits_with_cache(model, c_ref, cont)
-        lo_alt = logits_with_cache(model, c_alt, cont)
-        per_passage.append({"metrics": compare_logits(lo_ref, lo_alt, cont),
-                            "stats": stats})
+        lo_alt = logits_with_cache(model, c_alt, e["cont"])
+        per_passage.append({
+            "metrics": compare_logits(e["logits_ref"], lo_alt, e["cont"]),
+            "stats": stats,
+        })
     if not per_passage:
         return None
     md = float(np.mean([r["metrics"]["ppl_delta_rel"] for r in per_passage]))
@@ -102,6 +125,15 @@ def main():
     passages = load_wikitext_passages(tok, args.ctx_len + args.n_eval, args.n_passages)
     print(f"  got {len(passages)} WikiText passages", flush=True)
 
+    print(f"  building per-passage prefills (ctx={args.ctx_len}, n_eval={args.n_eval})…",
+          flush=True)
+    t_prefill = time.time()
+    entries = build_prefills(
+        model, tok, passages, args.ctx_len, args.n_eval, args.prefill_chunk
+    )
+    print(f"  prefilled {len(entries)} passages in {time.time() - t_prefill:.1f}s",
+          flush=True)
+
     grid = list(product(args.bit_widths, args.variance_ratios, args.block_sizes))
     print(f"  running {len(grid)} configurations "
           f"(exact PCA, per_block, fp16 skeleton, compress={args.compress})", flush=True)
@@ -111,11 +143,10 @@ def main():
     for i, (bw, vr, bs) in enumerate(grid):
         label = f"b={bw} vr={vr} bs={bs}"
         t0 = time.time()
-        res = run_one(
-            model, tok, passages,
-            ctx_len=args.ctx_len, n_eval=args.n_eval,
+        res = run_one_cached(
+            model, entries,
             block_size=bs, bit_width=bw, variance_ratio=vr,
-            prefill_chunk=args.prefill_chunk, compress=args.compress,
+            compress=args.compress,
         )
         dur = time.time() - t0
         if res is None:
