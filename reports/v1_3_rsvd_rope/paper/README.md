@@ -1,8 +1,8 @@
 # arXiv submission package
 
-**Title**: Kakeya Skeleton with Residual Turbo Compression: A Rate--Distortion Framework for LLM KV Cache Compression
+**Title**: Randomized Kakeya Skeletons for LLM KV Cache Compression: Algorithm and Rate--Distortion Boundary
 
-**Authors**: KakeyaTurbo Contributors
+**Author**: Allen Li (individual researcher, AllenL329@gmail.com)
 
 **Date**: April 19, 2026
 
@@ -13,7 +13,7 @@
 | File | Size | Purpose |
 |---|---:|---|
 | `kakeyaturbo.tex` | ~64 KB | single-file LaTeX source (arXiv-compatible, no custom style files) |
-| `kakeyaturbo.pdf` | ~399 KB | compiled 18-page PDF for preview |
+| `kakeyaturbo.pdf` | ~405 KB | compiled 19-page PDF for preview |
 
 ## Reproducibility
 
