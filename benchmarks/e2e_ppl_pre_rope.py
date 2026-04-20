@@ -64,7 +64,8 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                    variance_ratio: float = 0.95,
                    skeleton_dtype: str = "fp16",
                    exact_rank_cap: int | None = None,
-                   centroids_file: str | None = None):
+                   centroids_file: str | None = None,
+                   outlier_threshold: float | None = None):
     import tempfile
     with tempfile.TemporaryDirectory(dir="/tmp") as td:
         tdp = Path(td)
@@ -90,12 +91,16 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
             cmd += ["--exact-rank-cap", str(exact_rank_cap)]
         if centroids_file is not None:
             cmd += ["--centroids-file", str(centroids_file)]
+        if outlier_threshold is not None:
+            cmd += ["--outlier-threshold", str(outlier_threshold)]
         if share_basis:
             cmd.append("--share-basis")
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
             raise RuntimeError(r.stderr)
         return read_kktv(dec_p), json.loads(rep_p.read_text())
+
+
 
 
 @torch.inference_mode()
@@ -129,7 +134,9 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     v_centroids_file: str | None = None,
                     boundary_skip_layers: list[int] | None = None,
                     boundary_mode: str = "bf16",
-                    boundary_bit_width: int = 4) -> tuple[DynamicCache, dict]:
+                    boundary_bit_width: int = 4,
+                    k_outlier_threshold: float | None = None,
+                    v_outlier_threshold: float | None = None) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -227,6 +234,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                         skeleton_dtype=skeleton_dtype,
                         exact_rank_cap=exact_rank_cap,
                         centroids_file=k_centroids_eff,
+                        outlier_threshold=(None if is_boundary else k_outlier_threshold),
                     )
                 else:
                     k_dec = k_flat[:n_comp].copy()
@@ -244,6 +252,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                         skeleton_dtype=skeleton_dtype,
                         exact_rank_cap=rank_cap_v_eff,
                         centroids_file=v_centroids_eff,
+                        outlier_threshold=(None if is_boundary else v_outlier_threshold),
                     )
                 else:
                     v_dec = v_flat[:n_comp].copy()
@@ -353,7 +362,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              bit_width_v=None, exact_rank_cap_v=None,
              pca_method_v=None,
              k_centroids_file=None, v_centroids_file=None,
-             boundary_skip_layers=None, boundary_mode="bf16", boundary_bit_width=4):
+             boundary_skip_layers=None, boundary_mode="bf16", boundary_bit_width=4,
+             k_outlier_threshold=None, v_outlier_threshold=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -377,6 +387,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         boundary_skip_layers=boundary_skip_layers,
         boundary_mode=boundary_mode,
         boundary_bit_width=boundary_bit_width,
+        k_outlier_threshold=k_outlier_threshold,
+        v_outlier_threshold=v_outlier_threshold,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -440,6 +452,13 @@ def main():
                          "(default 4) instead of --bit-width on these layers.")
     ap.add_argument("--boundary-bit-width", type=int, default=4,
                     help="Bit width for boundary layers when --boundary-mode=conservative.")
+    ap.add_argument("--k-outlier-threshold", type=float, default=None,
+                    help="If set, outlier compensation threshold on the K "
+                         "residual quantizer (scaled-residual space). "
+                         "Coordinates with |scaled_residual| > T are stored "
+                         "exact (u16+f16 = 4 bytes each). Typical T=2.0.")
+    ap.add_argument("--v-outlier-threshold", type=float, default=None,
+                    help="Same as --k-outlier-threshold but for V stream.")
     ap.add_argument("--compress", choices=["kv", "k_only", "v_only"], default="kv")
     ap.add_argument("--skeleton-dtype", choices=["fp16", "fp32"], default="fp16")
     ap.add_argument("--share-basis-k", action="store_true",
@@ -514,6 +533,8 @@ def main():
             args.boundary_skip_layers,
             args.boundary_mode,
             args.boundary_bit_width,
+            args.k_outlier_threshold,
+            args.v_outlier_threshold,
         )
         if res is None:
             print("    skipped (too short)"); continue

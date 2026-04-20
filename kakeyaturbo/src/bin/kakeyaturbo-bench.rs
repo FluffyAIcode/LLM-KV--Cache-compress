@@ -65,6 +65,11 @@ struct Args {
     /// little-endian, sorted).  When present, replaces the codec's
     /// unit-variance-Gaussian defaults on both encode and decode.
     centroids_file: Option<PathBuf>,
+    /// If set, outlier compensation threshold T.  Coordinates with
+    /// |scaled_residual| > T are stored exact (as u16 index + f16 value)
+    /// and override Lloyd-Max dequantization at decode.  Typical T=2.0
+    /// gives ~1-5 % outlier rate on Gaussian-like residuals.
+    outlier_threshold: Option<f32>,
 }
 
 fn print_help() {
@@ -106,6 +111,7 @@ fn parse_args() -> Result<Args, String> {
     let mut rsvd_oversample: usize = 8;
     let mut rsvd_power_iters: u32 = 2;
     let mut centroids_file: Option<PathBuf> = None;
+    let mut outlier_threshold: Option<f32> = None;
     let mut dump_decoded: Option<PathBuf> = None;
 
     let mut i = 1;
@@ -187,6 +193,12 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 centroids_file = Some(PathBuf::from(&argv[i]));
             }
+            "--outlier-threshold" => {
+                i += 1;
+                outlier_threshold = Some(
+                    argv[i].parse().map_err(|e| format!("bad --outlier-threshold: {e}"))?,
+                );
+            }
             other => return Err(format!("unknown flag {other}; try --help")),
         }
         i += 1;
@@ -213,6 +225,7 @@ fn parse_args() -> Result<Args, String> {
         rsvd_power_iters,
         dump_decoded,
         centroids_file,
+        outlier_threshold,
     })
 }
 
@@ -319,6 +332,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         skeleton_dtype,
         exact_rank_cap: args.exact_rank_cap,
         custom_centroids,
+        outlier_threshold: args.outlier_threshold,
     };
 
     let bs = args.block_size;

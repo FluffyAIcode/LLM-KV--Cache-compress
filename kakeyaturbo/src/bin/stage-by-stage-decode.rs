@@ -157,6 +157,7 @@ fn main() {
         skeleton_dtype: kakeyaturbo::SkeletonDtype::Fp16,
         exact_rank_cap: None,
         custom_centroids: None,
+        outlier_threshold: None,
     };
 
     let weights = vec![1.0_f32; bs];
