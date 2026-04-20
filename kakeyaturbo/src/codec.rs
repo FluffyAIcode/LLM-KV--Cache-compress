@@ -242,12 +242,20 @@ pub fn encode_block<R: Distortion>(
         let rotated = rotate(&res_padded, params.rotation_seed);
 
         // Scale to approximately unit variance for the Lloyd-Max codebook.
-        // The WHT rotation preserves L2 norm up to sqrt(n), and the
-        // Gaussianisation argument assumes each coord ~ N(0, σ²/N_EFF).
-        // We divide by the empirical residual std to match the codebook.
+        // The `rotate` function implements an UNNORMALIZED Walsh-Hadamard
+        // transform, so for residual `res` of length d_eff (padded with
+        // zeros to wht_len), the rotated vector `rotated = H·D·res_padded`
+        // satisfies `‖rotated‖² = wht_len · ‖res‖²`, giving an average
+        // per-coordinate squared magnitude of `‖res‖²`. To match the
+        // Lloyd-Max codebook (calibrated for N(0, 1)) we therefore scale
+        // by `1 / ‖res‖`, so the result has unit per-coord variance.
+        //
+        // (Prior versions used `scale = √wht_len / ‖res‖`, which made the
+        // scaled values have per-coord variance `wht_len`, saturating the
+        // quantiser. Fixed in this revision.)
         let res_norm = l2_norm(&res);
         let scale = if res_norm > f32::EPSILON {
-            (wht_len as f32).sqrt() / res_norm
+            1.0 / res_norm
         } else {
             1.0
         };
