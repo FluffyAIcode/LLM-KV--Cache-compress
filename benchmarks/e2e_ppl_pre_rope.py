@@ -59,7 +59,8 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                    rsvd_target_rank: int, metric: str, share_basis: bool,
                    pca_method: str = "randomized",
                    variance_ratio: float = 0.95,
-                   skeleton_dtype: str = "fp16"):
+                   skeleton_dtype: str = "fp16",
+                   exact_rank_cap: int | None = None):
     import tempfile
     with tempfile.TemporaryDirectory(dir="/tmp") as td:
         tdp = Path(td)
@@ -81,6 +82,8 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
         if pca_method == "randomized":
             cmd += ["--rsvd-target-rank", str(rsvd_target_rank),
                     "--rsvd-oversample", "8", "--rsvd-power-iters", "2"]
+        if exact_rank_cap is not None and pca_method == "exact":
+            cmd += ["--exact-rank-cap", str(exact_rank_cap)]
         if share_basis:
             cmd.append("--share-basis")
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -110,7 +113,8 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     skeleton_dtype: str = "fp16",
                     share_basis_k: bool = False,
                     share_basis_v: bool = True,
-                    q_precond: QPrecond | None = None) -> tuple[DynamicCache, dict]:
+                    q_precond: QPrecond | None = None,
+                    exact_rank_cap: int | None = None) -> tuple[DynamicCache, dict]:
     """Build an alt cache whose full-attention-layer K,V are round-tripped
     through the codec. K is PRE-RoPE (cache already holds it that way)."""
     cfg = model.config.get_text_config(decoder=True)
@@ -165,6 +169,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     share_basis=share_basis_k, pca_method=pca_method,
                     variance_ratio=variance_ratio,
                     skeleton_dtype=skeleton_dtype,
+                    exact_rank_cap=exact_rank_cap,
                 )
             else:
                 k_dec = k_flat[:n_comp].copy()
@@ -176,6 +181,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     share_basis=share_basis_v, pca_method=pca_method,
                     variance_ratio=variance_ratio,
                     skeleton_dtype=skeleton_dtype,
+                    exact_rank_cap=exact_rank_cap,
                 )
             else:
                 v_dec = v_flat[:n_comp].copy()
@@ -257,7 +263,8 @@ def logits_with_cache(model, cache, cont_ids):
 def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              prefill_chunk, pca_method, vr, compress,
              skeleton_dtype, share_basis_k, share_basis_v,
-             q_precond=None):
+             q_precond=None, rsvd_rank_factor=0.5,
+             exact_rank_cap=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -270,7 +277,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         pca_method=pca_method, variance_ratio=vr, compress=compress,
         skeleton_dtype=skeleton_dtype,
         share_basis_k=share_basis_k, share_basis_v=share_basis_v,
-        q_precond=q_precond,
+        q_precond=q_precond, rsvd_target_rank_factor=rsvd_rank_factor,
+        exact_rank_cap=exact_rank_cap,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -292,6 +300,11 @@ def main():
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--pca-method", choices=["exact", "randomized"], default="randomized")
     ap.add_argument("--variance-ratio", type=float, default=0.95)
+    ap.add_argument("--rsvd-rank-factor", type=float, default=0.5,
+                    help="RSVD target_rank / D. Default 0.5 = D/2.")
+    ap.add_argument("--exact-rank-cap", type=int, default=None,
+                    help="Hard cap on d_eff in exact PCA (like RSVD's target_rank "
+                         "but without the RSVD approximation error).")
     ap.add_argument("--compress", choices=["kv", "k_only", "v_only"], default="kv")
     ap.add_argument("--skeleton-dtype", choices=["fp16", "fp32"], default="fp16")
     ap.add_argument("--share-basis-k", action="store_true",
@@ -349,7 +362,8 @@ def main():
             args.bit_width, args.prefill_chunk, args.pca_method,
             args.variance_ratio, args.compress,
             args.skeleton_dtype, args.share_basis_k, args.share_basis_v,
-            q_precond,
+            q_precond, args.rsvd_rank_factor,
+            args.exact_rank_cap,
         )
         if res is None:
             print("    skipped (too short)"); continue

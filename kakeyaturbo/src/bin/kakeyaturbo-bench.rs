@@ -48,6 +48,9 @@ struct Args {
     pca_method: String,
     /// One of "fp16" or "fp32" — skeleton (PCA mean+basis, K-means centres) storage precision.
     skeleton_dtype: String,
+    /// If set, hard-cap d_eff at this value in the exact PCA path
+    /// (None = unlimited, controlled by variance_ratio only).
+    exact_rank_cap: Option<usize>,
     /// Randomized-SVD knobs. Ignored when pca_method == "exact".
     rsvd_target_rank: Option<usize>,
     rsvd_oversample: usize,
@@ -67,6 +70,7 @@ fn print_help() {
             [--share-basis] [--verify] \\\n    \
             [--pca-method exact|randomized] \\\n    \
             [--skeleton-dtype fp16|fp32] \\\n    \
+            [--exact-rank-cap N] \\\n    \
             [--rsvd-target-rank N] [--rsvd-oversample N] [--rsvd-power-iters N] \\\n    \
             [--dump-decoded PATH]\n\n\
             Compresses a KV tensor file block-by-block using the\n\
@@ -91,6 +95,7 @@ fn parse_args() -> Result<Args, String> {
     let mut share_basis = false;
     let mut pca_method = "exact".to_string();
     let mut skeleton_dtype = "fp16".to_string();
+    let mut exact_rank_cap: Option<usize> = None;
     let mut rsvd_target_rank: Option<usize> = None;
     let mut rsvd_oversample: usize = 8;
     let mut rsvd_power_iters: u32 = 2;
@@ -149,6 +154,12 @@ fn parse_args() -> Result<Args, String> {
                 i += 1;
                 skeleton_dtype = argv[i].clone();
             }
+            "--exact-rank-cap" => {
+                i += 1;
+                exact_rank_cap = Some(
+                    argv[i].parse().map_err(|e| format!("bad --exact-rank-cap: {e}"))?,
+                );
+            }
             "--rsvd-target-rank" => {
                 i += 1;
                 rsvd_target_rank = Some(argv[i].parse().map_err(|e| format!("bad --rsvd-target-rank: {e}"))?);
@@ -185,6 +196,7 @@ fn parse_args() -> Result<Args, String> {
         share_basis,
         pca_method,
         skeleton_dtype,
+        exact_rank_cap,
         rsvd_target_rank,
         rsvd_oversample,
         rsvd_power_iters,
@@ -259,6 +271,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         kmeans_max_iter: 32,
         pca_method,
         skeleton_dtype,
+        exact_rank_cap: args.exact_rank_cap,
     };
 
     let bs = args.block_size;

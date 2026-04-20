@@ -18,8 +18,8 @@ use crate::kmeans::{
     assign_and_project, fit_spherical_kmeans_with_storage, residual,
 };
 use crate::pca::{
-    fit_weighted_pca_randomized_with_storage, fit_weighted_pca_with_storage, project, unproject,
-    PcaFit, PcaStorage,
+    fit_weighted_pca_randomized_with_storage, fit_weighted_pca_with_storage_capped, project,
+    unproject, PcaFit, PcaStorage,
 };
 use crate::quantize::{dequantize_vector, pack_bits, quantize_vector, unpack_bits};
 use crate::skeleton::Skeleton;
@@ -130,6 +130,12 @@ pub struct CodecParams {
     /// Storage precision for PCA mean, PCA basis, and K-means centres.
     /// Does not affect the residual Lloyd-Max quantiser.
     pub skeleton_dtype: SkeletonDtype,
+    /// Optional hard upper bound on `d_eff` for the exact PCA path.
+    /// `None` (the default) leaves `d_eff` controlled by `variance_ratio`.
+    /// `Some(r)` clips `d_eff ≤ r` even if variance_ratio would keep more
+    /// components — useful to match RSVD's rank budget while using exact
+    /// (un-approximated) eigenvectors.
+    pub exact_rank_cap: Option<usize>,
 }
 
 impl Default for CodecParams {
@@ -142,6 +148,7 @@ impl Default for CodecParams {
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
             skeleton_dtype: SkeletonDtype::Fp16,
+            exact_rank_cap: None,
         }
     }
 }
@@ -164,12 +171,13 @@ fn fit_pca_dispatch(
 ) -> PcaFit {
     let storage = pca_storage(params);
     match params.pca_method {
-        PcaMethod::Exact => fit_weighted_pca_with_storage(
+        PcaMethod::Exact => fit_weighted_pca_with_storage_capped(
             vectors,
             weights,
             d,
             params.variance_ratio,
             storage,
+            params.exact_rank_cap,
         ),
         PcaMethod::Randomized {
             target_rank,
@@ -632,6 +640,7 @@ mod tests {
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
             skeleton_dtype: SkeletonDtype::Fp16,
+            exact_rank_cap: None,
         };
         let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
         let recovered = decode_block::<MSE>(&sk, &codes);
@@ -1124,6 +1133,7 @@ mod tests {
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
             skeleton_dtype: SkeletonDtype::Fp16,
+            exact_rank_cap: None,
         };
         let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
         assert!(enc.shared_pca.is_none());

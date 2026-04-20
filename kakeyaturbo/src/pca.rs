@@ -235,12 +235,12 @@ impl PcaFit {
 /// `variance_ratio` is not finite.
 #[must_use]
 pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_ratio: f32) -> PcaFit {
-    fit_weighted_pca_with_storage(vectors, weights, d, variance_ratio, PcaStorage::Fp16)
+    fit_weighted_pca_with_storage_capped(
+        vectors, weights, d, variance_ratio, PcaStorage::Fp16, None,
+    )
 }
 
-/// Full-control variant of [`fit_weighted_pca`] that lets the caller
-/// pick skeleton storage precision. Mathematically identical to
-/// `fit_weighted_pca`; only the final mean/basis buffers differ in dtype.
+/// Storage-aware variant of [`fit_weighted_pca`], no rank cap.
 #[must_use]
 pub fn fit_weighted_pca_with_storage(
     vectors: &[f32],
@@ -248,6 +248,22 @@ pub fn fit_weighted_pca_with_storage(
     d: usize,
     variance_ratio: f32,
     storage: PcaStorage,
+) -> PcaFit {
+    fit_weighted_pca_with_storage_capped(vectors, weights, d, variance_ratio, storage, None)
+}
+
+/// Full-control variant of [`fit_weighted_pca`].  When `rank_cap` is
+/// `Some(r)`, `d_eff` is clipped to at most `r` regardless of
+/// `variance_ratio`. This lets the caller use exact PCA to match
+/// RSVD's rank-budgeted behaviour without RSVD's approximation error.
+#[must_use]
+pub fn fit_weighted_pca_with_storage_capped(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    storage: PcaStorage,
+    rank_cap: Option<usize>,
 ) -> PcaFit {
     assert!(
         variance_ratio.is_finite(),
@@ -310,6 +326,9 @@ pub fn fit_weighted_pca_with_storage(
         d_eff = 1;
     }
     d_eff = d_eff.clamp(1, d);
+    if let Some(cap) = rank_cap {
+        d_eff = d_eff.min(cap.max(1).min(d));
+    }
 
     // Flatten top-d_eff eigenvectors into row-major basis.
     let mut basis = Vec::with_capacity(d_eff * d);
