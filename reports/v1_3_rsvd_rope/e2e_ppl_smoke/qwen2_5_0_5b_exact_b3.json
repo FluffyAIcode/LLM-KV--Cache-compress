@@ -1,0 +1,587 @@
+{
+  "model_name": "qwen2_5_0_5b_exact_b3",
+  "ctx_len": 1024,
+  "n_eval": 64,
+  "block_size": 512,
+  "bit_width": 3,
+  "pca_method": "exact",
+  "n_passages": 2,
+  "mean_ppl_delta_rel": 466.22025577268784,
+  "mean_kl": 5.709554195404053,
+  "mean_top1_agreement": 0.1746031790971756,
+  "verdict": "REJECT",
+  "per_passage": [
+    {
+      "ctx_len": 1024,
+      "n_eval": 64,
+      "prefill_sec": 1.1271841419511475,
+      "roundtrip_sec": 2.2721949970000423,
+      "compression_stats": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 8.3581133806,
+            "v_mse": 0.0001809863,
+            "k_bytes": 41600,
+            "v_bytes": 81024,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 1,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.1468517675,
+            "v_mse": 0.0185622226,
+            "k_bytes": 95264,
+            "v_bytes": 82560,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 2,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.508691242,
+            "v_mse": 0.0346923436,
+            "k_bytes": 98144,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 3,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.5172435813,
+            "v_mse": 0.0651975153,
+            "k_bytes": 96064,
+            "v_bytes": 83328,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 4,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.8188348235,
+            "v_mse": 0.1019647424,
+            "k_bytes": 95904,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 5,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.8567054407,
+            "v_mse": 0.1147669143,
+            "k_bytes": 97664,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 6,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.8745597967,
+            "v_mse": 0.0729060007,
+            "k_bytes": 96544,
+            "v_bytes": 82560,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 7,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.4726913774,
+            "v_mse": 0.1133059364,
+            "k_bytes": 97504,
+            "v_bytes": 83328,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 8,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.3134146944,
+            "v_mse": 0.1130395192,
+            "k_bytes": 95424,
+            "v_bytes": 83328,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 9,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.5387619364,
+            "v_mse": 0.1440092512,
+            "k_bytes": 79616,
+            "v_bytes": 83072,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 10,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.8013560292,
+            "v_mse": 0.1720509367,
+            "k_bytes": 94784,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 11,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.5355013535,
+            "v_mse": 0.191149592,
+            "k_bytes": 78496,
+            "v_bytes": 82304,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 12,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.7383269023,
+            "v_mse": 0.1831462647,
+            "k_bytes": 95584,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 13,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.9807068439,
+            "v_mse": 0.1854731069,
+            "k_bytes": 95104,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 14,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6738277381,
+            "v_mse": 0.1801455628,
+            "k_bytes": 95264,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 15,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.812357267,
+            "v_mse": 0.2019084304,
+            "k_bytes": 96224,
+            "v_bytes": 82816,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 16,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.449565246,
+            "v_mse": 0.2839936569,
+            "k_bytes": 87200,
+            "v_bytes": 84096,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 17,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6758822885,
+            "v_mse": 0.2080514284,
+            "k_bytes": 97344,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 18,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.0096336419,
+            "v_mse": 0.1881940128,
+            "k_bytes": 97664,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 19,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.0308505006,
+            "v_mse": 0.2162260482,
+            "k_bytes": 96704,
+            "v_bytes": 83328,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 20,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6826318995,
+            "v_mse": 0.6176638029,
+            "k_bytes": 95744,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 21,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6290162434,
+            "v_mse": 1.3190498758,
+            "k_bytes": 94304,
+            "v_bytes": 84352,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 22,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.5790444016,
+            "v_mse": 1.5476911362,
+            "k_bytes": 81056,
+            "v_bytes": 84096,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 23,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6450578789,
+            "v_mse": 1.1525113143,
+            "k_bytes": 82656,
+            "v_bytes": 84096,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          }
+        ],
+        "n_full": 24
+      },
+      "metrics": {
+        "mean_kl": 4.7025980949401855,
+        "max_kl": 13.254217147827148,
+        "top1_agreement": 0.2063492089509964,
+        "ppl_ref": 22.5943660736084,
+        "ppl_alt": 2635.965087890625,
+        "ppl_delta_rel": 115.66470656017181,
+        "nll_ref": 3.1177005767822266,
+        "nll_alt": 7.877004623413086,
+        "n_tokens": 63
+      }
+    },
+    {
+      "ctx_len": 1024,
+      "n_eval": 64,
+      "prefill_sec": 0.8915112629765645,
+      "roundtrip_sec": 2.3094059790018946,
+      "compression_stats": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 8.4605497825,
+            "v_mse": 0.0001949588,
+            "k_bytes": 41600,
+            "v_bytes": 81792,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 1,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.1564662014,
+            "v_mse": 0.0208300641,
+            "k_bytes": 96224,
+            "v_bytes": 83072,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 2,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.4714245631,
+            "v_mse": 0.0374398709,
+            "k_bytes": 99264,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 3,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.4901721209,
+            "v_mse": 0.0670342708,
+            "k_bytes": 96544,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 4,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.7972908122,
+            "v_mse": 0.1090628997,
+            "k_bytes": 96064,
+            "v_bytes": 84096,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 5,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.8348392834,
+            "v_mse": 0.1232791314,
+            "k_bytes": 98144,
+            "v_bytes": 84096,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 6,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.9000525824,
+            "v_mse": 0.079240281,
+            "k_bytes": 97184,
+            "v_bytes": 83072,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 7,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.4732430243,
+            "v_mse": 0.1213952587,
+            "k_bytes": 98304,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 8,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.339228342,
+            "v_mse": 0.1208605753,
+            "k_bytes": 95744,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 9,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.4762273287,
+            "v_mse": 0.1514088187,
+            "k_bytes": 79776,
+            "v_bytes": 83328,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 10,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.758306577,
+            "v_mse": 0.1820923397,
+            "k_bytes": 95264,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 11,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.5755684967,
+            "v_mse": 0.1977211103,
+            "k_bytes": 78976,
+            "v_bytes": 82304,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 12,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.7026924827,
+            "v_mse": 0.178391806,
+            "k_bytes": 95584,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 13,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.919877464,
+            "v_mse": 0.1866671457,
+            "k_bytes": 94464,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 14,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6669510899,
+            "v_mse": 0.1975351991,
+            "k_bytes": 95264,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 15,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.8092935893,
+            "v_mse": 0.2037396276,
+            "k_bytes": 96064,
+            "v_bytes": 83072,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 16,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.4041430301,
+            "v_mse": 0.2965258171,
+            "k_bytes": 80896,
+            "v_bytes": 84352,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 17,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6692121917,
+            "v_mse": 0.2065248236,
+            "k_bytes": 97184,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 18,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.9954170369,
+            "v_mse": 0.1963249298,
+            "k_bytes": 97504,
+            "v_bytes": 84096,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 19,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 1.002862447,
+            "v_mse": 0.2155041237,
+            "k_bytes": 96384,
+            "v_bytes": 83584,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 20,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6924403766,
+            "v_mse": 0.6293819797,
+            "k_bytes": 95424,
+            "v_bytes": 83840,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 21,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6410478759,
+            "v_mse": 1.3750911428,
+            "k_bytes": 88000,
+            "v_bytes": 84352,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 22,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.5646213035,
+            "v_mse": 1.631329591,
+            "k_bytes": 80896,
+            "v_bytes": 84352,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          },
+          {
+            "layer": 23,
+            "hd": 64,
+            "seq": 1024,
+            "k_mse": 0.6777065782,
+            "v_mse": 1.2048422894,
+            "k_bytes": 82656,
+            "v_bytes": 84352,
+            "n_compressible_vecs": 2048,
+            "n_tail_vecs": 0
+          }
+        ],
+        "n_full": 24
+      },
+      "metrics": {
+        "mean_kl": 6.71651029586792,
+        "max_kl": 18.406085968017578,
+        "top1_agreement": 0.1428571492433548,
+        "ppl_ref": 9.57373332977295,
+        "ppl_alt": 7829.16748046875,
+        "ppl_delta_rel": 816.7758049852039,
+        "nll_ref": 2.2590231895446777,
+        "nll_alt": 8.965611457824707,
+        "n_tokens": 63
+      }
+    }
+  ]
+}
