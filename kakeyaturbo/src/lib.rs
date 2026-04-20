@@ -41,6 +41,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod besicovitch;
 pub mod codec;
 pub mod distortion;
 pub mod kmeans;
@@ -49,6 +50,14 @@ pub mod quantize;
 pub mod skeleton;
 pub mod wht;
 
+pub use besicovitch::{
+    decode_block as besicovitch_decode_block,
+    decode_block_full as besicovitch_decode_block_full,
+    encode_block as besicovitch_encode_block,
+    encode_block_full as besicovitch_encode_block_full,
+    BesicovitchCode, BesicovitchParams, BesicovitchSkeleton,
+    DirectionCodebook, MagnitudeMode, MagnitudePayload,
+};
 pub use codec::{
     decode_block, decode_block_with_centroids, decode_layer, decode_layer_with_centroids,
     encode_block, encode_layer, layer_nbytes, Code, CodecParams, LayerEncoding, PcaMethod,

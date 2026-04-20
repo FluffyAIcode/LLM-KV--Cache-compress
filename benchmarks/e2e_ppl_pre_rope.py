@@ -33,6 +33,7 @@ from benchmarks.turboquant_roundtrip import (
 )
 
 BENCH_BIN = REPO / "kakeyaturbo" / "target" / "release" / "kakeyaturbo-bench"
+BESI_BIN = REPO / "kakeyaturbo" / "target" / "release" / "besicovitch-bench"
 KKTV_MAGIC = 0x4B4B5456
 
 
@@ -101,6 +102,35 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
         return read_kktv(dec_p), json.loads(rep_p.read_text())
 
 
+def besicovitch_roundtrip(arr: np.ndarray, block_size: int,
+                          group_size: int, direction_bits: int,
+                          magnitude_bits: int, magnitude_mode: str,
+                          subtract_mean: bool):
+    """Round-trip a tensor through the Besicovitch-product codec.
+    Returns (decoded_array, report_dict)."""
+    import tempfile
+    with tempfile.TemporaryDirectory(dir="/tmp") as td:
+        tdp = Path(td)
+        in_p = tdp / "x.kktv"
+        rep_p = tdp / "r.json"
+        dec_p = tdp / "dec.kktv"
+        write_kktv(in_p, arr.astype(np.float32, copy=False))
+        cmd = [
+            str(BESI_BIN), "--input", str(in_p), "--output", str(rep_p),
+            "--block-size", str(block_size),
+            "--group-size", str(group_size),
+            "--direction-bits", str(direction_bits),
+            "--magnitude-bits", str(magnitude_bits),
+            "--magnitude-mode", magnitude_mode,
+            "--verify",
+            "--dump-decoded", str(dec_p),
+        ]
+        if subtract_mean:
+            cmd.append("--subtract-mean")
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:
+            raise RuntimeError(f"besicovitch-bench failed: {r.stderr}")
+        return read_kktv(dec_p), json.loads(rep_p.read_text())
 
 
 @torch.inference_mode()
@@ -136,7 +166,12 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     boundary_mode: str = "bf16",
                     boundary_bit_width: int = 4,
                     k_outlier_threshold: float | None = None,
-                    v_outlier_threshold: float | None = None) -> tuple[DynamicCache, dict]:
+                    v_outlier_threshold: float | None = None,
+                    besi_group_size: int = 2,
+                    besi_direction_bits: int = 5,
+                    besi_magnitude_bits: int = 4,
+                    besi_magnitude_mode: str = "quantized",
+                    besi_subtract_mean: bool = True) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -278,6 +313,68 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                 else:
                     v_dec = v_flat[:n_comp].copy()
                     v_rep = {"mean_block_mse": 0.0, "skipped": True}
+            elif codec == "besicovitch":
+                # Besicovitch-product codec: no per-block PCA, fixed
+                # direction codebook + optional block-mean subtraction.
+                # Q-precondition is still honored (whitens K before codec)
+                # but no Lloyd-Max-style residual calibration applies.
+                # Boundary layers still use the kakeyaturbo PCA path so
+                # the first/last few layers don't regress — Besicovitch
+                # struggles on L=0-type high-mean data at boundary.
+                if is_boundary:
+                    if compress in ("kv", "k_only"):
+                        k_dec, k_rep = rust_roundtrip(
+                            k_flat[:n_comp], block_size=block_size,
+                            bit_width=bit_width_k_eff,
+                            rsvd_target_rank=target_rank, metric="mse",
+                            share_basis=False, pca_method="exact",
+                            variance_ratio=variance_ratio,
+                            skeleton_dtype=skeleton_dtype,
+                            exact_rank_cap=exact_rank_cap,
+                            centroids_file=None,
+                        )
+                    else:
+                        k_dec = k_flat[:n_comp].copy()
+                        k_rep = {"mean_block_mse": 0.0, "skipped": True}
+                    if compress in ("kv", "v_only"):
+                        v_dec, v_rep = rust_roundtrip(
+                            v_flat[:n_comp], block_size=block_size,
+                            bit_width=bit_width_v_eff,
+                            rsvd_target_rank=target_rank, metric="mse",
+                            share_basis=share_basis_v, pca_method="exact",
+                            variance_ratio=variance_ratio,
+                            skeleton_dtype=skeleton_dtype,
+                            exact_rank_cap=None,
+                            centroids_file=None,
+                        )
+                    else:
+                        v_dec = v_flat[:n_comp].copy()
+                        v_rep = {"mean_block_mse": 0.0, "skipped": True}
+                else:
+                    if compress in ("kv", "k_only"):
+                        k_dec, k_rep = besicovitch_roundtrip(
+                            k_flat[:n_comp], block_size=block_size,
+                            group_size=besi_group_size,
+                            direction_bits=besi_direction_bits,
+                            magnitude_bits=besi_magnitude_bits,
+                            magnitude_mode=besi_magnitude_mode,
+                            subtract_mean=besi_subtract_mean,
+                        )
+                    else:
+                        k_dec = k_flat[:n_comp].copy()
+                        k_rep = {"mean_block_mse": 0.0, "skipped": True}
+                    if compress in ("kv", "v_only"):
+                        v_dec, v_rep = besicovitch_roundtrip(
+                            v_flat[:n_comp], block_size=block_size,
+                            group_size=besi_group_size,
+                            direction_bits=besi_direction_bits,
+                            magnitude_bits=besi_magnitude_bits,
+                            magnitude_mode=besi_magnitude_mode,
+                            subtract_mean=besi_subtract_mean,
+                        )
+                    else:
+                        v_dec = v_flat[:n_comp].copy()
+                        v_rep = {"mean_block_mse": 0.0, "skipped": True}
             else:
                 raise ValueError(f"unknown codec: {codec}")
         else:
@@ -363,7 +460,9 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              pca_method_v=None,
              k_centroids_file=None, v_centroids_file=None,
              boundary_skip_layers=None, boundary_mode="bf16", boundary_bit_width=4,
-             k_outlier_threshold=None, v_outlier_threshold=None):
+             k_outlier_threshold=None, v_outlier_threshold=None,
+             besi_group_size=2, besi_direction_bits=5, besi_magnitude_bits=4,
+             besi_magnitude_mode="quantized", besi_subtract_mean=True):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -389,6 +488,11 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         boundary_bit_width=boundary_bit_width,
         k_outlier_threshold=k_outlier_threshold,
         v_outlier_threshold=v_outlier_threshold,
+        besi_group_size=besi_group_size,
+        besi_direction_bits=besi_direction_bits,
+        besi_magnitude_bits=besi_magnitude_bits,
+        besi_magnitude_mode=besi_magnitude_mode,
+        besi_subtract_mean=besi_subtract_mean,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -415,13 +519,13 @@ def main():
     ap.add_argument("--exact-rank-cap", type=int, default=None,
                     help="Hard cap on d_eff in exact PCA (like RSVD's target_rank "
                          "but without the RSVD approximation error).")
-    ap.add_argument("--codec", choices=["kakeyaturbo", "turboquant"],
+    ap.add_argument("--codec", choices=["kakeyaturbo", "turboquant", "besicovitch"],
                     default="kakeyaturbo",
-                    help="Which codec to apply to the cache. 'turboquant' uses "
-                         "the reference Python implementation (PolarQuant+QJL "
-                         "for K, PolarQuant for V); block_size, pca_method, "
-                         "variance_ratio, share_basis, skeleton_dtype, "
-                         "exact_rank_cap are ignored.")
+                    help="Which codec to apply to the cache.\n"
+                         "'kakeyaturbo': PCA/RSVD skeleton + Lloyd-Max residual.\n"
+                         "'turboquant': reference PolarQuant+QJL (K) / PolarQuant (V).\n"
+                         "'besicovitch': fixed direction codebook + per-group "
+                         "magnitude, optional per-block mean (no per-block PCA).")
     ap.add_argument("--bit-width-v", type=int, default=None,
                     help="If set, overrides --bit-width for the V stream "
                          "(asymmetric K/V codec).  Default: V uses --bit-width "
@@ -452,6 +556,17 @@ def main():
                          "(default 4) instead of --bit-width on these layers.")
     ap.add_argument("--boundary-bit-width", type=int, default=4,
                     help="Bit width for boundary layers when --boundary-mode=conservative.")
+    ap.add_argument("--besi-group-size", type=int, default=2,
+                    help="Besicovitch: group size g (D % g == 0).")
+    ap.add_argument("--besi-direction-bits", type=int, default=5,
+                    help="Besicovitch: direction codebook size = 2^direction_bits.")
+    ap.add_argument("--besi-magnitude-bits", type=int, default=4,
+                    help="Besicovitch: bits for magnitude quantization.")
+    ap.add_argument("--besi-magnitude-mode", type=str, default="quantized",
+                    choices=["f16", "quantized"],
+                    help="Besicovitch: how to encode the per-group magnitude.")
+    ap.add_argument("--besi-no-subtract-mean", action="store_true",
+                    help="Besicovitch: disable per-block mean subtraction.")
     ap.add_argument("--k-outlier-threshold", type=float, default=None,
                     help="If set, outlier compensation threshold on the K "
                          "residual quantizer (scaled-residual space). "
@@ -535,6 +650,11 @@ def main():
             args.boundary_bit_width,
             args.k_outlier_threshold,
             args.v_outlier_threshold,
+            args.besi_group_size,
+            args.besi_direction_bits,
+            args.besi_magnitude_bits,
+            args.besi_magnitude_mode,
+            not args.besi_no_subtract_mean,
         )
         if res is None:
             print("    skipped (too short)"); continue
