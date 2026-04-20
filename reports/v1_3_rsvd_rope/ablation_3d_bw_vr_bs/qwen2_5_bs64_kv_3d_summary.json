@@ -1,0 +1,49 @@
+{
+  "model_name": "qwen2_5_bs64",
+  "compress": "kv",
+  "ctx_len": 1024,
+  "n_eval": 64,
+  "fixed": {
+    "pca_method": "exact",
+    "skeleton_dtype": "fp16",
+    "share_basis": false
+  },
+  "rows": [
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 64,
+      "ppl_delta": 0.3656521141529083,
+      "kl": 0.2619614973664284,
+      "top1": 0.7857142984867096,
+      "seconds": 8.80255913734436
+    },
+    {
+      "bit_width": 3,
+      "variance_ratio": 1.0,
+      "block_size": 128,
+      "ppl_delta": 0.6149224638938904,
+      "kl": 0.39519982039928436,
+      "top1": 0.6984127163887024,
+      "seconds": 8.530533790588379
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 64,
+      "ppl_delta": 0.33869659900665283,
+      "kl": 0.25584473833441734,
+      "top1": 0.8095238208770752,
+      "seconds": 8.691781997680664
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 128,
+      "ppl_delta": 0.5379779487848282,
+      "kl": 0.36224086582660675,
+      "top1": 0.7142857313156128,
+      "seconds": 8.314392805099487
+    }
+  ]
+}

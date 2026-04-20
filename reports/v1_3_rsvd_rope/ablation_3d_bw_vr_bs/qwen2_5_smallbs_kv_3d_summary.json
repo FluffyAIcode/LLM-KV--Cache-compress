@@ -1,0 +1,40 @@
+{
+  "model_name": "qwen2_5_smallbs",
+  "compress": "kv",
+  "ctx_len": 1024,
+  "n_eval": 64,
+  "fixed": {
+    "pca_method": "exact",
+    "skeleton_dtype": "fp16",
+    "share_basis": false
+  },
+  "rows": [
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 16,
+      "ppl_delta": 0.009361321106553078,
+      "kl": 0.03720998577773571,
+      "top1": 0.8571428656578064,
+      "seconds": 7.397532939910889
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 32,
+      "ppl_delta": 0.09444324672222137,
+      "kl": 0.10078108310699463,
+      "top1": 0.8650793731212616,
+      "seconds": 7.0475547313690186
+    },
+    {
+      "bit_width": 4,
+      "variance_ratio": 1.0,
+      "block_size": 64,
+      "ppl_delta": 0.34084659814834595,
+      "kl": 0.25958607345819473,
+      "top1": 0.8095238208770752,
+      "seconds": 8.376789808273315
+    }
+  ]
+}
