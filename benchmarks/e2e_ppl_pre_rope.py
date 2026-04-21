@@ -179,7 +179,8 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     besi_magnitude_mode: str = "quantized",
                     besi_subtract_mean: bool = True,
                     codec_v: str | None = None,
-                    k_residual_besi: dict | None = None) -> tuple[DynamicCache, dict]:
+                    k_residual_besi: dict | None = None,
+                    riemann_scale_method: str = "sqrt_trace") -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -310,6 +311,38 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     magnitude_mode=besi_magnitude_mode,
                     subtract_mean=besi_subtract_mean,
                 )
+            elif codec_name == "riemann_besi":
+                # Riemannian K-Besi: per-(layer, group) offline-calibrated scale.
+                # Breaks the Q-precond + quantized-magnitude trilemma by
+                # replacing per-vector max|α_k| with a stable fixed scale.
+                # Requires the input to already be Q-preconditioned (whitened)
+                # — harness does this when --q-precondition is set.
+                if is_boundary:
+                    return rust_roundtrip(
+                        kv_flat_slice, block_size=block_size,
+                        bit_width=bit_width_k_eff,
+                        rsvd_target_rank=target_rank, metric="mse",
+                        share_basis=False, pca_method="exact",
+                        variance_ratio=variance_ratio,
+                        skeleton_dtype=skeleton_dtype,
+                        exact_rank_cap=exact_rank_cap,
+                        centroids_file=None,
+                    )
+                from benchmarks.k_riemann_besi_codec import (
+                    calibrate_offline_scales, roundtrip_k_whitened,
+                )
+                scales = calibrate_offline_scales(
+                    kv_flat_slice, g=besi_group_size,
+                    method=riemann_scale_method)
+                rec, rep = roundtrip_k_whitened(
+                    kv_flat_slice, block_size=block_size,
+                    g=besi_group_size,
+                    direction_bits=besi_direction_bits,
+                    magnitude_bits=besi_magnitude_bits,
+                    scales=scales,
+                    subtract_mean=besi_subtract_mean,
+                )
+                return rec, rep
             raise ValueError(f"unknown codec: {codec_name}")
 
         def _encode_v(kv_flat_slice, codec_name):
@@ -455,7 +488,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              besi_group_size=2, besi_direction_bits=5, besi_magnitude_bits=4,
              besi_magnitude_mode="quantized", besi_subtract_mean=True,
              codec_v=None,
-             k_residual_besi=None):
+             k_residual_besi=None,
+             riemann_scale_method="sqrt_trace"):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -488,6 +522,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         besi_subtract_mean=besi_subtract_mean,
         codec_v=codec_v,
         k_residual_besi=k_residual_besi,
+        riemann_scale_method=riemann_scale_method,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -514,7 +549,14 @@ def main():
     ap.add_argument("--exact-rank-cap", type=int, default=None,
                     help="Hard cap on d_eff in exact PCA (like RSVD's target_rank "
                          "but without the RSVD approximation error).")
-    ap.add_argument("--codec", choices=["kakeyaturbo", "turboquant", "besicovitch"],
+    ap.add_argument("--riemann-scale-method",
+                    choices=["sqrt_trace", "rms_alpha", "pct95_alpha",
+                             "pct99_alpha", "pct999_alpha"],
+                    default="sqrt_trace",
+                    help="Per-group offline scale calibration method for "
+                         "Riemannian K-Besi codec. pct99_alpha is better for "
+                         "heavy-tailed whitened K distributions.")
+    ap.add_argument("--codec", choices=["kakeyaturbo", "turboquant", "besicovitch", "riemann_besi"],
                     default="kakeyaturbo",
                     help="Codec to apply to the K stream (also V if --codec-v "
                          "is not set).\n"
@@ -523,7 +565,7 @@ def main():
                          "'besicovitch': fixed direction codebook + per-group "
                          "magnitude, optional per-block mean (no per-block PCA).")
     ap.add_argument("--codec-v",
-                    choices=["kakeyaturbo", "turboquant", "besicovitch"],
+                    choices=["kakeyaturbo", "turboquant", "besicovitch", "riemann_besi"],
                     default=None,
                     help="Asymmetric V-stream codec. If unset, V uses --codec. "
                          "V cares about MSE (not inner-product), so Besicovitch's "
@@ -675,6 +717,7 @@ def main():
                 "magnitude_mode": args.k_residual_besi_magnitude_mode,
                 "group_size": args.k_residual_besi_group_size,
             }),
+            args.riemann_scale_method,
         )
         if res is None:
             print("    skipped (too short)"); continue
