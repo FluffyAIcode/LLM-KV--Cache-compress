@@ -9,12 +9,28 @@ codebook, expanded boundary, asymmetric K/V) should have been applied
 directly to the **original v1.3 RSVD skeleton** which was *already*
 designed for high compression ratio. This sprint tests that thesis.
 
-**Bottom line.** **User was right.** Stacking guardrails on v1.3 RSVD
-produces **3.71× @ +5.36% Δppl, top-1=85.32% MARGINAL** — higher
-ratio AND higher top-1 than any point from the Riemann-Besi sprints
-(previous best: 3.58× @ +1.45% / 78.17%). v1.3 RSVD's skeleton was
-already attention-aware and data-adaptive; the trick was just applying
-the PPL-stabilization guardrails correctly.
+**Bottom line (after ratio bug fix).** **User was right.** Stacking
+guardrails on v1.3 RSVD produces **B3 @ 4.30× @ +5.36% Δppl,
+top-1=85.32% MARGINAL** — the highest-ratio ACCEPT-proximate point
+we've ever measured. Previous Riemann-Besi best (F2) was only
+3.58×. v1.3 RSVD's skeleton was already attention-aware and
+data-adaptive; the trick was just applying the PPL-stabilization
+guardrails correctly.
+
+## Ratio accounting bug caught by user review
+
+A first version of this FINDINGS reported B3 at 3.71×. That was WRONG.
+The error: I computed the 6-boundary layers' cost using **exact PCA
+b=4** (441 + 344 = 785 KB per boundary layer), but the v1.3 configs
+use `--pca-method randomized`, which sends the boundary layers through
+**RSVD b=4** (241 + 192 = 433 KB per boundary layer — 44.8% cheaper).
+With correct RSVD boundary cost, B3 is **4.30×**, not 3.71×.
+
+User spotted the inconsistency because the bare v1.3 DECISION.md
+headline was "5.98× on DS-Distill", and the corrected table below
+recovers V0 at 5.79× — matching (within seed-induced 3% variance)
+the original v1.3 headline. The ratio-vs-PPL trade-off curve is now
+consistent across the whole document.
 
 ## The historical wrong turn
 
@@ -66,24 +82,51 @@ detour.
 
 **B3 is the new champion** — top-1 first breaks 85% at 3.71× compression.
 
-## Full Pareto matrix
+## Full Pareto matrix (ratios corrected)
 
 | Config | Ratio | Δppl | top-1 | Verdict |
 |:---|------:|-----:|------:|:-------:|
-| **v1.4 Pareto (K Kakeya exact b=4 + V Besi d=3 m=4)** | **2.97×** | **−2.04%** | **91.27%** | **ACCEPT ★** |
-| **B3: v1.3 RSVD b=3 + K cal + outlier T=2.0 + V Besi + 6 bdry** | **3.71×** | **+5.36%** | **85.32%** | **MARGINAL 🎯** |
-| C3: v1.3 RSVD b=4 + outlier + V Besi + 6 bdry | 3.55× | +4.95% | 83.73% | MARGINAL |
-| C4: B3 + 8 bdry | 3.58× | +9.95% | 82.94% | MARGINAL |
-| C2: B3 + rsvd rank 0.75 | 2.96× | +6.96% | 89.29% | MARGINAL |
-| Prev Riemann F2 | 3.58× | +1.45% | 78.17% | ACCEPT (low top-1) |
+| V0 BARE v1.3 RSVD b=2 (0 bdry) | 5.79× | +355.62% | 42.46% | REJECT |
+| V1 + Q-precond + 4 bdry | 5.61× | +37.91% | 73.02% | REJECT |
+| V3 + K+V cal + 6 bdry | 5.52× | +25.18% | 71.43% | REJECT |
+| V4 + V Besi d=3 m=4 | 4.94× | +15.96% | 77.38% | REJECT |
+| B1 K b=3 + all guardrails | 4.86× | +15.73% | 76.98% | REJECT |
+| B2 + V Besi d=3 m=4 | 4.65× | +16.01% | 82.14% | REJECT |
+| C4 B3 + 8 bdry | 4.34× | +9.95% | 82.94% | MARGINAL |
+| **B3: + outlier T=2.0** | **4.30×** | **+5.36%** | **85.32%** | **MARGINAL 🎯** |
+| C3 b=4 + outlier + V Besi + 6 bdry | 4.09× | +4.95% | 83.73% | MARGINAL |
+| C1 B3 + outlier T=1.5 | 3.74× | +5.62% | 81.75% | MARGINAL |
+| **C2 B3 + rsvd rank 0.75** | **3.32×** | **+6.96%** | **89.29%** | **MARGINAL 🎯** |
+| **v1.4 Pareto (K Kakeya EXACT b=4 + V Besi)** | **2.97×** | **−2.04%** | **91.27%** | **ACCEPT ★** |
 
-**B3 vs v1.4 Pareto**: +25% ratio for 7.4pp Δppl + 6pp top-1.
+Two configs cleanly dominate v1.4 Pareto on ratio while preserving
+top-1 ≥ 85%:
+- **B3: 4.30× @ +5.36% Δppl, top-1 85.32%** — +45% ratio, 7.4pp Δppl
+- **C2: 3.32× @ +6.96% Δppl, top-1 89.29%** — +12% ratio, 9pp Δppl,
+  top-1 almost matches v1.4 Pareto (89.29% vs 91.27%)
 
-**B3 vs Riemann F2**: higher ratio (3.71× vs 3.58×), much higher top-1
-(85.32% vs 78.17%), at the cost of Δppl (+5.36% vs +1.45%). For
-production, top-1 matters more than Δppl at these scales (Δppl within
-10% is usually indistinguishable by humans; top-1 agreement with
-bf16 baseline predicts where specific tokens diverge).
+**B3 vs Riemann F2 (previous best high-ratio ACCEPT)**:
+B3 delivers higher ratio (4.30× vs 3.58×) AND higher top-1 (85.32%
+vs 78.17%), at the cost of Δppl (+5.36% vs +1.45%). For top-1
+sensitive applications this is a pure win.
+
+## Ratio decomposition (V0 5.79× → B3 4.30×): where the bytes went
+
+| Step | Added | Ratio | Δratio | Δppl |
+|:-----|:------|------:|-------:|-----:|
+| V0 | bare v1.3 RSVD b=2, 0 bdry | 5.79× | ref | +355.62% |
+| V1 | +4 bdry + Q-precond | 5.61× | −3.1% | +37.91% |
+| V3 | +2 bdry (total 6) + K/V cal | 5.52× | −1.5% | +25.18% |
+| V4 | V Besi d=3 m=4 replaces V RSVD b=2 | 4.94× | −10.6% | +15.96% |
+| B1 | K b=2 → K b=3 (+50% K bits) | 4.86× | −1.5% | +15.73% |
+| B2 | V b=3 → V Besi d=3 m=4 (again) | 4.65× | −4.3% | +16.01% |
+| B3 | outlier T=2.0 (4.5% of coords → f16) | **4.30×** | −7.5% | **+5.36%** |
+
+**Total: 26% ratio cost to trade +350pp Δppl + 43pp top-1.** The
+biggest ratio hit (V4: V RSVD b=2 → V Besi d=3 m=4, −10.6%) is
+the one that was most worth it — V Besi makes the V quantization
+error much less peaky, which is what lets the outlier+b=3 combo work
+on the K side without V being a bigger bottleneck.
 
 ## Per-layer analysis: why v1.3 RSVD beats Besi once rehabilitated
 
