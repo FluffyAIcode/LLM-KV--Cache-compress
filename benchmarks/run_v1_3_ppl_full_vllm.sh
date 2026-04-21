@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Build kakeyaturbo-bench and run the FULL v1.3 PPL recipe
-# (Q-precond + calibrated Lloyd-Max + 6-layer boundary skip + outlier
-# compensation T=2.0) on vLLM, targeting the SPRINT_CLOSEOUT.md
-# production cell:
+# Build kakeyaturbo-bench and run the v1.3 PPL production cell on vLLM:
+# DS-Distill D=128, K b=3 + V b=2, calibrated Lloyd-Max + outlier T=2.0
+# + 6-layer boundary skip + pre-RoPE Q-preconditioning.
 #
-#   DS-Distill D=128, K b=3 + V b=2, T=2.0, 6 bdry
-#     \xE2\x86\x92 \u0394ppl +7.82 %, top-1 78.97 %, ratio 4.61\u00d7  (MARGINAL)
+# HF reference for this cell (SPRINT_CLOSEOUT): Δppl +7.82 %, top-1
+# 78.97 %, ratio 4.61× (MARGINAL). Measuring the same cell under
+# vLLM 0.7.3 / FLASH_ATTN to quantify the engine-level gap.
 #
+# Per-channel attribution (K-only / V-only) is controlled by
+# COMPRESS_STREAM ∈ {kv, k, v}. Default kv = full production cell.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,6 +25,7 @@ VR="${VARIANCE_RATIO:-0.95}"
 PCA_METHOD="${PCA_METHOD:-randomized}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.80}"
 OUT_DIR="${OUT_DIR:-reports/v1_3_ppl/vllm}"
+COMPRESS_STREAM="${COMPRESS_STREAM:-kv}"
 
 Q_CALIB="${Q_CALIB:-reports/v1_4_q_pca/flagship/deepseek_distill_q_calib.safetensors}"
 K_CENTROIDS="${K_CENTROIDS:-reports/v1_4_q_pca/calibrated_codebook/ds_K_b${BIT_WIDTH_K}_centroids.f32}"
@@ -39,27 +42,7 @@ if [ -x /venv/main/bin/python ] && [ "${PYTHON_BIN}" = "python3" ]; then
     PYTHON_BIN=/venv/main/bin/python
 fi
 
-# Optional attention backend override (for the H4 ablation).
-# Unset / empty -> vLLM default (FLASH_ATTN on CUDA).
-if [ -n "${ATTN_BACKEND:-}" ]; then
-    export VLLM_ATTENTION_BACKEND="$ATTN_BACKEND"
-    echo "[run] VLLM_ATTENTION_BACKEND=$VLLM_ATTENTION_BACKEND"
-fi
-
 echo "[run] e2e_ppl_validation_vllm_full.py (using $PYTHON_BIN)"
-EXTRA_ARGS=()
-if [ -n "${PREFIX_ONLY_TOKENS:-}" ] && [ "${PREFIX_ONLY_TOKENS}" -gt 0 ]; then
-    EXTRA_ARGS+=(--prefix-only-tokens "$PREFIX_ONLY_TOKENS")
-fi
-
-# Allow K_CENTROIDS="" (or "none") to request Gaussian default centroids
-# (no --k-centroids flag). Useful when calibrated centroids do not exist
-# at the requested bit-width (SPRINT_CLOSEOUT notes b=4 does not benefit
-# from Lloyd-Max calibration; ds_K_b4_centroids.f32 is not shipped).
-K_CENT_ARG=(--k-centroids "$K_CENTROIDS")
-V_CENT_ARG=(--v-centroids "$V_CENTROIDS")
-case "${K_CENTROIDS,,}" in ''|none|off|skip) K_CENT_ARG=();; esac
-case "${V_CENTROIDS,,}" in ''|none|off|skip) V_CENT_ARG=();; esac
 
 "$PYTHON_BIN" benchmarks/e2e_ppl_validation_vllm_full.py \
     --model-path "$MODEL_PATH" \
@@ -71,11 +54,11 @@ case "${V_CENTROIDS,,}" in ''|none|off|skip) V_CENT_ARG=();; esac
     --variance-ratio "$VR" \
     --pca-method "$PCA_METHOD" \
     --q-calib "$Q_CALIB" \
-    "${K_CENT_ARG[@]}" \
-    "${V_CENT_ARG[@]}" \
+    --k-centroids "$K_CENTROIDS" \
+    --v-centroids "$V_CENTROIDS" \
     --outlier-threshold "$OUTLIER_THRESHOLD" \
     --boundary-skip-layers $BOUNDARY_LAYERS \
+    --compress-stream "$COMPRESS_STREAM" \
     --n-passages "$N_PASSAGES" \
     --gpu-mem-util "$GPU_MEM_UTIL" \
-    --out-dir "$OUT_DIR" \
-    "${EXTRA_ARGS[@]}"
+    --out-dir "$OUT_DIR"
