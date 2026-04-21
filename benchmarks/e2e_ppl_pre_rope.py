@@ -180,7 +180,8 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     besi_subtract_mean: bool = True,
                     codec_v: str | None = None,
                     k_residual_besi: dict | None = None,
-                    riemann_scale_method: str = "sqrt_trace") -> tuple[DynamicCache, dict]:
+                    riemann_scale_method: str = "sqrt_trace",
+                    riemann_centroids_file: str | None = None) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -330,10 +331,15 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     )
                 from benchmarks.k_riemann_besi_codec import (
                     calibrate_offline_scales, roundtrip_k_whitened,
+                    load_centroids_file,
                 )
                 scales = calibrate_offline_scales(
                     kv_flat_slice, g=besi_group_size,
                     method=riemann_scale_method)
+                cal_cents = None
+                if riemann_centroids_file:
+                    cal_cents = load_centroids_file(
+                        riemann_centroids_file, besi_magnitude_bits)
                 rec, rep = roundtrip_k_whitened(
                     kv_flat_slice, block_size=block_size,
                     g=besi_group_size,
@@ -341,6 +347,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     magnitude_bits=besi_magnitude_bits,
                     scales=scales,
                     subtract_mean=besi_subtract_mean,
+                    calibrated_centroids=cal_cents,
                 )
                 return rec, rep
             raise ValueError(f"unknown codec: {codec_name}")
@@ -387,6 +394,24 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     magnitude_bits=besi_magnitude_bits,
                     magnitude_mode=besi_magnitude_mode,
                     subtract_mean=besi_subtract_mean,
+                )
+            elif codec_name == "riemann_besi":
+                # Riemann-Besi is K-specific. If V is asked to use it,
+                # fall through to Kakeya-PCA (V doesn't benefit from
+                # Σ_q-weighted distortion; V's correct metric is MSE).
+                rank_cap_v_eff = (exact_rank_cap_v if exact_rank_cap_v is not None
+                                  else exact_rank_cap)
+                pca_v_eff = (pca_method_v if pca_method_v is not None
+                             else pca_method)
+                return rust_roundtrip(
+                    kv_flat_slice, block_size=block_size, bit_width=bit_width_v_eff,
+                    rsvd_target_rank=target_rank, metric="mse",
+                    share_basis=share_basis_v, pca_method=pca_v_eff,
+                    variance_ratio=variance_ratio,
+                    skeleton_dtype=skeleton_dtype,
+                    exact_rank_cap=rank_cap_v_eff,
+                    centroids_file=v_centroids_eff,
+                    outlier_threshold=(None if is_boundary else v_outlier_threshold),
                 )
             raise ValueError(f"unknown codec: {codec_name}")
 
@@ -489,7 +514,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              besi_magnitude_mode="quantized", besi_subtract_mean=True,
              codec_v=None,
              k_residual_besi=None,
-             riemann_scale_method="sqrt_trace"):
+             riemann_scale_method="sqrt_trace",
+             riemann_centroids_file=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -523,6 +549,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         codec_v=codec_v,
         k_residual_besi=k_residual_besi,
         riemann_scale_method=riemann_scale_method,
+        riemann_centroids_file=riemann_centroids_file,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -549,6 +576,11 @@ def main():
     ap.add_argument("--exact-rank-cap", type=int, default=None,
                     help="Hard cap on d_eff in exact PCA (like RSVD's target_rank "
                          "but without the RSVD approximation error).")
+    ap.add_argument("--riemann-centroids-file", type=str, default=None,
+                    help="Path to .f32 binary file with calibrated Lloyd-Max "
+                         "centroids for the Riemannian K-Besi magnitude quantizer. "
+                         "Produced by benchmarks/riemann_calibrate_codebook.py. "
+                         "When omitted, uses unit-Gaussian default centroids.")
     ap.add_argument("--riemann-scale-method",
                     choices=["sqrt_trace", "rms_alpha", "pct95_alpha",
                              "pct99_alpha", "pct999_alpha"],
@@ -718,6 +750,7 @@ def main():
                 "group_size": args.k_residual_besi_group_size,
             }),
             args.riemann_scale_method,
+            args.riemann_centroids_file,
         )
         if res is None:
             print("    skipped (too short)"); continue
