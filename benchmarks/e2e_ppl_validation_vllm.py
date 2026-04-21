@@ -187,28 +187,27 @@ def _roundtrip_tensor(
     share_basis: bool,
     layer_id: Any,
     kind: str,
+    head_size: int,
 ) -> torch.Tensor:
-    """Codec round-trip a vLLM `key` or `value` tensor in-place.
+    """Codec round-trip a vLLM `key` or `value` tensor.
 
-    vLLM passes `key` / `value` as `[num_tokens, num_kv_heads, head_dim]`
-    (flash-style), or sometimes already reshaped to `[num_tokens,
-    num_kv_heads * head_dim]`. We collapse to `[N, D]` where `D` is the
-    per-head dim, run the codec head-wise, and restore the shape.
+    vLLM 0.7.3 passes `key` / `value` into `Attention.forward` either as
+    2D `[num_tokens, num_kv_heads * head_size]` (some model definitions)
+    or 3D `[num_tokens, num_kv_heads, head_size]` (use_output path after
+    `.view`). In both cases the per-head dimension is `head_size`, which
+    the attention module exposes as `self.head_size`.
     """
     orig_shape = t.shape
     orig_dtype = t.dtype
     orig_device = t.device
 
     if t.dim() == 2:
-        # Shape is [num_tokens, num_kv_heads * head_dim].
-        # We don't know head_dim from this tensor alone — use the
-        # configured block dimension and hope it divides evenly.
         total = t.shape[1]
-        # Heuristic: assume head_dim is a power of two ≤ 256.
-        head_dim = 128 if total % 128 == 0 else (
-            64 if total % 64 == 0 else (total if total <= 256 else total)
-        )
-        x = t.reshape(-1, head_dim)
+        if total % head_size != 0:
+            raise ValueError(
+                f"KV tensor dim {total} not divisible by head_size {head_size}"
+            )
+        x = t.reshape(-1, head_size)
     elif t.dim() == 3:
         x = t.reshape(-1, t.shape[-1])
     else:
@@ -276,11 +275,14 @@ def install_vllm_codec_patch() -> None:
         query: torch.Tensor,
         key: torch.Tensor,
         value: torch.Tensor,
-        *args: Any,
-        **kwargs: Any,
+        kv_cache: torch.Tensor,
+        attn_metadata: Any,
     ) -> torch.Tensor:
         if CodecState.active:
-            layer_id = getattr(self, "_kakeyaturbo_layer_id", None)
+            layer_id = getattr(
+                self, "layer_name",
+                getattr(self, "_kakeyaturbo_layer_id", None),
+            )
             if layer_id is None:
                 layer_id = CodecState.layer_counter
                 CodecState.layer_counter += 1
@@ -294,20 +296,27 @@ def install_vllm_codec_patch() -> None:
                 or layer_id in CodecState.full_attention_layers
             )
             if is_full and key is not None and value is not None:
-                try:
-                    key = _roundtrip_tensor(
-                        key, metric="inner_product",
-                        share_basis=False, layer_id=layer_id, kind="K",
-                    )
-                    value = _roundtrip_tensor(
-                        value, metric="mse",
-                        share_basis=True, layer_id=layer_id, kind="V",
-                    )
-                except Exception as e:
-                    print(f"[codec-patch] layer {layer_id} round-trip "
-                          f"failed: {e}", file=sys.stderr)
+                head_size = getattr(self, "head_size", None)
+                if head_size is None:
+                    print(f"[codec-patch] layer {layer_id}: no head_size, "
+                          "skipping round-trip", file=sys.stderr)
+                else:
+                    try:
+                        key = _roundtrip_tensor(
+                            key, metric="inner_product",
+                            share_basis=False, layer_id=layer_id, kind="K",
+                            head_size=head_size,
+                        )
+                        value = _roundtrip_tensor(
+                            value, metric="mse",
+                            share_basis=True, layer_id=layer_id, kind="V",
+                            head_size=head_size,
+                        )
+                    except Exception as e:
+                        print(f"[codec-patch] layer {layer_id} round-trip "
+                              f"failed: {e}", file=sys.stderr)
 
-        return orig_forward(self, query, key, value, *args, **kwargs)
+        return orig_forward(self, query, key, value, kv_cache, attn_metadata)
 
     Attention.forward = patched_forward
     Attention._kakeyaturbo_patched = True  # type: ignore[attr-defined]
