@@ -39,6 +39,13 @@ if [ -x /venv/main/bin/python ] && [ "${PYTHON_BIN}" = "python3" ]; then
     PYTHON_BIN=/venv/main/bin/python
 fi
 
+# Optional attention backend override (for the H4 ablation).
+# Unset / empty -> vLLM default (FLASH_ATTN on CUDA).
+if [ -n "${ATTN_BACKEND:-}" ]; then
+    export VLLM_ATTENTION_BACKEND="$ATTN_BACKEND"
+    echo "[run] VLLM_ATTENTION_BACKEND=$VLLM_ATTENTION_BACKEND"
+fi
+
 echo "[run] e2e_ppl_validation_vllm_full.py (using $PYTHON_BIN)"
 "$PYTHON_BIN" benchmarks/e2e_ppl_validation_vllm_full.py \
     --model-path "$MODEL_PATH" \
