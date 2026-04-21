@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 models/
 turboquant_plus/
+.hf/
 
 # Rust build artifacts
 kakeyaturbo/target/

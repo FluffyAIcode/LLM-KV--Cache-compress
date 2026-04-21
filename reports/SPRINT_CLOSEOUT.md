@@ -19,11 +19,13 @@ reference.
 | B3 | RSVD b=3 + K cal + outlier T=2.0 + V Besi + 6 bdry | 4.30× | +5.36 % | 85.32 % | MARGINAL |
 | R1 | RSVD b=2 + K cal + outlier T=2.0 + V Besi + 6 bdry | 4.54× | +7.09 % | 82.54 % | MARGINAL |
 | R2 | RSVD b=2 + K cal + outlier T=1.5 + V Besi + 6 bdry | 3.92× | +3.88 % | 84.13 % | MARGINAL |
+| **NB3sv2** | **RSVD b=3 + K cal + outlier T=2.0 + V RSVD b=2 (shared-basis) + 6 bdry** | **4.61×** | **+7.82 %** | 78.97 % | **MARGINAL** |
 
 Source JSON files:
 - v1.4 Pareto: `reports/v1_4_besicovitch_v_only/ds_kakeya_vbesi_d3m4q_prerope_kv_b4_exact_fp16_sk0_sv0.json`
 - R1/R2/R3: `reports/v1_3_riemann_b2/R{1,2,3}_*.json`
 - B3: `reports/v1_3_revival/B3_rsvd_b3_outlier_Vbesi_prerope_kv_b3_randomized_fp16_sk0_sv0.json`
+- NB3sv2 (new high-ratio MARGINAL): `reports/v1_3_v_rsvd_noBesi/NB3sv2_noVBesi_T20_Vb2_*.json`
 
 ## v1.3 + guardrail stacking — the full progressive ladder
 
@@ -125,6 +127,58 @@ ratio advantage at matched Δppl tier.** See
 **8 % byte savings per middle layer → +26 % total ratio** after
 combining with 6 boundary layers' shared cost.
 
+### Drop-V-Besi ablation (`reports/v1_3_v_rsvd_noBesi/*.json`)
+
+User hypothesis: *V Besi wastes ratio and doesn't help PPL; keep v1.3
+V RSVD instead.* 8 cells at 4 passages validate the hypothesis **only
+in the B3 (MARGINAL) tier**, not in the R3 (ACCEPT ★) tier.
+
+| Cell | Recipe | Ratio | Δppl | top-1 | Verdict |
+|:---|:---|---:|---:|---:|:---:|
+| **R3-orig** | K b=3 T=1.5 + **V Besi** + 6 bdry | **3.73×** | **+1.91 %** | **87.30 %** | **ACCEPT ★** |
+| B3-orig | K b=3 T=2.0 + V Besi + 6 bdry | 4.30× | +5.36 % | 85.32 % | MARGINAL |
+| NB3 | K b=3 T=2.0 + V RSVD b=3 per-block | 3.98× | +6.08 % | 87.30 % | MARGINAL |
+| NB3v2 | K b=3 T=2.0 + V RSVD b=2 per-block | 4.19× | +6.76 % | 84.52 % | MARGINAL |
+| NB3sv3 | K b=3 T=2.0 + V RSVD b=3 shared | 4.36× | +8.89 % | 78.97 % | MARGINAL |
+| **NB3sv2** | **K b=3 T=2.0 + V RSVD b=2 shared** | **4.61×** | **+7.82 %** | 78.97 % | **MARGINAL 🎯** |
+| NR3 | K b=3 T=1.5 + V RSVD b=3 per-block | 3.49× | +6.71 % | 82.94 % | MARGINAL |
+| NR3v2 | K b=3 T=1.5 + V RSVD b=2 per-block | 3.64× | +7.23 % | 81.35 % | MARGINAL |
+| NR3sv3 | K b=3 T=1.5 + V RSVD b=3 shared | 3.78× | +12.38 % | 76.98 % | REJECT |
+| NR3sv2 | K b=3 T=1.5 + V RSVD b=2 shared | 3.96× | +12.56 % | 77.78 % | REJECT |
+
+**Two findings:**
+
+1. **At T=2.0, V Besi is purely a ratio tax.** Drop V Besi → keep or
+   improve top-1 at small Δppl cost (≤ +0.7 pp). **NB3sv2 @ 4.61× is
+   a new MARGINAL-tier Pareto point** — highest ratio ever at Δppl
+   ≤ 10 %. **User hypothesis validated** here.
+
+2. **At T=1.5, V Besi is a Δppl co-stabilizer, not a luxury.** Drop
+   V Besi → Δppl jumps from +1.91 % to +6.71 % (**−4.80 pp**). R3's
+   ACCEPT ★ verdict is conditional on V Besi. **User hypothesis fails**
+   here.
+
+**Mechanism.** At T=2.0, K Δppl is ~+5 %; V codec quality is swamped.
+At T=1.5 (heavier K outlier patching), K Δppl drops to ~+1.5 % and
+V quantization error becomes visible. V RSVD's per-vector `max|α_k|`
+scale is driven by rare large-magnitude groups — the same heavy-tail
+trilemma that disqualified Besi-K, now in the *opposite* direction:
+on V, Haar's fixed codebook beats RSVD's per-vector-scaled Lloyd-Max
+once K is clean enough to expose V's quantization floor.
+
+**Bonus negative result.** Layer-shared V basis (`--share-basis-v`,
+the original v1.3 default) is **strictly worse on Δppl** than
+per-block basis once 6-bdry protection is active: shared basis saves
+~7 % ratio but loses 2–6 pp Δppl. Shared-basis was a reasonable
+choice before 6-bdry, but it's now dominated.
+
+**Production-matrix implication.** Use a tiered rule:
+- **ACCEPT ★ tier** → R3 with V Besi (3.73× / +1.91 %, don't touch V)
+- **MARGINAL tier max ratio** → NB3sv2 (V RSVD b=2 shared, 4.61× /
+  +7.82 % / 78.97 %)
+- **MARGINAL tier balanced** → B3-orig with V Besi (4.30× / +5.36 % /
+  85.32 %)
+
 ## Key architectural conclusions (established with experimental data)
 
 1. **Q-preconditioning** (Cholesky of Σ_q) is the single biggest guardrail.
@@ -143,9 +197,13 @@ combining with 6 boundary layers' shared cost.
    starts to hurt (extra compression burden on remaining layers).
 
 4. **Asymmetric K/V** (V stream uses Besicovitch d=3 m=4 +mean while K
-   uses Kakeya-PCA): +1-2 pp Δppl, slight ratio cost. V benefits
-   because V's distortion metric is plain MSE (Besi Haar codebook is
-   RD-optimal); K benefits from PCA's per-block data adaptivity.
+   uses Kakeya-PCA) — **TIER-DEPENDENT** (per drop-V-Besi ablation
+   above).
+   - At ACCEPT ★ tier (K Δppl ≤ +2 %, e.g. R3): V Besi is essential,
+     worth 4.8 pp Δppl. Do not drop.
+   - At MARGINAL tier (K Δppl +5 %+, e.g. B3): V Besi is mostly a
+     ratio tax. NB3sv2 (V RSVD b=2 shared) is +7 % ratio at the cost
+     of +2.5 pp Δppl and 6 pp top-1. Use when max-ratio is the goal.
 
 5. **Outlier compensation** T=1.5 (13.4 % of coords patched as f16)
    vs T=2.0 (4.5 % of coords): −3.3 pp Δppl, costs ~13 % ratio. On

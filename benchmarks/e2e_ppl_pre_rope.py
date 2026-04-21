@@ -28,9 +28,18 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 import benchmarks.pre_rope_cache as prc
 from benchmarks.q_precondition import QPrecond, load as load_q_precond
-from benchmarks.turboquant_roundtrip import (
-    turboquant_k_roundtrip, turboquant_v_roundtrip,
-)
+
+def turboquant_k_roundtrip(*a, **kw):
+    from benchmarks.turboquant_roundtrip import (
+        turboquant_k_roundtrip as _impl,
+    )
+    return _impl(*a, **kw)
+
+def turboquant_v_roundtrip(*a, **kw):
+    from benchmarks.turboquant_roundtrip import (
+        turboquant_v_roundtrip as _impl,
+    )
+    return _impl(*a, **kw)
 
 BENCH_BIN = REPO / "kakeyaturbo" / "target" / "release" / "kakeyaturbo-bench"
 BESI_BIN = REPO / "kakeyaturbo" / "target" / "release" / "besicovitch-bench"
