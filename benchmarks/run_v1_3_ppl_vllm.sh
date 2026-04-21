@@ -24,8 +24,13 @@ GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.80}"
 echo "[build] kakeyaturbo-bench (release)"
 (cd kakeyaturbo && cargo build --release --bin kakeyaturbo-bench 1>&2)
 
-echo "[run] e2e_ppl_validation_vllm.py"
-python3 benchmarks/e2e_ppl_validation_vllm.py \
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+if [ -x /venv/main/bin/python ] && [ "${PYTHON_BIN}" = "python3" ]; then
+    PYTHON_BIN=/venv/main/bin/python
+fi
+
+echo "[run] e2e_ppl_validation_vllm.py (using $PYTHON_BIN)"
+"$PYTHON_BIN" benchmarks/e2e_ppl_validation_vllm.py \
   --model-path "$MODEL_PATH" \
   --model-name "$MODEL_NAME" \
   --ctx-len "$CTX_LEN" \
