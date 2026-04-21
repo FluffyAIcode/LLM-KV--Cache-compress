@@ -114,7 +114,7 @@ def run_hf_eager(model_path: str, passages_ids: list[list[int]],
     print(f"[hf] loading {model_path}", flush=True)
     tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, dtype=torch.bfloat16,
+        model_path, torch_dtype=torch.bfloat16,
         attn_implementation="eager", trust_remote_code=True,
     ).to("cuda").eval()
     out: list[dict] = []
