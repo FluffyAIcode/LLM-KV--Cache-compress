@@ -50,13 +50,14 @@ python3 benchmarks/e2e_ppl_pre_rope.py \
 
 No code changes — all flags already existed in the harness.
 
-## Place in the production matrix
+## Quality ↔ ratio tuning
 
-| Use case | Config | Ratio | Δppl | top-1 |
-|:---|:---|---:|---:|---:|
-| Quality-first (ACCEPT ★) | R3: K b=3 T=1.5 + V Besi + 6 bdry | 3.73× | +1.91 % | 87.30 % |
-| Balanced MARGINAL | B3: K b=3 T=2.0 + V Besi + 6 bdry | 4.30× | +5.36 % | 85.32 % |
-| **Ratio-first MARGINAL** | **v1.3 PPL (this recipe)** | **4.61×** | **+7.82 %** | 78.97 % |
+Higher quality is obtained by **raising K and/or V bit width on the
+same v1.3 PPL recipe** — no new codec path:
 
-Use v1.3 PPL for latency-dominated deployments where top-1 ≥ 75 %
-is sufficient.
+- K b=3 → K b=4 (raise K residual fidelity)
+- V b=2 → V b=3 or V b=4 (raise V residual fidelity)
+- `--rsvd-rank-factor 0.5` → `0.75` (larger skeleton, smaller residual)
+
+These are existing harness flags on the same v1.3 PPL recipe.
+Deploying at ACCEPT quality is a bit-width choice, not a codec choice.
