@@ -15,7 +15,7 @@ use half::f16;
 
 use crate::distortion::{Distortion, NormMode};
 use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
-use crate::pca::{fit_weighted_pca, project, unproject};
+use crate::pca::{fit_weighted_pca, fit_weighted_pca_randomized, project, unproject, PcaFit};
 use crate::quantize::{dequantize_vector, pack_bits, quantize_vector, unpack_bits};
 use crate::skeleton::Skeleton;
 use crate::wht::{inverse_rotate, rotate};
@@ -51,6 +51,37 @@ impl Code {
     }
 }
 
+/// PCA fit strategy — selects between the exact eigendecomposition
+/// path (v1.2 default) and the randomized-SVD sketch (v1.3 cheap fit).
+///
+/// Both paths produce a bit-compatible [`PcaFit`] so the rest of the
+/// codec is completely oblivious to the choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PcaMethod {
+    /// Exact `SymmetricEigen` on the D×D weighted covariance.
+    /// Cost: O(n·D² + D³) per block. Numerically ideal.
+    Exact,
+    /// Halko–Martinsson–Tropp randomized SVD with the given knobs.
+    /// Cost: O(n·D·r) per block where `r = target_rank + oversample`.
+    Randomized {
+        /// Maximum `d_eff` produced by truncation (`D/2` is a safe default).
+        target_rank: usize,
+        /// Extra sketch dimensions beyond `target_rank` (5–10 standard).
+        oversample: usize,
+        /// Subspace-power iterations (2 is the typical sweet spot).
+        power_iters: u32,
+        /// XOR-ed into `CodecParams::rotation_seed` to derive the
+        /// Gaussian-test-matrix seed. Keeps all randomness reproducible.
+        seed_offset: u64,
+    },
+}
+
+impl Default for PcaMethod {
+    fn default() -> Self {
+        Self::Exact
+    }
+}
+
 /// Runtime parameters for a single `encode_block` call.
 ///
 /// Compile-time parameters (dimensions, distortion) are passed via
@@ -68,6 +99,8 @@ pub struct CodecParams {
     pub rotation_seed: u32,
     /// Maximum K-means iterations.
     pub kmeans_max_iter: u32,
+    /// PCA fit strategy (exact vs randomized SVD).
+    pub pca_method: PcaMethod,
 }
 
 impl Default for CodecParams {
@@ -78,7 +111,35 @@ impl Default for CodecParams {
             bit_width: 3,
             rotation_seed: 0xCAFE_BABE,
             kmeans_max_iter: 32,
+            pca_method: PcaMethod::Exact,
         }
+    }
+}
+
+/// Dispatch helper: fit the requested PCA variant.
+fn fit_pca_dispatch(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    params: &CodecParams,
+) -> PcaFit {
+    match params.pca_method {
+        PcaMethod::Exact => fit_weighted_pca(vectors, weights, d, params.variance_ratio),
+        PcaMethod::Randomized {
+            target_rank,
+            oversample,
+            power_iters,
+            seed_offset,
+        } => fit_weighted_pca_randomized(
+            vectors,
+            weights,
+            d,
+            params.variance_ratio,
+            target_rank.min(d),
+            oversample,
+            power_iters,
+            u64::from(params.rotation_seed) ^ seed_offset,
+        ),
     }
 }
 
@@ -134,7 +195,7 @@ pub fn encode_block<R: Distortion>(
     assert!(params.k >= 1, "k must be ≥ 1");
 
     // --- Stage 1: Structure extraction ---
-    let pca = fit_weighted_pca(vectors, weights, d, params.variance_ratio);
+    let pca = fit_pca_dispatch(vectors, weights, d, params);
 
     // Project every vector into d_eff-space.
     let mut coeffs = Vec::with_capacity(n * pca.d_eff);
@@ -336,7 +397,7 @@ pub fn encode_layer<R: Distortion>(
     // signature doesn't expose that, we inline the pipeline here. The
     // inner ops (kmeans, rotation, quantise) are identical.
     use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
-    use crate::pca::{fit_weighted_pca_pooled, project};
+    use crate::pca::project;
     use crate::quantize::{pack_bits, quantize_vector};
     use crate::wht::rotate;
     use half::f16;
@@ -348,7 +409,10 @@ pub fn encode_layer<R: Distortion>(
         pooled_vecs.extend_from_slice(b);
         pooled_weights.extend_from_slice(w);
     }
-    let shared_pca = fit_weighted_pca_pooled(&pooled_vecs, &pooled_weights, d, params.variance_ratio);
+    // Pooled PCA honours the same PcaMethod as per-block fits. For the
+    // randomized path the seed is derived from rotation_seed XOR a
+    // per-layer salt so different layers don't reuse identical sketches.
+    let shared_pca = fit_pca_dispatch(&pooled_vecs, &pooled_weights, d, params);
 
     // Pre-project every block's coefficients so we can run K-means in
     // coefficient space on each block.
@@ -501,6 +565,7 @@ mod tests {
             bit_width: 4,
             rotation_seed: 0xABCD,
             kmeans_max_iter: 32,
+            pca_method: PcaMethod::Exact,
         };
         let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
         let recovered = decode_block::<MSE>(&sk, &codes);
@@ -872,6 +937,7 @@ mod tests {
             k: 4, bit_width: 3,
             rotation_seed: 0xA5A5_A5A5,
             kmeans_max_iter: 32,
+            pca_method: PcaMethod::Exact,
         };
         let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
         assert!(enc.shared_pca.is_none());

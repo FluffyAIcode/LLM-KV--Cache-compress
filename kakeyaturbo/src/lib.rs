@@ -51,7 +51,7 @@ pub mod wht;
 
 pub use codec::{
     decode_block, decode_layer, encode_block, encode_layer, layer_nbytes, Code, CodecParams,
-    LayerEncoding,
+    LayerEncoding, PcaMethod,
 };
 pub use distortion::{Distortion, InnerProduct, LInf, NormMode, MSE};
 pub use skeleton::Skeleton;

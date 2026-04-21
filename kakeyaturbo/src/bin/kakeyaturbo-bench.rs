@@ -26,7 +26,7 @@ use std::time::Instant;
 
 use kakeyaturbo::{
     decode_block, decode_layer, encode_block, encode_layer, CodecParams, Code, Distortion,
-    InnerProduct, LInf, LayerEncoding, MSE,
+    InnerProduct, LInf, LayerEncoding, PcaMethod, MSE,
 };
 
 const MAGIC: u32 = 0x4B4B_5456;
@@ -44,6 +44,16 @@ struct Args {
     rotation_seed: u32,
     verify: bool,
     share_basis: bool,
+    /// One of "exact" or "randomized".
+    pca_method: String,
+    /// Randomized-SVD knobs. Ignored when pca_method == "exact".
+    rsvd_target_rank: Option<usize>,
+    rsvd_oversample: usize,
+    rsvd_power_iters: u32,
+    /// If set, dump the decoded (round-tripped) KV tensor to this path in
+    /// KKTV format so downstream Python drivers can measure end-to-end
+    /// downstream quality (next-token KL, PPL) against the original.
+    dump_decoded: Option<PathBuf>,
 }
 
 fn print_help() {
@@ -52,9 +62,15 @@ fn print_help() {
             [--metric mse|inner_product|linf] \\\n    \
             [--block-size N] [--variance-ratio R] \\\n    \
             [--k K] [--bit-width B] [--rotation-seed S] \\\n    \
-            [--verify]\n\n\
+            [--share-basis] [--verify] \\\n    \
+            [--pca-method exact|randomized] \\\n    \
+            [--rsvd-target-rank N] [--rsvd-oversample N] [--rsvd-power-iters N] \\\n    \
+            [--dump-decoded PATH]\n\n\
             Compresses a KV tensor file block-by-block using the\n\
-            kakeyaturbo codec and writes a JSON report.\n"
+            kakeyaturbo codec and writes a JSON report. With\n\
+            --dump-decoded PATH (and --verify), also writes the\n\
+            round-tripped tensor in KKTV format for downstream\n\
+            e2e quality measurement.\n"
     );
 }
 
@@ -70,6 +86,11 @@ fn parse_args() -> Result<Args, String> {
     let mut rotation_seed: u32 = 0xCAFE_BABE;
     let mut verify = false;
     let mut share_basis = false;
+    let mut pca_method = "exact".to_string();
+    let mut rsvd_target_rank: Option<usize> = None;
+    let mut rsvd_oversample: usize = 8;
+    let mut rsvd_power_iters: u32 = 2;
+    let mut dump_decoded: Option<PathBuf> = None;
 
     let mut i = 1;
     while i < argv.len() {
@@ -116,6 +137,26 @@ fn parse_args() -> Result<Args, String> {
             }
             "--verify" => verify = true,
             "--share-basis" => share_basis = true,
+            "--pca-method" => {
+                i += 1;
+                pca_method = argv[i].clone();
+            }
+            "--rsvd-target-rank" => {
+                i += 1;
+                rsvd_target_rank = Some(argv[i].parse().map_err(|e| format!("bad --rsvd-target-rank: {e}"))?);
+            }
+            "--rsvd-oversample" => {
+                i += 1;
+                rsvd_oversample = argv[i].parse().map_err(|e| format!("bad --rsvd-oversample: {e}"))?;
+            }
+            "--rsvd-power-iters" => {
+                i += 1;
+                rsvd_power_iters = argv[i].parse().map_err(|e| format!("bad --rsvd-power-iters: {e}"))?;
+            }
+            "--dump-decoded" => {
+                i += 1;
+                dump_decoded = Some(PathBuf::from(&argv[i]));
+            }
             other => return Err(format!("unknown flag {other}; try --help")),
         }
         i += 1;
@@ -134,6 +175,11 @@ fn parse_args() -> Result<Args, String> {
         rotation_seed,
         verify,
         share_basis,
+        pca_method,
+        rsvd_target_rank,
+        rsvd_oversample,
+        rsvd_power_iters,
+        dump_decoded,
     })
 }
 
@@ -181,12 +227,23 @@ fn read_tensor(path: &PathBuf) -> Result<(Vec<f32>, usize, usize), String> {
 }
 
 fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) -> Report {
+    let pca_method = match args.pca_method.as_str() {
+        "exact" => PcaMethod::Exact,
+        "randomized" => PcaMethod::Randomized {
+            target_rank: args.rsvd_target_rank.unwrap_or((dim / 2).max(8)),
+            oversample: args.rsvd_oversample,
+            power_iters: args.rsvd_power_iters,
+            seed_offset: 0x9E37_79B9_7F4A_7C15,
+        },
+        other => panic!("unknown --pca-method {other}, expected 'exact' or 'randomized'"),
+    };
     let params = CodecParams {
         variance_ratio: args.variance_ratio,
         k: args.k,
         bit_width: args.bit_width,
         rotation_seed: args.rotation_seed,
         kmeans_max_iter: 32,
+        pca_method,
     };
 
     let bs = args.block_size;
@@ -197,6 +254,14 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
     let mut total_mse_count = 0usize;
     let mut encode_ns: u128 = 0;
     let mut decode_ns: u128 = 0;
+    // If --dump-decoded is set (and verify is on), accumulate the decoded
+    // tensor here and write it at the end.
+    let want_decoded = args.dump_decoded.is_some() && args.verify;
+    let mut decoded_full: Vec<f32> = if want_decoded {
+        Vec::with_capacity(n_full * bs * dim)
+    } else {
+        Vec::new()
+    };
 
     let (total_skeleton, total_codes, total_blocks, total_vecs_encoded, shared_pca_bytes) = if args.share_basis {
         // v1.2 B' path: fit one basis over all blocks, K-means per-block.
@@ -224,6 +289,9 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
                 }
                 total_mse_sum += sq / (bs * dim) as f64;
                 total_mse_count += 1;
+                if want_decoded {
+                    decoded_full.extend_from_slice(rec);
+                }
             }
         }
 
@@ -262,10 +330,31 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
                 }
                 total_mse_sum += sq / (bs * dim) as f64;
                 total_mse_count += 1;
+                if want_decoded {
+                    decoded_full.extend_from_slice(&rec);
+                }
             }
         }
         (total_skeleton, total_codes, total_blocks, total_vecs_encoded, 0)
     };
+
+    // Write decoded tensor to disk if requested.
+    if want_decoded {
+        let path = args.dump_decoded.as_ref().expect("dump_decoded path");
+        let f = std::fs::File::create(path).expect("create decoded output");
+        let mut w = std::io::BufWriter::new(f);
+        use std::io::Write;
+        let magic: u32 = 0x4B4B_5456;
+        w.write_all(&magic.to_le_bytes()).expect("write magic");
+        w.write_all(&1u32.to_le_bytes()).expect("write version");
+        w.write_all(&(total_vecs_encoded as u64).to_le_bytes()).expect("write n_vecs");
+        w.write_all(&(dim as u32).to_le_bytes()).expect("write dim");
+        w.write_all(&0u32.to_le_bytes()).expect("write pad");
+        for v in &decoded_full {
+            w.write_all(&v.to_le_bytes()).expect("write f32");
+        }
+        w.flush().expect("flush decoded");
+    }
 
     let baseline_bytes = total_vecs_encoded * dim * std::mem::size_of::<f32>();
     let baseline_bytes_bf16 = total_vecs_encoded * dim * 2;
@@ -297,6 +386,19 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         },
         share_basis: args.share_basis,
         shared_pca_bytes,
+        pca_method: args.pca_method.clone(),
+        rsvd_target_rank: match pca_method {
+            PcaMethod::Randomized { target_rank, .. } => target_rank,
+            PcaMethod::Exact => 0,
+        },
+        rsvd_oversample: match pca_method {
+            PcaMethod::Randomized { oversample, .. } => oversample,
+            PcaMethod::Exact => 0,
+        },
+        rsvd_power_iters: match pca_method {
+            PcaMethod::Randomized { power_iters, .. } => power_iters,
+            PcaMethod::Exact => 0,
+        },
     }
 }
 
@@ -322,6 +424,10 @@ struct Report {
     mean_block_mse: f64,
     share_basis: bool,
     shared_pca_bytes: usize,
+    pca_method: String,
+    rsvd_target_rank: usize,
+    rsvd_oversample: usize,
+    rsvd_power_iters: u32,
 }
 
 impl Report {
@@ -348,7 +454,11 @@ impl Report {
                 \"verify\":{verify},\
                 \"mean_block_mse\":{mse:.10},\
                 \"share_basis\":{sb},\
-                \"shared_pca_bytes\":{spb}\
+                \"shared_pca_bytes\":{spb},\
+                \"pca_method\":\"{pm}\",\
+                \"rsvd_target_rank\":{rtr},\
+                \"rsvd_oversample\":{ros},\
+                \"rsvd_power_iters\":{rpi}\
             }}",
             metric = self.metric,
             bs = self.block_size,
@@ -371,6 +481,10 @@ impl Report {
             mse = self.mean_block_mse,
             sb = self.share_basis,
             spb = self.shared_pca_bytes,
+            pm = self.pca_method,
+            rtr = self.rsvd_target_rank,
+            ros = self.rsvd_oversample,
+            rpi = self.rsvd_power_iters,
         )
     }
 }
