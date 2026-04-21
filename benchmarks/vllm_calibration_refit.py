@@ -56,9 +56,38 @@ import torch
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "benchmarks"))
 
-from lloyd_max_calibration import (  # noqa: E402
-    fit_pca_simple, next_pow2, wht_rotate, lloyd_max_iterate,
-)
+# Import ONLY the pure-numpy math utilities from the Lloyd-Max helper
+# without triggering its HF-side imports (transformers + pre_rope_cache).
+# We do this by pulling the needed functions out of the module source.
+def _load_lm_helpers():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "lmc_math", str(REPO / "benchmarks" / "lloyd_max_calibration.py"),
+    )
+    # Rather than execute the module (which imports transformers +
+    # pre_rope_cache), parse it and exec only the function defs we need.
+    src = (REPO / "benchmarks" / "lloyd_max_calibration.py").read_text()
+    # Strip the top-level HF imports so exec() doesn't fail.
+    safe_lines = []
+    skip_imports = (
+        "from transformers",
+        "import benchmarks.pre_rope_cache",
+        "from benchmarks.q_precondition",
+        "from benchmarks.e2e_ppl_pre_rope",
+    )
+    for line in src.splitlines():
+        if any(line.lstrip().startswith(p) for p in skip_imports):
+            continue
+        safe_lines.append(line)
+    ns: dict = {"__name__": "lmc_math"}
+    exec("\n".join(safe_lines), ns)
+    return ns
+
+_lmc = _load_lm_helpers()
+fit_pca_simple = _lmc["fit_pca_simple"]
+next_pow2 = _lmc["next_pow2"]
+wht_rotate = _lmc["wht_rotate"]
+lloyd_max_iterate = _lmc["lloyd_max_iterate"]
 
 
 # =============================================================================
