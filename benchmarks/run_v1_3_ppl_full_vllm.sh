@@ -47,6 +47,11 @@ if [ -n "${ATTN_BACKEND:-}" ]; then
 fi
 
 echo "[run] e2e_ppl_validation_vllm_full.py (using $PYTHON_BIN)"
+EXTRA_ARGS=()
+if [ -n "${PREFIX_ONLY_TOKENS:-}" ] && [ "${PREFIX_ONLY_TOKENS}" -gt 0 ]; then
+    EXTRA_ARGS+=(--prefix-only-tokens "$PREFIX_ONLY_TOKENS")
+fi
+
 "$PYTHON_BIN" benchmarks/e2e_ppl_validation_vllm_full.py \
     --model-path "$MODEL_PATH" \
     --model-name "$MODEL_NAME" \
@@ -63,4 +68,5 @@ echo "[run] e2e_ppl_validation_vllm_full.py (using $PYTHON_BIN)"
     --boundary-skip-layers $BOUNDARY_LAYERS \
     --n-passages "$N_PASSAGES" \
     --gpu-mem-util "$GPU_MEM_UTIL" \
-    --out-dir "$OUT_DIR"
+    --out-dir "$OUT_DIR" \
+    "${EXTRA_ARGS[@]}"

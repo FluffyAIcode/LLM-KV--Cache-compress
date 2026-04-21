@@ -174,6 +174,11 @@ class CodecState:
     q_precond: QPrecond | None = None
     share_basis_k: bool = False
     share_basis_v: bool = True
+    # H5 ablation: if > 0, only the first `prefix_only_tokens` rows of
+    # each layer's K/V go through the codec; the tail is pass-through.
+    # Mirrors the HF harness's "codec only touched the prefill cache,
+    # teacher-force step saw exact K/V" two-pass semantics.
+    prefix_only_tokens: int = 0
     stats: list[dict] = []
 
 
@@ -290,6 +295,18 @@ def _apply_k_guardrails(
     arr = x.detach().to(torch.float32).cpu().numpy()
     n_tokens, n_kv, hd = arr.shape
 
+    # H5 ablation: prefix-only mode. If set, only the first
+    # `prefix_only_tokens` rows get codec'd; the tail is pass-through.
+    # This mirrors HF's two-pass harness where the codec only touched
+    # the prefill cache, and teacher-force saw exact K/V.
+    prefix_n = CodecState.prefix_only_tokens
+    if prefix_n > 0 and prefix_n < n_tokens:
+        tail_arr = arr[prefix_n:]  # we'll splice it back at the end
+        arr = arr[:prefix_n]
+        n_tokens = arr.shape[0]
+    else:
+        tail_arr = None
+
     # Q-preconditioning: whiten only K (v_ref is False) and only when
     # a calibrated Cholesky is present for this layer.
     qp = CodecState.q_precond
@@ -345,6 +362,10 @@ def _apply_k_guardrails(
     dec = dec.reshape(n_tokens, n_kv, hd)
     if use_whiten:
         dec = qp.unwhiten(dec, layer=layer_id)
+
+    # Splice the uncompressed tail back on (H5 prefix-only mode).
+    if tail_arr is not None:
+        dec = np.concatenate([dec, tail_arr], axis=0)
 
     restored = (
         torch.from_numpy(dec.astype(np.float32))
@@ -510,6 +531,12 @@ def main() -> int:
     ap.add_argument("--boundary-skip-layers", type=int, nargs="*",
                     default=[0, 1, 7, 14, 26, 27],
                     help="Layer indices kept at full precision (bf16)")
+    ap.add_argument("--prefix-only-tokens", type=int, default=0,
+                    help="H5 ablation: if > 0, only the first N rows of "
+                         "each layer's K/V go through the codec; the tail "
+                         "is pass-through. Mirrors the HF harness's "
+                         "two-pass 'codec only touched the prefill cache' "
+                         "semantics. 0 disables.")
     ap.add_argument("--share-basis-v", action="store_true", default=True)
     ap.add_argument("--no-share-basis-v", dest="share_basis_v",
                     action="store_false")
@@ -532,6 +559,11 @@ def main() -> int:
     CodecState.k_outlier_threshold = args.outlier_threshold
     CodecState.boundary_skip_layers = set(args.boundary_skip_layers or [])
     CodecState.share_basis_v = args.share_basis_v
+    CodecState.prefix_only_tokens = int(args.prefix_only_tokens or 0)
+    if CodecState.prefix_only_tokens > 0:
+        print(f"[setup] prefix-only codec window: first "
+              f"{CodecState.prefix_only_tokens} tokens per layer "
+              f"(H5 ablation — tail is pass-through)", flush=True)
     if args.q_calib:
         print(f"[setup] loading Q-preconditioner from {args.q_calib}",
               flush=True)
