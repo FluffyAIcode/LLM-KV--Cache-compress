@@ -171,7 +171,8 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     besi_direction_bits: int = 5,
                     besi_magnitude_bits: int = 4,
                     besi_magnitude_mode: str = "quantized",
-                    besi_subtract_mean: bool = True) -> tuple[DynamicCache, dict]:
+                    besi_subtract_mean: bool = True,
+                    codec_v: str | None = None) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -254,129 +255,111 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
             # Don't use mid-layer calibrated centroids at a different bit width.
             k_centroids_eff = None
             v_centroids_eff = None
-        if n_comp > 0:
-            if codec == "kakeyaturbo":
-                if compress in ("kv", "k_only"):
-                    # When Q-preconditioned, the codec input is isotropic (in
-                    # the Sigma_q metric), so the residual-side metric reverts
-                    # to MSE — otherwise we'd double-apply the IP weighting.
-                    k_metric = "mse" if use_qp else "inner_product"
-                    k_dec, k_rep = rust_roundtrip(
-                        k_flat[:n_comp], block_size=block_size, bit_width=bit_width_k_eff,
-                        rsvd_target_rank=target_rank, metric=k_metric,
-                        share_basis=share_basis_k, pca_method=pca_method,
+        # Asymmetric K/V codec selection: V may use a different codec
+        # than K (useful because K cares about inner-product / Σ_q-weighted
+        # distortion while V cares about plain MSE — so Besicovitch's
+        # Haar-uniform codebook is a natural fit for V).
+        codec_v_eff = codec_v if codec_v is not None else codec
+
+        def _encode_k(kv_flat_slice, codec_name):
+            """Encode K stream with the specified codec. Returns (decoded, report)."""
+            if codec_name == "kakeyaturbo":
+                k_metric = "mse" if use_qp else "inner_product"
+                return rust_roundtrip(
+                    kv_flat_slice, block_size=block_size, bit_width=bit_width_k_eff,
+                    rsvd_target_rank=target_rank, metric=k_metric,
+                    share_basis=share_basis_k, pca_method=pca_method,
+                    variance_ratio=variance_ratio,
+                    skeleton_dtype=skeleton_dtype,
+                    exact_rank_cap=exact_rank_cap,
+                    centroids_file=k_centroids_eff,
+                    outlier_threshold=(None if is_boundary else k_outlier_threshold),
+                )
+            elif codec_name == "turboquant":
+                return turboquant_k_roundtrip(
+                    kv_flat_slice, bit_width=bit_width_k_eff, seed=42 + i * 2,
+                )
+            elif codec_name == "besicovitch":
+                if is_boundary:
+                    # Besicovitch struggles on L=0-type extreme-magnitude
+                    # boundary layers (even with mean subtraction).  Fall
+                    # back to Kakeya-PCA b=boundary_bit_width for safety.
+                    return rust_roundtrip(
+                        kv_flat_slice, block_size=block_size,
+                        bit_width=bit_width_k_eff,
+                        rsvd_target_rank=target_rank, metric="mse",
+                        share_basis=False, pca_method="exact",
                         variance_ratio=variance_ratio,
                         skeleton_dtype=skeleton_dtype,
                         exact_rank_cap=exact_rank_cap,
-                        centroids_file=k_centroids_eff,
-                        outlier_threshold=(None if is_boundary else k_outlier_threshold),
+                        centroids_file=None,
                     )
-                else:
-                    k_dec = k_flat[:n_comp].copy()
-                    k_rep = {"mean_block_mse": 0.0, "skipped": True}
-                if compress in ("kv", "v_only"):
-                    rank_cap_v_eff = (exact_rank_cap_v if exact_rank_cap_v is not None
-                                      else exact_rank_cap)
-                    pca_v_eff = (pca_method_v if pca_method_v is not None
-                                 else pca_method)
-                    v_dec, v_rep = rust_roundtrip(
-                        v_flat[:n_comp], block_size=block_size, bit_width=bit_width_v_eff,
+                return besicovitch_roundtrip(
+                    kv_flat_slice, block_size=block_size,
+                    group_size=besi_group_size,
+                    direction_bits=besi_direction_bits,
+                    magnitude_bits=besi_magnitude_bits,
+                    magnitude_mode=besi_magnitude_mode,
+                    subtract_mean=besi_subtract_mean,
+                )
+            raise ValueError(f"unknown codec: {codec_name}")
+
+        def _encode_v(kv_flat_slice, codec_name):
+            """Encode V stream with the specified codec. Returns (decoded, report)."""
+            if codec_name == "kakeyaturbo":
+                rank_cap_v_eff = (exact_rank_cap_v if exact_rank_cap_v is not None
+                                  else exact_rank_cap)
+                pca_v_eff = (pca_method_v if pca_method_v is not None
+                             else pca_method)
+                return rust_roundtrip(
+                    kv_flat_slice, block_size=block_size, bit_width=bit_width_v_eff,
+                    rsvd_target_rank=target_rank, metric="mse",
+                    share_basis=share_basis_v, pca_method=pca_v_eff,
+                    variance_ratio=variance_ratio,
+                    skeleton_dtype=skeleton_dtype,
+                    exact_rank_cap=rank_cap_v_eff,
+                    centroids_file=v_centroids_eff,
+                    outlier_threshold=(None if is_boundary else v_outlier_threshold),
+                )
+            elif codec_name == "turboquant":
+                return turboquant_v_roundtrip(
+                    kv_flat_slice, bit_width=bit_width_v_eff, seed=42 + i * 2 + 1,
+                )
+            elif codec_name == "besicovitch":
+                if is_boundary:
+                    # Same boundary safety as K-side: fall back to Kakeya-PCA
+                    # on L=0-type layers where V may also be badly-behaved.
+                    return rust_roundtrip(
+                        kv_flat_slice, block_size=block_size,
+                        bit_width=bit_width_v_eff,
                         rsvd_target_rank=target_rank, metric="mse",
-                        share_basis=share_basis_v, pca_method=pca_v_eff,
+                        share_basis=share_basis_v, pca_method="exact",
                         variance_ratio=variance_ratio,
                         skeleton_dtype=skeleton_dtype,
-                        exact_rank_cap=rank_cap_v_eff,
-                        centroids_file=v_centroids_eff,
-                        outlier_threshold=(None if is_boundary else v_outlier_threshold),
+                        exact_rank_cap=None,
+                        centroids_file=None,
                     )
-                else:
-                    v_dec = v_flat[:n_comp].copy()
-                    v_rep = {"mean_block_mse": 0.0, "skipped": True}
-            elif codec == "turboquant":
-                # TurboQuant is per-vector and has no block structure; we still
-                # respect n_comp to keep tails identical with the kakeyaturbo
-                # path (for apples-to-apples PPL).  Seed per (layer, stream)
-                # so rotations are independent across layers.
-                if compress in ("kv", "k_only"):
-                    k_dec, k_rep = turboquant_k_roundtrip(
-                        k_flat[:n_comp], bit_width=bit_width_k_eff,
-                        seed=42 + i * 2,
-                    )
-                else:
-                    k_dec = k_flat[:n_comp].copy()
-                    k_rep = {"mean_block_mse": 0.0, "skipped": True}
-                if compress in ("kv", "v_only"):
-                    v_dec, v_rep = turboquant_v_roundtrip(
-                        v_flat[:n_comp], bit_width=bit_width_v_eff,
-                        seed=42 + i * 2 + 1,
-                    )
-                else:
-                    v_dec = v_flat[:n_comp].copy()
-                    v_rep = {"mean_block_mse": 0.0, "skipped": True}
-            elif codec == "besicovitch":
-                # Besicovitch-product codec: no per-block PCA, fixed
-                # direction codebook + optional block-mean subtraction.
-                # Q-precondition is still honored (whitens K before codec)
-                # but no Lloyd-Max-style residual calibration applies.
-                # Boundary layers still use the kakeyaturbo PCA path so
-                # the first/last few layers don't regress — Besicovitch
-                # struggles on L=0-type high-mean data at boundary.
-                if is_boundary:
-                    if compress in ("kv", "k_only"):
-                        k_dec, k_rep = rust_roundtrip(
-                            k_flat[:n_comp], block_size=block_size,
-                            bit_width=bit_width_k_eff,
-                            rsvd_target_rank=target_rank, metric="mse",
-                            share_basis=False, pca_method="exact",
-                            variance_ratio=variance_ratio,
-                            skeleton_dtype=skeleton_dtype,
-                            exact_rank_cap=exact_rank_cap,
-                            centroids_file=None,
-                        )
-                    else:
-                        k_dec = k_flat[:n_comp].copy()
-                        k_rep = {"mean_block_mse": 0.0, "skipped": True}
-                    if compress in ("kv", "v_only"):
-                        v_dec, v_rep = rust_roundtrip(
-                            v_flat[:n_comp], block_size=block_size,
-                            bit_width=bit_width_v_eff,
-                            rsvd_target_rank=target_rank, metric="mse",
-                            share_basis=share_basis_v, pca_method="exact",
-                            variance_ratio=variance_ratio,
-                            skeleton_dtype=skeleton_dtype,
-                            exact_rank_cap=None,
-                            centroids_file=None,
-                        )
-                    else:
-                        v_dec = v_flat[:n_comp].copy()
-                        v_rep = {"mean_block_mse": 0.0, "skipped": True}
-                else:
-                    if compress in ("kv", "k_only"):
-                        k_dec, k_rep = besicovitch_roundtrip(
-                            k_flat[:n_comp], block_size=block_size,
-                            group_size=besi_group_size,
-                            direction_bits=besi_direction_bits,
-                            magnitude_bits=besi_magnitude_bits,
-                            magnitude_mode=besi_magnitude_mode,
-                            subtract_mean=besi_subtract_mean,
-                        )
-                    else:
-                        k_dec = k_flat[:n_comp].copy()
-                        k_rep = {"mean_block_mse": 0.0, "skipped": True}
-                    if compress in ("kv", "v_only"):
-                        v_dec, v_rep = besicovitch_roundtrip(
-                            v_flat[:n_comp], block_size=block_size,
-                            group_size=besi_group_size,
-                            direction_bits=besi_direction_bits,
-                            magnitude_bits=besi_magnitude_bits,
-                            magnitude_mode=besi_magnitude_mode,
-                            subtract_mean=besi_subtract_mean,
-                        )
-                    else:
-                        v_dec = v_flat[:n_comp].copy()
-                        v_rep = {"mean_block_mse": 0.0, "skipped": True}
+                return besicovitch_roundtrip(
+                    kv_flat_slice, block_size=block_size,
+                    group_size=besi_group_size,
+                    direction_bits=besi_direction_bits,
+                    magnitude_bits=besi_magnitude_bits,
+                    magnitude_mode=besi_magnitude_mode,
+                    subtract_mean=besi_subtract_mean,
+                )
+            raise ValueError(f"unknown codec: {codec_name}")
+
+        if n_comp > 0:
+            if compress in ("kv", "k_only"):
+                k_dec, k_rep = _encode_k(k_flat[:n_comp], codec)
             else:
-                raise ValueError(f"unknown codec: {codec}")
+                k_dec = k_flat[:n_comp].copy()
+                k_rep = {"mean_block_mse": 0.0, "skipped": True}
+            if compress in ("kv", "v_only"):
+                v_dec, v_rep = _encode_v(v_flat[:n_comp], codec_v_eff)
+            else:
+                v_dec = v_flat[:n_comp].copy()
+                v_rep = {"mean_block_mse": 0.0, "skipped": True}
         else:
             k_dec = k_flat[:0]; v_dec = v_flat[:0]
             k_rep = v_rep = {"mean_block_mse": 0.0}
@@ -462,7 +445,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              boundary_skip_layers=None, boundary_mode="bf16", boundary_bit_width=4,
              k_outlier_threshold=None, v_outlier_threshold=None,
              besi_group_size=2, besi_direction_bits=5, besi_magnitude_bits=4,
-             besi_magnitude_mode="quantized", besi_subtract_mean=True):
+             besi_magnitude_mode="quantized", besi_subtract_mean=True,
+             codec_v=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -493,6 +477,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         besi_magnitude_bits=besi_magnitude_bits,
         besi_magnitude_mode=besi_magnitude_mode,
         besi_subtract_mean=besi_subtract_mean,
+        codec_v=codec_v,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -521,11 +506,19 @@ def main():
                          "but without the RSVD approximation error).")
     ap.add_argument("--codec", choices=["kakeyaturbo", "turboquant", "besicovitch"],
                     default="kakeyaturbo",
-                    help="Which codec to apply to the cache.\n"
+                    help="Codec to apply to the K stream (also V if --codec-v "
+                         "is not set).\n"
                          "'kakeyaturbo': PCA/RSVD skeleton + Lloyd-Max residual.\n"
                          "'turboquant': reference PolarQuant+QJL (K) / PolarQuant (V).\n"
                          "'besicovitch': fixed direction codebook + per-group "
                          "magnitude, optional per-block mean (no per-block PCA).")
+    ap.add_argument("--codec-v",
+                    choices=["kakeyaturbo", "turboquant", "besicovitch"],
+                    default=None,
+                    help="Asymmetric V-stream codec. If unset, V uses --codec. "
+                         "V cares about MSE (not inner-product), so Besicovitch's "
+                         "Haar-uniform codebook may be well-matched for V "
+                         "while K stays on Kakeya-PCA.")
     ap.add_argument("--bit-width-v", type=int, default=None,
                     help="If set, overrides --bit-width for the V stream "
                          "(asymmetric K/V codec).  Default: V uses --bit-width "
@@ -655,6 +648,7 @@ def main():
             args.besi_magnitude_bits,
             args.besi_magnitude_mode,
             not args.besi_no_subtract_mean,
+            args.codec_v,
         )
         if res is None:
             print("    skipped (too short)"); continue
