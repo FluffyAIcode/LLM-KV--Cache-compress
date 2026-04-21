@@ -79,7 +79,8 @@ def _load_lm_helpers():
         if any(line.lstrip().startswith(p) for p in skip_imports):
             continue
         safe_lines.append(line)
-    ns: dict = {"__name__": "lmc_math"}
+    ns: dict = {"__name__": "lmc_math",
+                "__file__": str(REPO / "benchmarks" / "lloyd_max_calibration.py")}
     exec("\n".join(safe_lines), ns)
     return ns
 
