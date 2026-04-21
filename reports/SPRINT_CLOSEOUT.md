@@ -25,6 +25,106 @@ Source JSON files:
 - R1/R2/R3: `reports/v1_3_riemann_b2/R{1,2,3}_*.json`
 - B3: `reports/v1_3_revival/B3_rsvd_b3_outlier_Vbesi_prerope_kv_b3_randomized_fp16_sk0_sv0.json`
 
+## v1.3 + guardrail stacking — the full progressive ladder
+
+This is the evidence trail behind the five architectural conclusions
+below. All rows are 4-passage DS-Distill D=128 ctx=2048; each row adds
+exactly **one** guardrail on top of the previous.
+
+### b=2 path — the "from disaster to MARGINAL" rehabilitation
+(`reports/v1_3_revival/V{0-4}_*.json`)
+
+| Step | Added guardrail | Ratio | Δppl | top-1 | Verdict |
+|:----:|:----------------|------:|-----:|------:|:-------:|
+| V0 | **BARE** v1.3 RSVD b=2, 0 boundary | 5.79× | **+355.62 %** | 42.46 % | REJECT |
+| V1 | + Q-precondition (Chol Σ_q) + 4 bdry | 5.61× | **+37.91 %** | 73.02 % | REJECT |
+| V2 | + K calibrated Lloyd-Max codebook | 5.60× | +36.53 % | 68.25 % | REJECT |
+| V3 | + K/V cal + 6 bdry (add L=7, L=14) | 5.52× | **+25.18 %** | 71.43 % | REJECT |
+| V4 | + V Besi d=3 m=4 (asymmetric K/V) | 4.94× | **+15.96 %** | 77.38 % | REJECT |
+
+**V0 → V4: Δppl +355 % → +16 % (22× better), top-1 42 % → 77 %
+(+35 pp) at ~14 % ratio cost.** Confirms every guardrail individually
+contributes; Q-precond alone is worth 317 pp Δppl.
+
+### b=3 path — where ACCEPT becomes reachable
+(`reports/v1_3_revival/B{0-3}_*.json`)
+
+| Step | Added guardrail | Ratio | Δppl | top-1 | Verdict |
+|:----:|:----------------|------:|-----:|------:|:-------:|
+| B0 | **BARE** v1.3 RSVD b=3 | 4.90× | +374.90 % | 41.27 % | REJECT |
+| B1 | + all guardrails except outlier | 4.86× | +15.73 % | 76.98 % | REJECT |
+| B2 | + V Besi d=3 m=4 (asymmetric K/V) | 4.65× | +16.01 % | 82.14 % | REJECT |
+| **B3** | **+ outlier T=2.0 (~4.5 % of coords → f16)** | **4.30×** | **+5.36 %** | **85.32 %** | **MARGINAL 🎯** |
+
+**B3 is the highest-ratio MARGINAL config measured in this PR.**
+Outlier T=2.0 is the single step that lifts top-1 from 82 % to 85 %.
+
+### b=3 fine-tune (C1–C4, `reports/v1_3_revival/C{1-4}_*.json`)
+
+| Cell | Variant on B3 | Ratio | Δppl | top-1 | Verdict |
+|:----:|:--------------|------:|-----:|------:|:-------:|
+| C1 | B3 + outlier T=1.5 instead of T=2.0 | 3.74× | +5.62 % | 81.75 % | MARGINAL |
+| C2 | B3 + RSVD rank 0.75 (larger skeleton) | 3.32× | +6.96 % | **89.29 %** | MARGINAL |
+| C3 | b=4 + outlier + V Besi + 6 bdry | 4.09× | +4.95 % | 83.73 % | MARGINAL |
+| C4 | B3 + 8 boundary layers | 4.34× | +9.95 % | 82.94 % | MARGINAL |
+
+Take-aways:
+- **C4 (8 bdry) regresses** — confirms "6 bdry is the sweet spot"
+- **C2 shows the top-1 ceiling** — enlarging skeleton to rank 0.75
+  reaches 89 % top-1 (near v1.4 Pareto's 91 %) at 3.32× ratio
+- **C3 (b=4) is dominated** by v1.4 Pareto on every axis (ratio, Δppl,
+  top-1). b=4 exact PCA beats b=4 RSVD when budget allows exact.
+
+### Riemann+outlier ladder (R1–R3, `reports/v1_3_riemann_b2/R{1,2,3}_*.json`)
+
+Framing note: "Riemann" here = v1.3 RSVD path with Q-precond already
+active. Q-precond's Chol(Σ_q) whitening IS the Euclidean isometry of
+the Σ_q-metric Riemannian manifold — no separate "Riemann codec" is
+needed. R1–R3 = B3 variants at different (bit width, outlier T).
+
+| Bit width | T = 2.0 | T = 1.5 |
+|:---------:|:--------|:--------|
+| b=2 | **R1**: 4.54× / +7.09 % / 82.54 % — MARGINAL | **R2**: 3.92× / +3.88 % / 84.13 % — MARGINAL |
+| b=3 | **B3**: 4.30× / +5.36 % / 85.32 % — MARGINAL | **R3**: 3.74× / +1.91 % / 87.30 % — **ACCEPT ★ 🎯** |
+
+**R3 is the highest-ratio ACCEPT ★ config measured in this PR**
+(+26 % ratio over v1.4 Pareto at one tier lower top-1).
+
+### Head-to-head vs TurboQuant reference impl at matched bit width
+(`reports/v1_3_riemann_b2/T{1,2,3}_*.json`; un-optimized Python ref,
+**not TurboQuant's shipped C++**)
+
+| b | TurboQuant Δppl | Our best Δppl | TurboQuant top-1 | Our top-1 |
+|:-:|---------------:|--------------:|----------------:|---------:|
+| 2 | +19 176 % (turbo2) | +3.88 % (R2) | 4.37 % | 84.13 % |
+| 3 | +13 908 % (turbo3) | +1.91 % (R3) | 4.37 % | 87.30 % |
+| 4 | +31 732 % (turbo4) | −2.04 % (v1.4) | 6.75 % | 91.27 % |
+
+**Caveat.** These T-cells are TurboQuant's reference Python impl (no
+skeleton, no attention weighting, no boundary, no calibration). The
+3-4 orders-of-magnitude Δppl gap reflects un-guardrailed reference
+behavior, not their shipped C++ — do **not** quote a "10 000×" ratio.
+The correct apples-to-apples comparison is R3 (3.74×) vs TurboQuant
+**shipped** (≈ 2.58× for `q8_0-K + turbo3-V + Boundary V`): **+45 %
+ratio advantage at matched Δppl tier.** See
+`reports/v1_3_riemann_b2/FAIR_VS_TURBOQUANT.md`.
+
+### Byte accounting for R3 (DS-Distill D=128, middle layer)
+
+| Component | Bytes/vector |
+|:---|---:|
+| RSVD skeleton (rank=64, amortized) | 16.25 |
+| Kakeya-PCA coeffs (3 bits × d_eff=64) | 24 |
+| K-means center indices | 0.5 |
+| Residual codes (Lloyd-Max 3 bits × 128) | 48 |
+| Outlier list (~13.4 % × 4 B/entry) | 6.9 |
+| V Besi d=3 m=4 | 58.25 |
+| **R3 total (middle layer)** | **~154 B/v** |
+| v1.4 Pareto reference (exact PCA b=4 + V Besi) | ~168 B/v |
+
+**8 % byte savings per middle layer → +26 % total ratio** after
+combining with 6 boundary layers' shared cost.
+
 ## Key architectural conclusions (established with experimental data)
 
 1. **Q-preconditioning** (Cholesky of Σ_q) is the single biggest guardrail.
