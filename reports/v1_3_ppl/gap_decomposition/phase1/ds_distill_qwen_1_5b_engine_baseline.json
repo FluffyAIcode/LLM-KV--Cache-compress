@@ -1,0 +1,54 @@
+{
+  "model_name": "ds_distill_qwen_1_5b",
+  "model_path": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+  "ctx_len": 2048,
+  "n_eval": 64,
+  "n_passages": 4,
+  "top_k": 20,
+  "per_passage": [
+    {
+      "passage": 0,
+      "ppl_hf": 155.29136280992466,
+      "ppl_vllm": 124.8755040661336,
+      "ppl_rel_gap": -0.19586317096733719,
+      "mean_abs_dlogp_true": 0.4668402730367234,
+      "top1_agreement": 0.796875,
+      "mean_sym_kl_topk": 0.1725966700377824,
+      "n_tokens": 64
+    },
+    {
+      "passage": 1,
+      "ppl_hf": 37.002521861507184,
+      "ppl_vllm": 33.0042923548772,
+      "ppl_rel_gap": -0.10805289222163106,
+      "mean_abs_dlogp_true": 0.3430485639091785,
+      "top1_agreement": 0.78125,
+      "mean_sym_kl_topk": 0.1451719600263503,
+      "n_tokens": 64
+    },
+    {
+      "passage": 2,
+      "ppl_hf": 9.727045826506595,
+      "ppl_vllm": 8.535555997020436,
+      "ppl_rel_gap": -0.12249246592827809,
+      "mean_abs_dlogp_true": 0.2817480601333955,
+      "top1_agreement": 0.84375,
+      "mean_sym_kl_topk": 0.13000758305344523,
+      "n_tokens": 64
+    },
+    {
+      "passage": 3,
+      "ppl_hf": 26.172701996613686,
+      "ppl_vllm": 25.35456860935595,
+      "ppl_rel_gap": -0.03125903421678005,
+      "mean_abs_dlogp_true": 0.29655563103051463,
+      "top1_agreement": 0.859375,
+      "mean_sym_kl_topk": 0.13394780791003463,
+      "n_tokens": 64
+    }
+  ],
+  "mean_ppl_rel_gap": -0.1144168908335066,
+  "mean_top1_agreement": 0.8203125,
+  "mean_sym_kl_topk": 0.14543100525690314,
+  "mean_abs_dlogp_true": 0.347048132027453
+}
