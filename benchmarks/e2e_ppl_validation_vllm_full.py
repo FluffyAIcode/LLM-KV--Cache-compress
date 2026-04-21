@@ -170,6 +170,7 @@ class CodecState:
     k_centroids_file: str | None = None
     v_centroids_file: str | None = None
     k_outlier_threshold: float | None = None
+    v_outlier_threshold: float | None = None
     boundary_skip_layers: set[int] = set()
     q_precond: QPrecond | None = None
     share_basis_k: bool = False
@@ -330,7 +331,7 @@ def _apply_k_guardrails(
     target_rank = max(2, int(hd * CodecState.rsvd_target_rank_factor))
     if v_ref:
         centroids = CodecState.v_centroids_file
-        outlier_thr = None
+        outlier_thr = CodecState.v_outlier_threshold
         share = CodecState.share_basis_v
         metric = "mse"
     else:
@@ -523,6 +524,11 @@ def main() -> int:
     ap.add_argument("--v-centroids", type=str, default=None)
     ap.add_argument("--outlier-threshold", type=float, default=None,
                     help="K residual outlier T (e.g. 2.0 for v1.3 PPL)")
+    ap.add_argument("--v-outlier-threshold", type=float, default=None,
+                    help="V residual outlier T. Unset by default (V has no "
+                         "outlier compensation in SPRINT_CLOSEOUT v1.3 PPL); "
+                         "enables symmetric outlier compensation on V when "
+                         "set (e.g. 2.0).")
     ap.add_argument("--boundary-skip-layers", type=int, nargs="*",
                     default=[0, 1, 7, 14, 26, 27],
                     help="Layer indices kept at full precision (bf16)")
@@ -552,6 +558,7 @@ def main() -> int:
     CodecState.k_centroids_file = args.k_centroids
     CodecState.v_centroids_file = args.v_centroids
     CodecState.k_outlier_threshold = args.outlier_threshold
+    CodecState.v_outlier_threshold = args.v_outlier_threshold
     CodecState.boundary_skip_layers = set(args.boundary_skip_layers or [])
     CodecState.share_basis_v = args.share_basis_v
     CodecState.compress_stream = args.compress_stream
@@ -646,6 +653,7 @@ def main() -> int:
         "k_centroids": args.k_centroids,
         "v_centroids": args.v_centroids,
         "outlier_threshold": args.outlier_threshold,
+        "v_outlier_threshold": args.v_outlier_threshold,
         "boundary_skip_layers": sorted(CodecState.boundary_skip_layers),
         "share_basis_v": args.share_basis_v,
         "n_passages": len(per_passage),

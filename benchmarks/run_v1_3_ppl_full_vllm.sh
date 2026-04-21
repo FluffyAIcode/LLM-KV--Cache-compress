@@ -20,6 +20,7 @@ BLOCK_SIZE="${BLOCK_SIZE:-512}"
 BIT_WIDTH_K="${BIT_WIDTH_K:-3}"
 BIT_WIDTH_V="${BIT_WIDTH_V:-2}"
 OUTLIER_THRESHOLD="${OUTLIER_THRESHOLD:-2.0}"
+V_OUTLIER_THRESHOLD="${V_OUTLIER_THRESHOLD:-}"
 N_PASSAGES="${N_PASSAGES:-4}"
 VR="${VARIANCE_RATIO:-0.95}"
 PCA_METHOD="${PCA_METHOD:-randomized}"
@@ -57,6 +58,7 @@ echo "[run] e2e_ppl_validation_vllm_full.py (using $PYTHON_BIN)"
     --k-centroids "$K_CENTROIDS" \
     --v-centroids "$V_CENTROIDS" \
     --outlier-threshold "$OUTLIER_THRESHOLD" \
+    ${V_OUTLIER_THRESHOLD:+--v-outlier-threshold "$V_OUTLIER_THRESHOLD"} \
     --boundary-skip-layers $BOUNDARY_LAYERS \
     --compress-stream "$COMPRESS_STREAM" \
     --n-passages "$N_PASSAGES" \
