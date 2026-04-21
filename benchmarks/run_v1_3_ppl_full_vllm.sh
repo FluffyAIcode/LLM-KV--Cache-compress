@@ -52,6 +52,15 @@ if [ -n "${PREFIX_ONLY_TOKENS:-}" ] && [ "${PREFIX_ONLY_TOKENS}" -gt 0 ]; then
     EXTRA_ARGS+=(--prefix-only-tokens "$PREFIX_ONLY_TOKENS")
 fi
 
+# Allow K_CENTROIDS="" (or "none") to request Gaussian default centroids
+# (no --k-centroids flag). Useful when calibrated centroids do not exist
+# at the requested bit-width (SPRINT_CLOSEOUT notes b=4 does not benefit
+# from Lloyd-Max calibration; ds_K_b4_centroids.f32 is not shipped).
+K_CENT_ARG=(--k-centroids "$K_CENTROIDS")
+V_CENT_ARG=(--v-centroids "$V_CENTROIDS")
+case "${K_CENTROIDS,,}" in ''|none|off|skip) K_CENT_ARG=();; esac
+case "${V_CENTROIDS,,}" in ''|none|off|skip) V_CENT_ARG=();; esac
+
 "$PYTHON_BIN" benchmarks/e2e_ppl_validation_vllm_full.py \
     --model-path "$MODEL_PATH" \
     --model-name "$MODEL_NAME" \
@@ -62,8 +71,8 @@ fi
     --variance-ratio "$VR" \
     --pca-method "$PCA_METHOD" \
     --q-calib "$Q_CALIB" \
-    --k-centroids "$K_CENTROIDS" \
-    --v-centroids "$V_CENTROIDS" \
+    "${K_CENT_ARG[@]}" \
+    "${V_CENT_ARG[@]}" \
     --outlier-threshold "$OUTLIER_THRESHOLD" \
     --boundary-skip-layers $BOUNDARY_LAYERS \
     --n-passages "$N_PASSAGES" \
