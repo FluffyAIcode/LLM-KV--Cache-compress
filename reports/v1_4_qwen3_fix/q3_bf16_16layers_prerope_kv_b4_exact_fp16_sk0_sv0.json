@@ -1,0 +1,663 @@
+{
+  "model_name": "q3_bf16_16layers",
+  "ctx_len": 2048,
+  "n_eval": 64,
+  "bit_width": 4,
+  "pca_method": "exact",
+  "variance_ratio": 1.0,
+  "skeleton_dtype": "fp16",
+  "share_basis_k": false,
+  "share_basis_v": false,
+  "compress": "kv",
+  "architecture": "pre_rope_cache",
+  "per_passage": [
+    {
+      "metrics": {
+        "mean_kl": 0.34788575768470764,
+        "top1_agreement": 0.7142857313156128,
+        "ppl_ref": 59.6350212097168,
+        "ppl_alt": 70.59881591796875,
+        "ppl_delta_rel": 0.18384826183319092
+      },
+      "stats": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 1,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 2,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 3,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 4,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 5,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 6,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 7,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 8,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0187438436,
+            "v_mse": 0.0162861719855346
+          },
+          {
+            "layer": 9,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0135956463,
+            "v_mse": 0.020582883171213578
+          },
+          {
+            "layer": 10,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0092519197,
+            "v_mse": 0.021518807552290964
+          },
+          {
+            "layer": 11,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0320675065,
+            "v_mse": 0.04060473811600394
+          },
+          {
+            "layer": 12,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.015621356,
+            "v_mse": 0.054946090395133644
+          },
+          {
+            "layer": 13,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.025556212,
+            "v_mse": 0.06435103515056285
+          },
+          {
+            "layer": 14,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0204283955,
+            "v_mse": 0.06671180158434763
+          },
+          {
+            "layer": 15,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0118209894,
+            "v_mse": 0.0756999276962888
+          },
+          {
+            "layer": 16,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0305501746,
+            "v_mse": 0.11009899964598949
+          },
+          {
+            "layer": 17,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.015739591,
+            "v_mse": 0.24078249855155837
+          },
+          {
+            "layer": 18,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0140413254,
+            "v_mse": 0.23060256726081063
+          },
+          {
+            "layer": 19,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0152158393,
+            "v_mse": 0.3691814402254343
+          },
+          {
+            "layer": 20,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 21,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 22,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 23,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 24,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 25,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 26,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 27,
+            "boundary_uncompressed": true
+          }
+        ],
+        "n_full": 12
+      }
+    },
+    {
+      "metrics": {
+        "mean_kl": 0.36920157074928284,
+        "top1_agreement": 0.761904776096344,
+        "ppl_ref": 13.289837837219238,
+        "ppl_alt": 19.420177459716797,
+        "ppl_delta_rel": 0.4612802565097809
+      },
+      "stats": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 1,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 2,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 3,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 4,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 5,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 6,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 7,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 8,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0190536815,
+            "v_mse": 0.017316920813012372
+          },
+          {
+            "layer": 9,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0136906052,
+            "v_mse": 0.020903681155067702
+          },
+          {
+            "layer": 10,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0099150552,
+            "v_mse": 0.02154162251997319
+          },
+          {
+            "layer": 11,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0337262581,
+            "v_mse": 0.0395972228078265
+          },
+          {
+            "layer": 12,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0155803655,
+            "v_mse": 0.05484327523913082
+          },
+          {
+            "layer": 13,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0250075844,
+            "v_mse": 0.06432454386172473
+          },
+          {
+            "layer": 14,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0201091463,
+            "v_mse": 0.06743164067956693
+          },
+          {
+            "layer": 15,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0120061477,
+            "v_mse": 0.07556367099703488
+          },
+          {
+            "layer": 16,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0306048388,
+            "v_mse": 0.10851147838565854
+          },
+          {
+            "layer": 17,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0153433087,
+            "v_mse": 0.23856776532219154
+          },
+          {
+            "layer": 18,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0141619086,
+            "v_mse": 0.2283010457514191
+          },
+          {
+            "layer": 19,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0156042345,
+            "v_mse": 0.36618615550314815
+          },
+          {
+            "layer": 20,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 21,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 22,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 23,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 24,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 25,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 26,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 27,
+            "boundary_uncompressed": true
+          }
+        ],
+        "n_full": 12
+      }
+    },
+    {
+      "metrics": {
+        "mean_kl": 0.48424896597862244,
+        "top1_agreement": 0.6666666865348816,
+        "ppl_ref": 7.021605491638184,
+        "ppl_alt": 9.58114242553711,
+        "ppl_delta_rel": 0.3645230233669281
+      },
+      "stats": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 1,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 2,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 3,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 4,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 5,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 6,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 7,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 8,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.019527188,
+            "v_mse": 0.017545678673329478
+          },
+          {
+            "layer": 9,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0142222589,
+            "v_mse": 0.02183604011195087
+          },
+          {
+            "layer": 10,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0105159258,
+            "v_mse": 0.021946539094957276
+          },
+          {
+            "layer": 11,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0338400437,
+            "v_mse": 0.04305828365865323
+          },
+          {
+            "layer": 12,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0165829165,
+            "v_mse": 0.05943071605431645
+          },
+          {
+            "layer": 13,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0267850819,
+            "v_mse": 0.07012238255446951
+          },
+          {
+            "layer": 14,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0203431407,
+            "v_mse": 0.07186719272067944
+          },
+          {
+            "layer": 15,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0125047435,
+            "v_mse": 0.07753032891788218
+          },
+          {
+            "layer": 16,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0318381417,
+            "v_mse": 0.1127684287548168
+          },
+          {
+            "layer": 17,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0154519331,
+            "v_mse": 0.23832005399197975
+          },
+          {
+            "layer": 18,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0147208541,
+            "v_mse": 0.2350356387876898
+          },
+          {
+            "layer": 19,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0164038874,
+            "v_mse": 0.36709932024057584
+          },
+          {
+            "layer": 20,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 21,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 22,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 23,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 24,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 25,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 26,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 27,
+            "boundary_uncompressed": true
+          }
+        ],
+        "n_full": 12
+      }
+    },
+    {
+      "metrics": {
+        "mean_kl": 0.24773478507995605,
+        "top1_agreement": 0.9047619104385376,
+        "ppl_ref": 11.871164321899414,
+        "ppl_alt": 14.150473594665527,
+        "ppl_delta_rel": 0.19200384616851807
+      },
+      "stats": {
+        "per_layer": [
+          {
+            "layer": 0,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 1,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 2,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 3,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 4,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 5,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 6,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 7,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 8,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0197693694,
+            "v_mse": 0.018433581377084635
+          },
+          {
+            "layer": 9,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0143510487,
+            "v_mse": 0.021918664808732512
+          },
+          {
+            "layer": 10,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0106240556,
+            "v_mse": 0.021788967312706707
+          },
+          {
+            "layer": 11,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0355416269,
+            "v_mse": 0.04310144870567661
+          },
+          {
+            "layer": 12,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0174885756,
+            "v_mse": 0.06380579265346215
+          },
+          {
+            "layer": 13,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0284932773,
+            "v_mse": 0.07410698808055721
+          },
+          {
+            "layer": 14,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0209240698,
+            "v_mse": 0.07801362207727955
+          },
+          {
+            "layer": 15,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.012424287,
+            "v_mse": 0.07774480855977126
+          },
+          {
+            "layer": 16,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0325737567,
+            "v_mse": 0.11160170077818124
+          },
+          {
+            "layer": 17,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0155269081,
+            "v_mse": 0.24097409228282107
+          },
+          {
+            "layer": 18,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0151548608,
+            "v_mse": 0.23370298688234326
+          },
+          {
+            "layer": 19,
+            "hd": 128,
+            "seq": 2048,
+            "k_mse": 0.0166778255,
+            "v_mse": 0.36032640440638825
+          },
+          {
+            "layer": 20,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 21,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 22,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 23,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 24,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 25,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 26,
+            "boundary_uncompressed": true
+          },
+          {
+            "layer": 27,
+            "boundary_uncompressed": true
+          }
+        ],
+        "n_full": 12
+      }
+    }
+  ]
+}
