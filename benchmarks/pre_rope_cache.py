@@ -50,7 +50,14 @@ def _rotate_half_split(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) ->
     return (x * cos) + (_rotate_half(x) * sin)
 
 
-def _build_pre_rope_forward(eager_attention_forward: Callable):
+def _build_pre_rope_forward(
+    eager_attention_forward: Callable,
+    *,
+    apply_rope: Callable | None = None,
+    rotary_adapter: Callable | None = None,
+    uses_qk_norm: bool = False,
+    pass_sliding_window: bool = True,
+):
     """Factory: return a forward() that stores K_pre in cache and applies
     RoPE on the full stacked K at read time.
 
@@ -62,6 +69,25 @@ def _build_pre_rope_forward(eager_attention_forward: Callable):
     just a list append; no extra compute.  The calibration driver
     installs the recorder, runs forward on calibration data, and
     consumes the lists to build Σ_q per (layer, kv-head).
+
+    Parameters
+    ----------
+    apply_rope
+        If provided, used instead of the built-in `_rotate_half_split` —
+        allows family-specific RoPE conventions (e.g., GLM's
+        interleaved rotation).  Signature: `apply_rope(q, k, cos, sin)
+        -> (q_rot, k_rot)`.  If None, falls back to the Qwen/Llama
+        split-half convention.
+    rotary_adapter
+        Optional adapter `(rotary, dummy, positions) -> (cos, sin)` for
+        families whose rotary expects a different call signature.  If
+        None, uses `rotary(dummy, positions)` (Qwen-style).
+    uses_qk_norm
+        If True, calls `self.q_norm` and `self.k_norm` after q_proj/k_proj
+        (Qwen3 style).
+    pass_sliding_window
+        Whether to pass `sliding_window=getattr(self, 'sliding_window',
+        None)` to `eager_attention_forward` (Qwen2) vs. omit it (GLM).
     """
 
     def forward(
@@ -78,6 +104,16 @@ def _build_pre_rope_forward(eager_attention_forward: Callable):
         q_pre = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
         k_pre_new = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
         v_new = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+
+        if uses_qk_norm:
+            # Qwen3-style: RMSNorm applied BEFORE RoPE, so what we cache is
+            # post-norm pre-RoPE K.  We rewrap: q_pre/k_pre must go through
+            # q_norm/k_norm before the rotary so downstream attention matches
+            # the unpatched model.
+            q_pre_shape = q_pre.transpose(1, 2).contiguous()  # (B, S, H, D)
+            q_pre = self.q_norm(q_pre_shape).transpose(1, 2)
+            k_pre_new_shape = k_pre_new.transpose(1, 2).contiguous()
+            k_pre_new = self.k_norm(k_pre_new_shape).transpose(1, 2)
 
         recorder = getattr(self.config, "_q_recorder", None)
         if recorder is not None:
@@ -100,12 +136,27 @@ def _build_pre_rope_forward(eager_attention_forward: Callable):
         device = hidden_states.device
         full_positions = torch.arange(seq_total, device=device).unsqueeze(0).expand(bsz, -1)
         dummy = torch.zeros(bsz, seq_total, hd, device=device, dtype=hidden_states.dtype)
-        cos_full, sin_full = rotary(dummy, full_positions)
+        if rotary_adapter is not None:
+            cos_full, sin_full = rotary_adapter(rotary, dummy, full_positions)
+        else:
+            cos_full, sin_full = rotary(dummy, full_positions)
         cos_new = cos_full[:, start_pos:]
         sin_new = sin_full[:, start_pos:]
 
-        q_post = _rotate_half_split(q_pre, cos_new, sin_new)
-        k_post_all = _rotate_half_split(k_pre_all, cos_full, sin_full)
+        if apply_rope is not None:
+            q_post, _ = apply_rope(q_pre, q_pre, cos_new, sin_new)
+            _, k_post_all = apply_rope(k_pre_all, k_pre_all, cos_full, sin_full)
+        else:
+            q_post = _rotate_half_split(q_pre, cos_new, sin_new)
+            k_post_all = _rotate_half_split(k_pre_all, cos_full, sin_full)
+
+        attn_kwargs = {
+            "dropout": 0.0 if not self.training else self.attention_dropout,
+            "scaling": self.scaling,
+        }
+        if pass_sliding_window:
+            attn_kwargs["sliding_window"] = getattr(self, "sliding_window", None)
+        attn_kwargs.update(kwargs)
 
         attn_output, attn_weights = eager_attention_forward(
             self,
@@ -113,10 +164,7 @@ def _build_pre_rope_forward(eager_attention_forward: Callable):
             k_post_all,
             v_all,
             attention_mask,
-            dropout=0.0 if not self.training else self.attention_dropout,
-            scaling=self.scaling,
-            sliding_window=getattr(self, "sliding_window", None),
-            **kwargs,
+            **attn_kwargs,
         )
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
@@ -126,35 +174,76 @@ def _build_pre_rope_forward(eager_attention_forward: Callable):
     return forward
 
 
+def _find_first(model: nn.Module, cls):
+    for m in model.modules():
+        if isinstance(m, cls):
+            return m
+    return None
+
+
 def install(model: nn.Module) -> dict:
     """Monkey-patch every attention module so that cache stores pre-RoPE K.
 
+    Supported families (auto-detected by architecture name):
+    - Qwen2 (DeepSeek-R1-Distill, Qwen2.5)
+    - Qwen3 (has q_norm/k_norm pre-RoPE)
+    - GLM / GLM-edge (interleaved RoPE + partial rotation)
+    - Gemma3 (q_norm/k_norm, alternating full/sliding attention layers)
+
     Returns a dict with metadata about the patch, for diagnostics.
     """
-    from transformers.models.qwen2.modeling_qwen2 import (
-        Qwen2Attention,
-        Qwen2RotaryEmbedding,
-        eager_attention_forward as qwen2_eager,
-    )
-
     cfg = model.config.get_text_config(decoder=True)
-    rotary = None
-    for m in model.modules():
-        if isinstance(m, Qwen2RotaryEmbedding):
-            rotary = m
-            break
-    if rotary is None:
-        rotary = Qwen2RotaryEmbedding(config=cfg).to(next(model.parameters()).device)
+    arch = getattr(model.config, "architectures", ["?"])[0].lower()
 
+    if "qwen2" in arch:
+        from transformers.models.qwen2.modeling_qwen2 import (
+            Qwen2Attention, Qwen2RotaryEmbedding,
+            eager_attention_forward as eager,
+        )
+        cls, rot_cls, uses_qk_norm = Qwen2Attention, Qwen2RotaryEmbedding, False
+        apply_rope = None
+        pass_sw = True
+        family = "qwen2"
+    elif "qwen3" in arch:
+        from transformers.models.qwen3.modeling_qwen3 import (
+            Qwen3Attention, Qwen3RotaryEmbedding,
+            eager_attention_forward as eager,
+        )
+        cls, rot_cls, uses_qk_norm = Qwen3Attention, Qwen3RotaryEmbedding, True
+        apply_rope = None
+        pass_sw = True
+        family = "qwen3"
+    elif "glm" in arch:
+        from transformers.models.glm.modeling_glm import (
+            GlmAttention, GlmRotaryEmbedding,
+            eager_attention_forward as eager,
+            apply_rotary_pos_emb as glm_apply_rope,
+        )
+        cls, rot_cls, uses_qk_norm = GlmAttention, GlmRotaryEmbedding, False
+        apply_rope = glm_apply_rope
+        pass_sw = False
+        family = "glm"
+    else:
+        raise NotImplementedError(
+            f"pre_rope_cache.install: architecture '{arch}' not supported. "
+            f"Supported: qwen2, qwen3, glm."
+        )
+
+    rotary = _find_first(model, rot_cls)
+    if rotary is None:
+        rotary = rot_cls(config=cfg).to(next(model.parameters()).device)
     cfg._rotary_emb = rotary
 
     patched = 0
-    fwd = _build_pre_rope_forward(qwen2_eager)
+    fwd = _build_pre_rope_forward(
+        eager, apply_rope=apply_rope, uses_qk_norm=uses_qk_norm,
+        pass_sliding_window=pass_sw,
+    )
     for m in model.modules():
-        if isinstance(m, Qwen2Attention):
+        if isinstance(m, cls):
             m.config = cfg
             m.forward = types.MethodType(fwd, m)
             patched += 1
 
-    assert patched > 0, "no Qwen2Attention found — model family not yet supported"
-    return {"patched_layers": patched, "family": "qwen2"}
+    assert patched > 0, f"no {cls.__name__} found — model family mismatch"
+    return {"patched_layers": patched, "family": family}

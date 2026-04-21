@@ -80,7 +80,10 @@ def calibrate(model_path: str, out_path: Path, *,
     print(f"  patched {info['patched_layers']} attention layers", flush=True)
 
     cfg = model.config.get_text_config(decoder=True)
-    head_dim = cfg.hidden_size // cfg.num_attention_heads
+    # Qwen3 and similar families set an explicit head_dim that differs
+    # from hidden_size // num_attention_heads. Honor the explicit value
+    # when present; fall back to the classical formula otherwise.
+    head_dim = getattr(cfg, "head_dim", None) or (cfg.hidden_size // cfg.num_attention_heads)
     n_q = cfg.num_attention_heads
     n_kv = cfg.num_key_value_heads
     groups = _kv_group_ranges(n_q, n_kv)
