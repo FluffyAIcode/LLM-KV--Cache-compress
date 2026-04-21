@@ -262,7 +262,11 @@ def analyse_layer(
     if layer_id in boundary_skip:
         return {"layer": layer_id, "boundary_skip": True}
     n, nkv, hd = K.shape
-    n_comp = (n // block_size) * block_size
+    # Flattened row count = n * nkv rows of dim hd (one row per kv-head
+    # per token). The codec sees this flat stream; block_size applies to
+    # the flat stream.
+    n_total_rows = n * nkv
+    n_comp = (n_total_rows // block_size) * block_size
     if n_comp == 0:
         return {"layer": layer_id, "skipped_short": True}
     rank = max(2, hd // 2)
@@ -282,34 +286,50 @@ def analyse_layer(
         share_basis=False, centroids_file=k_centroids,
         outlier_threshold=k_outlier,
     )
-    k_dec_ = k_dec.reshape(-1, nkv, hd)
+    # Compare against flat ground-truth (before unwhiten), so the codec's
+    # reported mean_block_mse and ours agree. Also compute unwhitened
+    # residual norm for a "what attention actually sees" metric.
+    k_gt_flat = k_flat
+    k_err_flat = k_gt_flat - k_dec
+    k_mse_vs_flat = float(np.mean(k_err_flat ** 2))
+    # Per-row (== per kv-head per token) reshape for the unwhiten step.
+    # We want rows_per_head = n_comp // nkv; only full-head groups.
+    rows_per_head = (n_comp // nkv) * nkv  # already multiple of nkv by prev div
+    # Shape the decoded back to [n_rows_covered // nkv, nkv, hd]. Since
+    # k_enc.reshape(-1, hd) interleaves (token, kv_head) pairs in
+    # row-major order (token-major, kv_head-minor), the same reshape
+    # is its inverse.
+    n_tokens_covered = n_comp // nkv
+    k_dec_3d = k_dec.reshape(n_tokens_covered, nkv, hd)
     if k_whiten_used:
-        k_dec_full = q_precond.unwhiten(k_dec_, layer=layer_id)
+        k_hat = q_precond.unwhiten(k_dec_3d, layer=layer_id)
     else:
-        k_dec_full = k_dec_
-    # Per-vector relative residual norm.
-    k_gt = K[:n_comp]
-    k_err = k_gt - k_dec_full
-    k_mse_vs = float(np.mean(k_err ** 2))
-    k_relnorm = float(np.linalg.norm(k_err) / max(np.linalg.norm(k_gt), 1e-30))
+        k_hat = k_dec_3d
+    k_gt_3d = K[:n_tokens_covered]
+    k_err_3d = k_gt_3d - k_hat
+    k_mse_vs = float(np.mean(k_err_3d ** 2))
+    k_relnorm = float(np.linalg.norm(k_err_3d)
+                      / max(np.linalg.norm(k_gt_3d), 1e-30))
 
-    # V path.
+    # V path (no whitening).
     v_flat = V.reshape(-1, hd).astype(np.float32, copy=False)[:n_comp]
     v_dec, v_rep = rust_roundtrip(
         v_flat, block_size=block_size, bit_width=bit_width_v,
         rsvd_target_rank=rank, metric="mse", share_basis=True,
         centroids_file=v_centroids, outlier_threshold=None,
     )
-    v_dec_ = v_dec.reshape(-1, nkv, hd)
-    v_err = V[:n_comp] - v_dec_
-    v_mse_vs = float(np.mean(v_err ** 2))
-    v_relnorm = float(np.linalg.norm(v_err) /
-                      max(np.linalg.norm(V[:n_comp]), 1e-30))
+    v_dec_3d = v_dec.reshape(n_tokens_covered, nkv, hd)
+    v_gt_3d = V[:n_tokens_covered]
+    v_err_3d = v_gt_3d - v_dec_3d
+    v_mse_vs = float(np.mean(v_err_3d ** 2))
+    v_relnorm = float(np.linalg.norm(v_err_3d)
+                      / max(np.linalg.norm(v_gt_3d), 1e-30))
 
     return {
         "layer": layer_id,
         "n_vecs": int(n),
-        "n_compressible": int(n_comp),
+        "n_compressible_rows": int(n_comp),
+        "n_tokens_covered": int(n_tokens_covered),
         "K": {
             "codec_mean_block_mse": float(k_rep.get("mean_block_mse", -1)),
             "mse_vs_ground_truth": k_mse_vs,
