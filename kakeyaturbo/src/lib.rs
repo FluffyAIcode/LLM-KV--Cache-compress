@@ -53,8 +53,13 @@ pub mod wht;
 pub use besicovitch::{
     decode_block as besicovitch_decode_block,
     decode_block_full as besicovitch_decode_block_full,
+    decode_vector as besicovitch_decode_vector,
+    deserialize_code as besicovitch_deserialize_code,
     encode_block as besicovitch_encode_block,
     encode_block_full as besicovitch_encode_block_full,
+    encode_vector as besicovitch_encode_vector,
+    serialize_code as besicovitch_serialize_code,
+    serialized_nbytes as besicovitch_serialized_nbytes,
     BesicovitchCode, BesicovitchParams, BesicovitchSkeleton,
     DirectionCodebook, MagnitudeMode, MagnitudePayload,
 };

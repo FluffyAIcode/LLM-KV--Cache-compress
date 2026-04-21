@@ -158,6 +158,7 @@ fn main() {
         exact_rank_cap: None,
         custom_centroids: None,
         outlier_threshold: None,
+        residual_besi: None,
     };
 
     let weights = vec![1.0_f32; bs];

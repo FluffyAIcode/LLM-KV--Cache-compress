@@ -7,6 +7,7 @@
 //! Since v1.2 all PCA/K-means tensors inside are stored as bf16 (see
 //! the A optimisation) — the `nbytes` accounting reflects that.
 
+use crate::besicovitch::BesicovitchParams;
 use crate::kmeans::KmeansFit;
 use crate::pca::PcaFit;
 
@@ -22,8 +23,15 @@ pub struct Skeleton {
     pub rotation_seed: u32,
     /// Length of the residual after WHT (power of two ≥ `d_eff`).
     pub wht_len: usize,
-    /// Bits per residual coefficient (1..=4).
+    /// Bits per residual coefficient (1..=4).  Only meaningful when
+    /// `residual_besi` is `None` (Lloyd-Max path).
     pub bit_width: u8,
+    /// When `Some`, the residual was encoded with the Besicovitch-product
+    /// codec instead of Lloyd-Max.  The residual bytes live in
+    /// `Code::residual_besi`; decode dispatches on this field.  The
+    /// DirectionCodebook is deterministic from `(group_size,
+    /// direction_bits)`, so we don't need to carry it.
+    pub residual_besi: Option<BesicovitchParams>,
 }
 
 impl Skeleton {
@@ -59,6 +67,7 @@ mod tests {
             rotation_seed: 42,
             wht_len: 2,
             bit_width: 3,
+            residual_besi: None,
         }
     }
 

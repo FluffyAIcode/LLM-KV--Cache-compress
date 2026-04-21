@@ -66,7 +66,8 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
                    skeleton_dtype: str = "fp16",
                    exact_rank_cap: int | None = None,
                    centroids_file: str | None = None,
-                   outlier_threshold: float | None = None):
+                   outlier_threshold: float | None = None,
+                   residual_besi: dict | None = None):
     import tempfile
     with tempfile.TemporaryDirectory(dir="/tmp") as td:
         tdp = Path(td)
@@ -94,6 +95,11 @@ def rust_roundtrip(arr: np.ndarray, block_size: int, bit_width: int,
             cmd += ["--centroids-file", str(centroids_file)]
         if outlier_threshold is not None:
             cmd += ["--outlier-threshold", str(outlier_threshold)]
+        if residual_besi is not None:
+            cmd += ["--residual-besi-direction-bits", str(residual_besi["direction_bits"]),
+                    "--residual-besi-group-size", str(residual_besi.get("group_size", 2)),
+                    "--residual-besi-magnitude-bits", str(residual_besi["magnitude_bits"]),
+                    "--residual-besi-magnitude-mode", residual_besi.get("magnitude_mode", "quantized")]
         if share_basis:
             cmd.append("--share-basis")
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -172,7 +178,8 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     besi_magnitude_bits: int = 4,
                     besi_magnitude_mode: str = "quantized",
                     besi_subtract_mean: bool = True,
-                    codec_v: str | None = None) -> tuple[DynamicCache, dict]:
+                    codec_v: str | None = None,
+                    k_residual_besi: dict | None = None) -> tuple[DynamicCache, dict]:
     """Per-stream bit_width: `bit_width` applies to K (and V if bit_width_v
     is None); `bit_width_v` (if given) overrides V-stream bit width for
     asymmetric K/V codec operation.  Likewise `exact_rank_cap_v` is the
@@ -274,6 +281,7 @@ def roundtrip_cache(model, cache_ref: DynamicCache, *,
                     exact_rank_cap=exact_rank_cap,
                     centroids_file=k_centroids_eff,
                     outlier_threshold=(None if is_boundary else k_outlier_threshold),
+                    residual_besi=(None if is_boundary else k_residual_besi),
                 )
             elif codec_name == "turboquant":
                 return turboquant_k_roundtrip(
@@ -446,7 +454,8 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
              k_outlier_threshold=None, v_outlier_threshold=None,
              besi_group_size=2, besi_direction_bits=5, besi_magnitude_bits=4,
              besi_magnitude_mode="quantized", besi_subtract_mean=True,
-             codec_v=None):
+             codec_v=None,
+             k_residual_besi=None):
     ids = tok(passage, return_tensors="pt")["input_ids"]
     if ids.shape[-1] < ctx_len + n_eval:
         return None
@@ -478,6 +487,7 @@ def evaluate(model, tok, passage, ctx_len, n_eval, block_size, bit_width,
         besi_magnitude_mode=besi_magnitude_mode,
         besi_subtract_mean=besi_subtract_mean,
         codec_v=codec_v,
+        k_residual_besi=k_residual_besi,
     )
     cache_ref_fwd = copy.deepcopy(cache_ref)
     cache_alt_fwd = copy.deepcopy(cache_alt)
@@ -560,6 +570,16 @@ def main():
                     help="Besicovitch: how to encode the per-group magnitude.")
     ap.add_argument("--besi-no-subtract-mean", action="store_true",
                     help="Besicovitch: disable per-block mean subtraction.")
+    ap.add_argument("--k-residual-besi-direction-bits", type=int, default=0,
+                    help="When >0, replace Lloyd-Max K residual quantizer with "
+                         "Besicovitch-product codec (2^direction_bits directions).")
+    ap.add_argument("--k-residual-besi-group-size", type=int, default=2,
+                    help="K-residual Besi group size g (default 2 = unit circle).")
+    ap.add_argument("--k-residual-besi-magnitude-bits", type=int, default=4,
+                    help="K-residual Besi magnitude quantization bits.")
+    ap.add_argument("--k-residual-besi-magnitude-mode", type=str, default="quantized",
+                    choices=["f16", "quantized"],
+                    help="K-residual Besi magnitude encoding mode.")
     ap.add_argument("--k-outlier-threshold", type=float, default=None,
                     help="If set, outlier compensation threshold on the K "
                          "residual quantizer (scaled-residual space). "
@@ -649,6 +669,12 @@ def main():
             args.besi_magnitude_mode,
             not args.besi_no_subtract_mean,
             args.codec_v,
+            (None if args.k_residual_besi_direction_bits == 0 else {
+                "direction_bits": args.k_residual_besi_direction_bits,
+                "magnitude_bits": args.k_residual_besi_magnitude_bits,
+                "magnitude_mode": args.k_residual_besi_magnitude_mode,
+                "group_size": args.k_residual_besi_group_size,
+            }),
         )
         if res is None:
             print("    skipped (too short)"); continue

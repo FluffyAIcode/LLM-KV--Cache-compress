@@ -70,6 +70,9 @@ struct Args {
     /// and override Lloyd-Max dequantization at decode.  Typical T=2.0
     /// gives ~1-5 % outlier rate on Gaussian-like residuals.
     outlier_threshold: Option<f32>,
+    /// If set, replaces Lloyd-Max residual quantizer with Besicovitch-product
+    /// codec on the scaled (WHT + per-vector norm scaled) residual.
+    residual_besi: Option<kakeyaturbo::BesicovitchParams>,
 }
 
 fn print_help() {
@@ -112,6 +115,11 @@ fn parse_args() -> Result<Args, String> {
     let mut rsvd_power_iters: u32 = 2;
     let mut centroids_file: Option<PathBuf> = None;
     let mut outlier_threshold: Option<f32> = None;
+    let mut besi_group_size: usize = 2;
+    let mut besi_direction_bits: u8 = 0; // 0 = disabled
+    let mut besi_magnitude_bits: u8 = 4;
+    let mut besi_magnitude_mode = String::from("quantized");
+    let mut besi_subtract_mean = false;
     let mut dump_decoded: Option<PathBuf> = None;
 
     let mut i = 1;
@@ -199,6 +207,28 @@ fn parse_args() -> Result<Args, String> {
                     argv[i].parse().map_err(|e| format!("bad --outlier-threshold: {e}"))?,
                 );
             }
+            "--residual-besi-direction-bits" => {
+                i += 1;
+                besi_direction_bits = argv[i].parse()
+                    .map_err(|e| format!("bad --residual-besi-direction-bits: {e}"))?;
+            }
+            "--residual-besi-group-size" => {
+                i += 1;
+                besi_group_size = argv[i].parse()
+                    .map_err(|e| format!("bad --residual-besi-group-size: {e}"))?;
+            }
+            "--residual-besi-magnitude-bits" => {
+                i += 1;
+                besi_magnitude_bits = argv[i].parse()
+                    .map_err(|e| format!("bad --residual-besi-magnitude-bits: {e}"))?;
+            }
+            "--residual-besi-magnitude-mode" => {
+                i += 1;
+                besi_magnitude_mode = argv[i].clone();
+            }
+            "--residual-besi-subtract-mean" => {
+                besi_subtract_mean = true;
+            }
             other => return Err(format!("unknown flag {other}; try --help")),
         }
         i += 1;
@@ -226,6 +256,23 @@ fn parse_args() -> Result<Args, String> {
         dump_decoded,
         centroids_file,
         outlier_threshold,
+        residual_besi: if besi_direction_bits > 0 {
+            let mode = match besi_magnitude_mode.as_str() {
+                "f16" => kakeyaturbo::MagnitudeMode::F16,
+                "quantized" => kakeyaturbo::MagnitudeMode::QuantizedWithPerVectorScale,
+                other => return Err(format!(
+                    "bad --residual-besi-magnitude-mode {other}")),
+            };
+            Some(kakeyaturbo::BesicovitchParams {
+                group_size: besi_group_size,
+                direction_bits: besi_direction_bits,
+                magnitude_bits: besi_magnitude_bits,
+                magnitude_mode: mode,
+                subtract_mean: besi_subtract_mean,
+            })
+        } else {
+            None
+        },
     })
 }
 
@@ -333,6 +380,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         exact_rank_cap: args.exact_rank_cap,
         custom_centroids,
         outlier_threshold: args.outlier_threshold,
+        residual_besi: args.residual_besi.clone(),
     };
 
     let bs = args.block_size;

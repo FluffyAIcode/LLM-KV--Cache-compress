@@ -379,6 +379,170 @@ pub fn encode_block(
     (cb, codes)
 }
 
+/// Encode a **single** vector of length `d` against the given codebook.
+///
+/// Used internally by the kakeyaturbo codec to swap Lloyd-Max scalar
+/// quantization of the WHT-ed residual for a Besicovitch-product
+/// code.  No mean subtraction is performed (the residual is already
+/// zero-mean after PCA + k-means).
+pub fn encode_vector(
+    vector: &[f32],
+    codebook: &DirectionCodebook,
+    params: &BesicovitchParams,
+) -> BesicovitchCode {
+    assert_eq!(vector.len() % params.group_size, 0);
+    let g = params.group_size;
+    let groups = vector.len() / g;
+    let mut direction_ids = Vec::with_capacity(groups);
+    let mut raw_magnitudes = Vec::with_capacity(groups);
+    for k in 0..groups {
+        let group = &vector[k * g..(k + 1) * g];
+        let (id, alpha) = codebook.assign(group);
+        direction_ids.push(id);
+        raw_magnitudes.push(alpha);
+    }
+    let magnitudes = match params.magnitude_mode {
+        MagnitudeMode::F16 => {
+            MagnitudePayload::F16(raw_magnitudes.iter().map(|&a| f16::from_f32(a)).collect())
+        }
+        MagnitudeMode::QuantizedWithPerVectorScale => {
+            let scale = raw_magnitudes
+                .iter()
+                .fold(0.0_f32, |m, &v| m.max(v.abs()))
+                .max(1e-12);
+            let bits = params.magnitude_bits;
+            let centroids = crate::quantize::centroids_gaussian(bits);
+            let indices: Vec<u8> = raw_magnitudes
+                .iter()
+                .map(|&a| nearest_centroid_idx(centroids, a / scale))
+                .collect();
+            let packed = crate::quantize::pack_bits(&indices, bits);
+            MagnitudePayload::QuantizedWithScale {
+                packed_indices: packed,
+                scale: f16::from_f32(scale),
+            }
+        }
+    };
+    BesicovitchCode { direction_ids, magnitudes }
+}
+
+/// Decode a **single** vector's Besicovitch code back to a vector of
+/// length `d = groups * g`.
+#[must_use]
+pub fn decode_vector(
+    code: &BesicovitchCode,
+    codebook: &DirectionCodebook,
+    params: &BesicovitchParams,
+) -> Vec<f32> {
+    let g = params.group_size;
+    let groups = code.direction_ids.len();
+    let alphas: Vec<f32> = match &code.magnitudes {
+        MagnitudePayload::F16(v) => v.iter().map(|x| x.to_f32()).collect(),
+        MagnitudePayload::QuantizedWithScale { packed_indices, scale } => {
+            let bits = params.magnitude_bits;
+            let indices = crate::quantize::unpack_bits(packed_indices, bits, groups);
+            let centroids = crate::quantize::centroids_gaussian(bits);
+            let s = scale.to_f32();
+            indices.iter().map(|&i| centroids[i as usize] * s).collect()
+        }
+    };
+    let mut out = Vec::with_capacity(groups * g);
+    for k in 0..groups {
+        let id = code.direction_ids[k] as usize;
+        let d_vec = codebook.direction(id);
+        let alpha = alphas[k];
+        for j in 0..g {
+            out.push(alpha * d_vec[j]);
+        }
+    }
+    out
+}
+
+/// Pack a per-vector [`BesicovitchCode`] into a contiguous byte buffer
+/// for storage alongside other codec metadata.  Layout:
+///
+/// 1. Direction indices: `⌈G · direction_bits / 8⌉` packed bytes
+/// 2. Magnitude payload:
+///    - `F16`: `G × 2` bytes
+///    - `QuantizedWithScale`: `⌈G · magnitude_bits / 8⌉ + 2` bytes
+pub fn serialize_code(code: &BesicovitchCode, params: &BesicovitchParams) -> Vec<u8> {
+    let groups = code.direction_ids.len();
+    let indices: Vec<u8> = code.direction_ids.iter().map(|&id| id as u8).collect();
+    // For direction_bits > 8 we'd need u16 packing; for the ranges
+    // we use (d ∈ [1,10]) u8 is fine for ≤8 bits.  Assert this.
+    assert!(params.direction_bits <= 8,
+            "serialize_code currently assumes direction_bits ≤ 8, got {}",
+            params.direction_bits);
+    let mut out = crate::quantize::pack_bits(&indices, params.direction_bits);
+    match &code.magnitudes {
+        MagnitudePayload::F16(vals) => {
+            for v in vals {
+                out.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        MagnitudePayload::QuantizedWithScale { packed_indices, scale } => {
+            out.extend_from_slice(packed_indices);
+            out.extend_from_slice(&scale.to_le_bytes());
+        }
+    }
+    let _ = groups;
+    out
+}
+
+/// Inverse of [`serialize_code`].  Requires `groups` to reconstruct
+/// the unpacked index/magnitude count.
+pub fn deserialize_code(
+    bytes: &[u8],
+    groups: usize,
+    params: &BesicovitchParams,
+) -> BesicovitchCode {
+    assert!(params.direction_bits <= 8,
+            "deserialize_code currently assumes direction_bits ≤ 8, got {}",
+            params.direction_bits);
+    let dir_bits = groups * params.direction_bits as usize;
+    let dir_bytes = dir_bits.div_ceil(8);
+    let (dir_slice, rest) = bytes.split_at(dir_bytes);
+    let indices = crate::quantize::unpack_bits(dir_slice, params.direction_bits, groups);
+    let direction_ids: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
+    let magnitudes = match params.magnitude_mode {
+        MagnitudeMode::F16 => {
+            let mut v = Vec::with_capacity(groups);
+            for k in 0..groups {
+                let lo = rest[k * 2];
+                let hi = rest[k * 2 + 1];
+                v.push(f16::from_le_bytes([lo, hi]));
+            }
+            MagnitudePayload::F16(v)
+        }
+        MagnitudeMode::QuantizedWithPerVectorScale => {
+            let mag_bits = groups * params.magnitude_bits as usize;
+            let mag_bytes = mag_bits.div_ceil(8);
+            let packed_indices = rest[..mag_bytes].to_vec();
+            let scale_bytes = [rest[mag_bytes], rest[mag_bytes + 1]];
+            let scale = f16::from_le_bytes(scale_bytes);
+            MagnitudePayload::QuantizedWithScale {
+                packed_indices,
+                scale,
+            }
+        }
+    };
+    BesicovitchCode { direction_ids, magnitudes }
+}
+
+/// Byte size of the serialized form (same accounting as
+/// [`BesicovitchCode::nbytes`]).
+#[must_use]
+pub fn serialized_nbytes(groups: usize, params: &BesicovitchParams) -> usize {
+    let dir_bytes = (groups * params.direction_bits as usize).div_ceil(8);
+    let mag_bytes = match params.magnitude_mode {
+        MagnitudeMode::F16 => groups * 2,
+        MagnitudeMode::QuantizedWithPerVectorScale => {
+            (groups * params.magnitude_bits as usize).div_ceil(8) + 2
+        }
+    };
+    dir_bytes + mag_bytes
+}
+
 /// Decode a block back to `n × D` reconstructed vectors.  If the
 /// encoder used `subtract_mean`, pass the same skeleton here.  If not,
 /// pass an empty skeleton.
@@ -581,6 +745,66 @@ mod tests {
         // b_mag=4 bits → ~0.03 relative-error per magnitude,
         // plus direction quantization error.
         assert!(err < 0.1, "quantized-magnitude MSE too large: {err}");
+    }
+
+    #[test]
+    fn encode_vector_and_serialize_round_trip() {
+        // encode_vector -> decode_vector must match block-style call.
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(314);
+        let d = 64;
+        let mut vec_in = vec![0.0_f32; d];
+        for v in &mut vec_in {
+            *v = rng.r#gen::<f32>() * 2.0 - 1.0;
+        }
+        let params = BesicovitchParams {
+            group_size: 2, direction_bits: 5, magnitude_bits: 4,
+            magnitude_mode: MagnitudeMode::QuantizedWithPerVectorScale,
+            subtract_mean: false,
+        };
+        let cb = DirectionCodebook::build(params.group_size, params.direction_bits);
+        let code = encode_vector(&vec_in, &cb, &params);
+        let rec = decode_vector(&code, &cb, &params);
+        assert_eq!(rec.len(), d);
+        let e: f32 = vec_in.iter().zip(&rec).map(|(a, b)| (a - b).powi(2)).sum::<f32>() / d as f32;
+        assert!(e < 0.1, "round-trip MSE too large: {e}");
+    }
+
+    #[test]
+    fn serialize_deserialize_round_trips_exactly() {
+        // Serialization must be lossless at the code level.
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(271);
+        for (db, mb, mode) in [
+            (3_u8, 3_u8, MagnitudeMode::QuantizedWithPerVectorScale),
+            (4, 4, MagnitudeMode::QuantizedWithPerVectorScale),
+            (6, 0, MagnitudeMode::F16),
+            (7, 0, MagnitudeMode::F16),
+        ] {
+            let params = BesicovitchParams {
+                group_size: 2, direction_bits: db, magnitude_bits: mb,
+                magnitude_mode: mode,
+                subtract_mean: false,
+            };
+            let d = 32;
+            let groups = d / params.group_size;
+            let mut vec_in = vec![0.0_f32; d];
+            for v in &mut vec_in {
+                *v = rng.r#gen::<f32>() * 2.0 - 1.0;
+            }
+            let cb = DirectionCodebook::build(params.group_size, params.direction_bits);
+            let code = encode_vector(&vec_in, &cb, &params);
+            let bytes = serialize_code(&code, &params);
+            let expected_n = serialized_nbytes(groups, &params);
+            assert_eq!(bytes.len(), expected_n,
+                       "serialized bytes mismatch for db={db} mb={mb:?}: got {} want {}",
+                       bytes.len(), expected_n);
+            let decoded = deserialize_code(&bytes, groups, &params);
+            assert_eq!(code, decoded,
+                       "serialize→deserialize mismatch for db={db} mb={mb:?}");
+        }
     }
 
     #[test]

@@ -60,6 +60,16 @@ pub struct Code {
     /// these values AFTER Lloyd-Max dequantization but BEFORE inverse
     /// WHT and un-scaling.
     pub outliers: Vec<(u16, f16)>,
+    /// Optional Besicovitch-product payload for the scaled residual
+    /// vector.  When `Some`, it *replaces* `residual_packed` +
+    /// `outliers` as the residual representation:
+    ///   - encode: after WHT + per-vector-norm scaling, feed the
+    ///     resulting `wht_len`-dim vector to `besicovitch_encode_vector`
+    ///     and serialize.
+    ///   - decode: deserialize + `besicovitch_decode_vector`, then
+    ///     inverse-scale (same path as Lloyd-Max) and inverse-WHT.
+    /// Empty when `CodecParams::residual_besi.is_none()`.
+    pub residual_besi: Vec<u8>,
 }
 
 impl Code {
@@ -67,7 +77,9 @@ impl Code {
     #[must_use]
     pub fn nbytes(&self) -> usize {
         // seg_id(4) + 3×fp16(6) + packed residual + outliers (2+2 bytes each)
+        //                       + besi payload (replaces residual when set)
         4 + 3 * 2 + self.residual_packed.len() + self.outliers.len() * 4
+            + self.residual_besi.len()
     }
 
     /// Number of outlier entries (0 if outlier compensation is off).
@@ -177,6 +189,23 @@ pub struct CodecParams {
     /// Targets Gap 1 (K-means + WHT residuals are only near-Gaussian,
     /// so Lloyd-Max's heavy-tail quantization error is disproportionate).
     pub outlier_threshold: Option<f32>,
+    /// Optional Besicovitch-product codec for the scaled WHT residual.
+    ///
+    /// When `Some(params)`: the per-vector scalar Lloyd-Max residual
+    /// quantiser is replaced by the Besicovitch-product codec on
+    /// groups of `g = params.group_size` consecutive scaled-residual
+    /// coordinates.  This bypasses `bit_width` and `custom_centroids`
+    /// for the residual path; `outlier_threshold` and
+    /// `outlier_threshold`-based sparse patching are also disabled
+    /// (their effect is subsumed by Besi's per-vector adaptive scale).
+    ///
+    /// Rationale: the scaled residual is already near-isotropic
+    /// Gaussian (WHT Gaussianization, per-vector norm scaling), so a
+    /// Haar-uniform direction codebook is rate-distortion-optimal
+    /// under MSE.  The 2-D joint quantisation (g = 2) also captures
+    /// the residual cross-coord correlations that Lloyd-Max's scalar
+    /// quantiser ignores.
+    pub residual_besi: Option<crate::besicovitch::BesicovitchParams>,
 }
 
 impl Default for CodecParams {
@@ -192,6 +221,7 @@ impl Default for CodecParams {
             exact_rank_cap: None,
             custom_centroids: None,
             outlier_threshold: None,
+            residual_besi: None,
         }
     }
 }
@@ -372,30 +402,44 @@ pub fn encode_block<R: Distortion>(
         };
         let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
 
-        // Extract outliers BEFORE quantizing so the Lloyd-Max indices for
-        // outlier coordinates don't matter (they're overridden at decode).
-        // We still quantize the full vector for simplicity — the outlier
-        // list is additive metadata.
-        let outliers: Vec<(u16, f16)> = if let Some(t) = params.outlier_threshold {
-            scaled
-                .iter()
-                .enumerate()
-                .filter_map(|(i, &v)| {
-                    if v.abs() > t {
-                        Some((i as u16, f16::from_f32(v)))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
+        // Dispatch: Besicovitch-product residual (when residual_besi is set)
+        // or classic Lloyd-Max path.  The two are mutually exclusive —
+        // outlier compensation is only meaningful for Lloyd-Max (Besi
+        // already has per-vector adaptive scale).
+        let (packed, outliers, residual_besi_bytes) = if let Some(besi_params) =
+            &params.residual_besi
+        {
+            let cb = crate::besicovitch::DirectionCodebook::build(
+                besi_params.group_size, besi_params.direction_bits,
+            );
+            let code = crate::besicovitch::encode_vector(&scaled, &cb, besi_params);
+            let bytes = crate::besicovitch::serialize_code(&code, besi_params);
+            (Vec::new(), Vec::new(), bytes)
         } else {
-            Vec::new()
-        };
+            // Extract outliers BEFORE quantizing so the Lloyd-Max indices for
+            // outlier coordinates don't matter (they're overridden at decode).
+            let outliers: Vec<(u16, f16)> = if let Some(t) = params.outlier_threshold {
+                scaled
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, &v)| {
+                        if v.abs() > t {
+                            Some((i as u16, f16::from_f32(v)))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
 
-        let q = quantize_vector_with_centroids::<R>(
-            &scaled, params.bit_width, params.custom_centroids.as_deref(),
-        );
-        let packed = pack_bits(&q, params.bit_width);
+            let q = quantize_vector_with_centroids::<R>(
+                &scaled, params.bit_width, params.custom_centroids.as_deref(),
+            );
+            let packed = pack_bits(&q, params.bit_width);
+            (packed, outliers, Vec::new())
+        };
 
         let norm = match R::NORM_MODE {
             NormMode::Explicit => f16::from_f32(l2_norm(x)),
@@ -409,6 +453,7 @@ pub fn encode_block<R: Distortion>(
             norm,
             residual_packed: packed,
             outliers,
+            residual_besi: residual_besi_bytes,
         });
     }
 
@@ -418,6 +463,7 @@ pub fn encode_block<R: Distortion>(
         rotation_seed: params.rotation_seed,
         wht_len,
         bit_width: params.bit_width,
+        residual_besi: params.residual_besi.clone(),
     };
     (skeleton, codes)
 }
@@ -447,20 +493,33 @@ pub fn decode_block_with_centroids<R: Distortion>(
     let wht_len = skeleton.wht_len;
     let mut out = Vec::with_capacity(codes.len() * d);
     for code in codes {
-        let indices = unpack_bits(&code.residual_packed, skeleton.bit_width, wht_len);
-        let mut q_vals = dequantize_vector_with_centroids(
-            &indices, skeleton.bit_width, custom_centroids,
-        );
-
-        // Outlier patch: override Lloyd-Max dequantized values at outlier
-        // coordinates with their exact f16 values. These are still in the
-        // SCALED residual space, so the override happens before inv_scale.
-        for &(idx, val) in &code.outliers {
-            let i = idx as usize;
-            if i < q_vals.len() {
-                q_vals[i] = val.to_f32();
+        // Residual path: Besicovitch (if configured) else Lloyd-Max + outliers.
+        let mut q_vals = if let Some(besi_params) = &skeleton.residual_besi {
+            let cb = crate::besicovitch::DirectionCodebook::build(
+                besi_params.group_size, besi_params.direction_bits,
+            );
+            let groups = wht_len / besi_params.group_size;
+            let besi_code = crate::besicovitch::deserialize_code(
+                &code.residual_besi, groups, besi_params,
+            );
+            crate::besicovitch::decode_vector(&besi_code, &cb, besi_params)
+        } else {
+            let indices = unpack_bits(&code.residual_packed, skeleton.bit_width, wht_len);
+            let mut v = dequantize_vector_with_centroids(
+                &indices, skeleton.bit_width, custom_centroids,
+            );
+            // Outlier patch: override Lloyd-Max dequantized values at outlier
+            // coordinates with their exact f16 values. These are still in the
+            // SCALED residual space, so the override happens before inv_scale.
+            for &(idx, val) in &code.outliers {
+                let i = idx as usize;
+                if i < v.len() {
+                    v[i] = val.to_f32();
+                }
             }
-        }
+            v
+        };
+        let _ = &mut q_vals;
 
         // Inverse scale: match what encode_block did.
         // We stored 1/scale in `norm` when NORM_MODE == Absorbed.
@@ -622,25 +681,37 @@ pub fn encode_layer<R: Distortion>(
             let res_norm = l2_norm(&res);
             let scale = if res_norm > f32::EPSILON { 1.0 / res_norm } else { 1.0 };
             let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
-            let outliers: Vec<(u16, f16)> = if let Some(thr) = params.outlier_threshold {
-                scaled
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, &v)| {
-                        if v.abs() > thr {
-                            Some((idx as u16, f16::from_f32(v)))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
+            let (packed, outliers, residual_besi_bytes) = if let Some(besi_params) =
+                &params.residual_besi
+            {
+                let cb = crate::besicovitch::DirectionCodebook::build(
+                    besi_params.group_size, besi_params.direction_bits,
+                );
+                let code = crate::besicovitch::encode_vector(&scaled, &cb, besi_params);
+                let bytes = crate::besicovitch::serialize_code(&code, besi_params);
+                (Vec::new(), Vec::new(), bytes)
             } else {
-                Vec::new()
+                let outliers: Vec<(u16, f16)> = if let Some(thr) = params.outlier_threshold {
+                    scaled
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(idx, &v)| {
+                            if v.abs() > thr {
+                                Some((idx as u16, f16::from_f32(v)))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let q = quantize_vector_with_centroids::<R>(
+                    &scaled, params.bit_width, params.custom_centroids.as_deref(),
+                );
+                let packed = pack_bits(&q, params.bit_width);
+                (packed, outliers, Vec::new())
             };
-            let q = quantize_vector_with_centroids::<R>(
-                &scaled, params.bit_width, params.custom_centroids.as_deref(),
-            );
-            let packed = pack_bits(&q, params.bit_width);
             let norm = match R::NORM_MODE {
                 NormMode::Explicit => f16::from_f32(l2_norm(x)),
                 NormMode::Absorbed => f16::from_f32(1.0 / scale.max(f32::EPSILON)),
@@ -652,6 +723,7 @@ pub fn encode_layer<R: Distortion>(
                 norm,
                 residual_packed: packed,
                 outliers,
+                residual_besi: residual_besi_bytes,
             });
         }
 
@@ -661,6 +733,7 @@ pub fn encode_layer<R: Distortion>(
             rotation_seed: params.rotation_seed,
             wht_len,
             bit_width: params.bit_width,
+            residual_besi: params.residual_besi.clone(),
         };
         per_block.push((skeleton, codes));
     }
@@ -762,6 +835,7 @@ mod tests {
             exact_rank_cap: None,
             custom_centroids: None,
             outlier_threshold: None,
+            residual_besi: None,
         };
         let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
         let recovered = decode_block::<MSE>(&sk, &codes);
@@ -1009,6 +1083,72 @@ mod tests {
     }
 
     // -------------------- outlier compensation --------------------
+
+    #[test]
+    #[test]
+    fn residual_besi_round_trip_reconstructs_input() {
+        // Drop Lloyd-Max residual, swap in Besicovitch.  Round-trip
+        // should reconstruct with MSE comparable to a Lloyd-Max b=3/4 run.
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(77);
+        let n = 64;
+        let d = 32;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block {
+            *v = rng.r#gen::<f32>() * 2.0 - 1.0;
+        }
+        let w = vec![1.0_f32; n];
+
+        let params = CodecParams {
+            bit_width: 4, k: 8, variance_ratio: 0.99,
+            residual_besi: Some(crate::besicovitch::BesicovitchParams {
+                group_size: 2, direction_bits: 4, magnitude_bits: 4,
+                magnitude_mode: crate::besicovitch::MagnitudeMode::QuantizedWithPerVectorScale,
+                subtract_mean: false,
+            }),
+            ..Default::default()
+        };
+        let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
+        assert!(sk.residual_besi.is_some());
+        // All codes must have populated residual_besi and empty Lloyd-Max residual.
+        for c in &codes {
+            assert!(c.residual_besi.len() > 0,
+                    "residual_besi bytes must be populated when params.residual_besi is Some");
+            assert_eq!(c.residual_packed.len(), 0,
+                       "residual_packed must be empty on Besi residual path");
+            assert_eq!(c.outliers.len(), 0,
+                       "outliers disabled on Besi residual path");
+        }
+        let rec = decode_block::<MSE>(&sk, &codes);
+        let e = mse_of(&block, &rec);
+        assert!(e < 0.05, "Besi residual round-trip MSE too large: {e:.4e}");
+    }
+
+    #[test]
+    fn residual_besi_skeleton_records_params() {
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(101);
+        let n = 32; let d = 16;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block { *v = rng.r#gen::<f32>() * 2.0 - 1.0; }
+        let w = vec![1.0_f32; n];
+        let besi = crate::besicovitch::BesicovitchParams {
+            group_size: 2, direction_bits: 5, magnitude_bits: 3,
+            magnitude_mode: crate::besicovitch::MagnitudeMode::QuantizedWithPerVectorScale,
+            subtract_mean: false,
+        };
+        let params = CodecParams {
+            bit_width: 3, k: 4, residual_besi: Some(besi.clone()),
+            ..Default::default()
+        };
+        let (sk, _) = encode_block::<MSE>(&block, &w, d, &params);
+        let got = sk.residual_besi.as_ref().expect("expected besi on skeleton");
+        assert_eq!(got.group_size, besi.group_size);
+        assert_eq!(got.direction_bits, besi.direction_bits);
+        assert_eq!(got.magnitude_bits, besi.magnitude_bits);
+    }
 
     #[test]
     fn outlier_off_by_default_means_no_outliers() {
@@ -1404,6 +1544,7 @@ mod tests {
             exact_rank_cap: None,
             custom_centroids: None,
             outlier_threshold: None,
+            residual_besi: None,
         };
         let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
         assert!(enc.shared_pca.is_none());
