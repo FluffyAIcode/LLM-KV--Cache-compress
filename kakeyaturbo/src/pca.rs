@@ -22,6 +22,55 @@ use nalgebra::{DMatrix, DVector, SymmetricEigen};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
+/// Storage precision for the mean and basis tensors of a [`PcaFit`].
+/// `Fp16` is the v1.2/v1.3 default; `Fp32` doubles skeleton bytes and is
+/// used by the 2024-04 skeleton-precision ablation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PcaStorage {
+    /// IEEE-754 binary16 (default, matches paper byte accounting).
+    Fp16,
+    /// IEEE-754 binary32 (ablation-only, doubles skeleton bytes).
+    Fp32,
+}
+
+impl Default for PcaStorage {
+    fn default() -> Self {
+        Self::Fp16
+    }
+}
+
+/// Internal helper: pack a finished `(mean, basis, d_eff, captured_variance)`
+/// tuple into a `PcaFit` with either f16 or fp32 skeleton storage.
+fn materialize_pca_fit(
+    mean: Vec<f32>,
+    basis: Vec<f32>,
+    d_eff: usize,
+    captured_variance: f32,
+    storage: PcaStorage,
+) -> PcaFit {
+    let d = mean.len();
+    match storage {
+        PcaStorage::Fp16 => PcaFit {
+            mean: to_bf16(&mean),
+            basis: to_bf16(&basis),
+            mean_fp32: None,
+            basis_fp32: None,
+            d_eff,
+            d,
+            captured_variance,
+        },
+        PcaStorage::Fp32 => PcaFit {
+            mean: Vec::new(),
+            basis: Vec::new(),
+            mean_fp32: Some(mean),
+            basis_fp32: Some(basis),
+            d_eff,
+            d,
+            captured_variance,
+        },
+    }
+}
+
 /// Convert an f32 slice to an owned bf16 Vec (saturating conversion for NaN/Inf).
 #[inline]
 fn to_bf16(src: &[f32]) -> Vec<f16> {
@@ -78,12 +127,20 @@ pub fn weighted_mean(vectors: &[f32], weights: &[f32], d: usize) -> Vec<f32> {
 /// and [`Self::basis_f32`] when you need f32 views.
 #[derive(Debug, Clone)]
 pub struct PcaFit {
-    /// Mean vector, length `D`, stored as bf16.
+    /// Mean vector, length `D`, stored as f16 (empty if fp32 skeleton selected).
     pub mean: Vec<f16>,
-    /// Basis row-major `[d_eff, D]`, stored as bf16.
+    /// Basis row-major `[d_eff, D]`, stored as f16 (empty if fp32 skeleton selected).
     pub basis: Vec<f16>,
+    /// Optional fp32 mean buffer — populated iff the caller asked for
+    /// `SkeletonDtype::Fp32`. When set, takes precedence over `mean`.
+    pub mean_fp32: Option<Vec<f32>>,
+    /// Optional fp32 basis buffer — same semantics as `mean_fp32`.
+    pub basis_fp32: Option<Vec<f32>>,
     /// Number of kept components.
     pub d_eff: usize,
+    /// Input dimension `D` (needed when fp32 buffers are populated and the
+    /// f16 buffers are empty).
+    pub d: usize,
     /// Captured variance ratio (actual, may be ≥ the requested threshold).
     pub captured_variance: f32,
 }
@@ -92,31 +149,76 @@ impl PcaFit {
     /// Return the mean as a freshly-allocated f32 vector.
     #[must_use]
     pub fn mean_f32(&self) -> Vec<f32> {
+        if let Some(ref m) = self.mean_fp32 {
+            return m.clone();
+        }
         to_f32(&self.mean)
     }
 
     /// Return the basis as a freshly-allocated f32 vector.
     #[must_use]
     pub fn basis_f32(&self) -> Vec<f32> {
+        if let Some(ref b) = self.basis_fp32 {
+            return b.clone();
+        }
         to_f32(&self.basis)
     }
 
     /// Construct a `PcaFit` directly from f32 buffers (e.g. unit tests).
+    /// Default skeleton dtype is f16 for backward compatibility.
     #[must_use]
     pub fn from_f32(mean: Vec<f32>, basis: Vec<f32>, d_eff: usize, captured: f32) -> Self {
+        let d = mean.len();
         Self {
             mean: to_bf16(&mean),
             basis: to_bf16(&basis),
+            mean_fp32: None,
+            basis_fp32: None,
             d_eff,
+            d,
             captured_variance: captured,
+        }
+    }
+
+    /// Construct a `PcaFit` with fp32 skeleton storage.
+    #[must_use]
+    pub fn from_f32_skeleton_fp32(
+        mean: Vec<f32>,
+        basis: Vec<f32>,
+        d_eff: usize,
+        captured: f32,
+    ) -> Self {
+        let d = mean.len();
+        Self {
+            mean: Vec::new(),
+            basis: Vec::new(),
+            mean_fp32: Some(mean),
+            basis_fp32: Some(basis),
+            d_eff,
+            d,
+            captured_variance: captured,
+        }
+    }
+
+    /// Input dimension `D`.
+    #[must_use]
+    pub fn d(&self) -> usize {
+        if self.d > 0 {
+            self.d
+        } else {
+            self.mean.len()
         }
     }
 
     /// Byte footprint of this fit (the thing the codec actually stores).
     #[must_use]
     pub fn nbytes(&self) -> usize {
-        self.mean.len() * std::mem::size_of::<f16>()
-            + self.basis.len() * std::mem::size_of::<f16>()
+        let fp32_bytes = self.mean_fp32.as_ref().map(Vec::len).unwrap_or(0)
+            * std::mem::size_of::<f32>()
+            + self.basis_fp32.as_ref().map(Vec::len).unwrap_or(0) * std::mem::size_of::<f32>();
+        let f16_bytes = self.mean.len() * std::mem::size_of::<f16>()
+            + self.basis.len() * std::mem::size_of::<f16>();
+        fp32_bytes + f16_bytes
     }
 }
 
@@ -133,6 +235,36 @@ impl PcaFit {
 /// `variance_ratio` is not finite.
 #[must_use]
 pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_ratio: f32) -> PcaFit {
+    fit_weighted_pca_with_storage_capped(
+        vectors, weights, d, variance_ratio, PcaStorage::Fp16, None,
+    )
+}
+
+/// Storage-aware variant of [`fit_weighted_pca`], no rank cap.
+#[must_use]
+pub fn fit_weighted_pca_with_storage(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    storage: PcaStorage,
+) -> PcaFit {
+    fit_weighted_pca_with_storage_capped(vectors, weights, d, variance_ratio, storage, None)
+}
+
+/// Full-control variant of [`fit_weighted_pca`].  When `rank_cap` is
+/// `Some(r)`, `d_eff` is clipped to at most `r` regardless of
+/// `variance_ratio`. This lets the caller use exact PCA to match
+/// RSVD's rank-budgeted behaviour without RSVD's approximation error.
+#[must_use]
+pub fn fit_weighted_pca_with_storage_capped(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    storage: PcaStorage,
+    rank_cap: Option<usize>,
+) -> PcaFit {
     assert!(
         variance_ratio.is_finite(),
         "variance_ratio must be finite, got {variance_ratio}"
@@ -194,6 +326,9 @@ pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_rat
         d_eff = 1;
     }
     d_eff = d_eff.clamp(1, d);
+    if let Some(cap) = rank_cap {
+        d_eff = d_eff.min(cap.max(1).min(d));
+    }
 
     // Flatten top-d_eff eigenvectors into row-major basis.
     let mut basis = Vec::with_capacity(d_eff * d);
@@ -211,12 +346,7 @@ pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_rat
         1.0
     };
 
-    PcaFit {
-        mean: to_bf16(&mean),
-        basis: to_bf16(&basis),
-        d_eff,
-        captured_variance,
-    }
+    materialize_pca_fit(mean, basis, d_eff, captured_variance, storage)
 }
 
 /// Fit a weighted PCA on a concatenated multi-block tensor and return a
@@ -284,6 +414,33 @@ pub fn fit_weighted_pca_randomized(
     power_iters: u32,
     seed: u64,
 ) -> PcaFit {
+    fit_weighted_pca_randomized_with_storage(
+        vectors,
+        weights,
+        d,
+        variance_ratio,
+        target_rank,
+        oversample,
+        power_iters,
+        seed,
+        PcaStorage::Fp16,
+    )
+}
+
+/// Storage-aware variant of [`fit_weighted_pca_randomized`].
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn fit_weighted_pca_randomized_with_storage(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    target_rank: usize,
+    oversample: usize,
+    power_iters: u32,
+    seed: u64,
+    storage: PcaStorage,
+) -> PcaFit {
     assert!(
         variance_ratio.is_finite(),
         "variance_ratio must be finite, got {variance_ratio}"
@@ -322,10 +479,21 @@ pub fn fit_weighted_pca_randomized(
     // Z = Aᵀ · Ω, shape D×r.
     let mut z = a.transpose() * &omega;
 
-    // Subspace power iterations Z ← Aᵀ A Z.
+    // Subspace power iterations with re-orthogonalisation (HMT 2011 §4.5,
+    // "Algorithm 4.4: Randomized Subspace Iteration").  Without the per-
+    // iteration QR, power iteration on ill-conditioned data (condition
+    // number ≳ 10³) produces exponentially-growing column norms that push
+    // nalgebra's subsequent thin-SVD into an effectively-non-terminating
+    // Jacobi sweep on numerically-rank-deficient inputs.  Re-orthogonalising
+    // Z between iterations keeps columns unit-norm and decouples the
+    // iteration's stability from the spectrum of A.
     for _ in 0..power_iters {
         let ay = &a * &z; // n×r
-        z = a.transpose() * ay; // D×r
+        let ay_q = ay.qr().q();
+        let ay_q = ay_q.columns(0, r).into_owned();
+        let ata_q = a.transpose() * &ay_q; // D×r
+        let ata_qr = ata_q.qr().q();
+        z = ata_qr.columns(0, r).into_owned();
     }
 
     // QR of Z → Q ∈ ℝ^{D×r} orthonormal.
@@ -382,12 +550,7 @@ pub fn fit_weighted_pca_randomized(
         1.0
     };
 
-    PcaFit {
-        mean: to_bf16(&mean),
-        basis: to_bf16(&basis),
-        d_eff,
-        captured_variance,
-    }
+    materialize_pca_fit(mean, basis, d_eff, captured_variance, storage)
 }
 
 /// Project a single vector `x` onto the PCA basis: `coeff = U · (x − μ)`.
@@ -396,15 +559,15 @@ pub fn fit_weighted_pca_randomized(
 /// inner multiply-add loop stays in f32 for numerical accuracy.
 #[must_use]
 pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
-    let d = fit.mean.len();
+    let d = fit.d();
     assert_eq!(x.len(), d, "x dimension mismatch");
+    let mean_f32 = fit.mean_f32();
+    let basis_f32 = fit.basis_f32();
     let mut coeff = vec![0.0_f32; fit.d_eff];
     for k in 0..fit.d_eff {
         let mut acc = 0.0_f32;
         for j in 0..d {
-            let basis_kj = fit.basis[k * d + j].to_f32();
-            let mean_j = fit.mean[j].to_f32();
-            acc += basis_kj * (x[j] - mean_j);
+            acc += basis_f32[k * d + j] * (x[j] - mean_f32[j]);
         }
         coeff[k] = acc;
     }
@@ -416,12 +579,13 @@ pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
 #[must_use]
 pub fn unproject(coeff: &[f32], fit: &PcaFit) -> Vec<f32> {
     assert_eq!(coeff.len(), fit.d_eff, "coeff length mismatch");
-    let d = fit.mean.len();
+    let d = fit.d();
+    let basis_f32 = fit.basis_f32();
     let mut x = fit.mean_f32();
     for k in 0..fit.d_eff {
         let c = coeff[k];
         for j in 0..d {
-            x[j] += fit.basis[k * d + j].to_f32() * c;
+            x[j] += basis_f32[k * d + j] * c;
         }
     }
     x

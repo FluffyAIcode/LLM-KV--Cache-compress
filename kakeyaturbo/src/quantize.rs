@@ -47,11 +47,46 @@ pub fn centroids_gaussian(bits: u8) -> &'static [f32] {
 ///
 /// For `R = MSE`, `R::d(x, c)` inlines to `(x - c)²` and the function
 /// becomes a pure argmin loop with no dispatch in the emitted code.
+///
+/// Uses the unit-variance-Gaussian Lloyd-Max centroids by default.
 #[inline]
 #[must_use]
 pub fn quantize_vector<R: Distortion>(x: &[f32], bits: u8) -> Vec<u8> {
+    quantize_vector_with_centroids::<R>(x, bits, None)
+}
+
+/// Variant of [`quantize_vector`] that accepts an optional caller-supplied
+/// centroid table. When `Some`, must contain exactly `1 << bits` sorted
+/// floats; when `None`, falls back to the Gaussian default.
+///
+/// The calibrated-codebook path (fitting Lloyd-Max centroids on the
+/// empirical residual distribution of a specific model) uses this to
+/// replace the unit-variance Gaussian assumption with a model-specific
+/// optimum. Paper §2 calls this the "codebook calibration" step.
+#[inline]
+#[must_use]
+pub fn quantize_vector_with_centroids<R: Distortion>(
+    x: &[f32],
+    bits: u8,
+    custom_centroids: Option<&[f32]>,
+) -> Vec<u8> {
     assert!((1..=4).contains(&bits), "bits must be 1..=4");
-    let centroids = centroids_gaussian(bits);
+    let default;
+    let centroids: &[f32] = match custom_centroids {
+        Some(c) => {
+            assert_eq!(
+                c.len(),
+                1usize << bits,
+                "custom centroids must have {} entries for {bits}-bit",
+                1usize << bits
+            );
+            c
+        }
+        None => {
+            default = centroids_gaussian(bits);
+            default
+        }
+    };
     let mut out = Vec::with_capacity(x.len());
     for &xi in x {
         let mut best_idx: u8 = 0;
@@ -69,10 +104,38 @@ pub fn quantize_vector<R: Distortion>(x: &[f32], bits: u8) -> Vec<u8> {
 }
 
 /// Reverse of [`quantize_vector`]: map indices back to centroid values.
+///
+/// Uses the unit-variance-Gaussian Lloyd-Max centroids by default.
 #[must_use]
 pub fn dequantize_vector(indices: &[u8], bits: u8) -> Vec<f32> {
+    dequantize_vector_with_centroids(indices, bits, None)
+}
+
+/// Variant of [`dequantize_vector`] that accepts an optional caller-supplied
+/// centroid table (same contract as [`quantize_vector_with_centroids`]).
+#[must_use]
+pub fn dequantize_vector_with_centroids(
+    indices: &[u8],
+    bits: u8,
+    custom_centroids: Option<&[f32]>,
+) -> Vec<f32> {
     assert!((1..=4).contains(&bits), "bits must be 1..=4");
-    let centroids = centroids_gaussian(bits);
+    let default;
+    let centroids: &[f32] = match custom_centroids {
+        Some(c) => {
+            assert_eq!(
+                c.len(),
+                1usize << bits,
+                "custom centroids must have {} entries for {bits}-bit",
+                1usize << bits
+            );
+            c
+        }
+        None => {
+            default = centroids_gaussian(bits);
+            default
+        }
+    };
     indices.iter().map(|&i| centroids[i as usize]).collect()
 }
 
@@ -358,6 +421,99 @@ mod tests {
     #[should_panic(expected = "bits must be 1..=8")]
     fn unpack_rejects_oversized_bits() {
         let _ = unpack_bits(&[0u8], 9, 1);
+    }
+
+    // -------------------- custom centroids --------------------
+
+    #[test]
+    fn quantize_with_custom_centroids_matches_nearest() {
+        // Asymmetric centroids — calibrated for a heavy-tailed distribution
+        // (bigger extreme centroids, denser near 0).
+        let c: Vec<f32> = vec![-3.0, -0.5, 0.5, 3.0];  // b=2, 4 entries
+        let input = vec![-4.0_f32, -1.0, -0.3, 0.0, 0.3, 1.0, 4.0];
+        let q = quantize_vector_with_centroids::<MSE>(&input, 2, Some(&c));
+        //  -4 → 0 (nearest -3)
+        //  -1 → 1 (nearest -0.5, since |-1 - -0.5| = 0.5 < |-1 - -3| = 2)
+        //  -0.3 → 1 (nearest -0.5)
+        //  0.0 → 1 or 2 (equidistant, argmin picks first = 1)
+        //  0.3 → 2 (nearest 0.5)
+        //  1.0 → 2 (nearest 0.5)
+        //  4.0 → 3 (nearest 3)
+        assert_eq!(q, vec![0, 1, 1, 1, 2, 2, 3]);
+    }
+
+    #[test]
+    fn custom_centroids_round_trip() {
+        let c: Vec<f32> = vec![-2.5, -0.3, 0.3, 2.5];
+        let input = c.clone();
+        let q = quantize_vector_with_centroids::<MSE>(&input, 2, Some(&c));
+        let rec = dequantize_vector_with_centroids(&q, 2, Some(&c));
+        for (a, b) in input.iter().zip(&rec) {
+            assert_abs_diff_eq!(a, b, epsilon = 1e-5);
+        }
+    }
+
+    #[test]
+    fn custom_centroids_outperform_gaussian_on_calibrated_source() {
+        // Data that's heavy-tailed — calibrated Lloyd-Max should beat
+        // the Gaussian-assumed centroids on reconstruction MSE.
+        // Build 1000 samples from Laplace-like mixture.
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(7);
+        let input: Vec<f32> = (0..1000)
+            .map(|_| {
+                let u: f32 = rng.gen();
+                // Laplace sample: sign(u-0.5) * ln(1 - 2|u-0.5|)
+                let s = (u - 0.5).signum();
+                let v: f32 = -(1.0 - 2.0 * (u - 0.5).abs()).ln();
+                s * v
+            })
+            .collect();
+
+        // Empirical Lloyd-Max at b=2 for Laplace-like data:
+        // Compute mean of each quartile empirically — simple approximation.
+        let mut sorted = input.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let q1 = sorted.len() / 4;
+        let q2 = sorted.len() / 2;
+        let q3 = 3 * sorted.len() / 4;
+        let c_calibrated: Vec<f32> = vec![
+            sorted[..q1].iter().sum::<f32>() / q1 as f32,
+            sorted[q1..q2].iter().sum::<f32>() / (q2 - q1) as f32,
+            sorted[q2..q3].iter().sum::<f32>() / (q3 - q2) as f32,
+            sorted[q3..].iter().sum::<f32>() / (sorted.len() - q3) as f32,
+        ];
+
+        let q_gauss = quantize_vector_with_centroids::<MSE>(&input, 2, None);
+        let rec_gauss = dequantize_vector_with_centroids(&q_gauss, 2, None);
+        let mse_gauss: f32 = input
+            .iter()
+            .zip(&rec_gauss)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f32>()
+            / input.len() as f32;
+
+        let q_cal = quantize_vector_with_centroids::<MSE>(&input, 2, Some(&c_calibrated));
+        let rec_cal = dequantize_vector_with_centroids(&q_cal, 2, Some(&c_calibrated));
+        let mse_cal: f32 = input
+            .iter()
+            .zip(&rec_cal)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f32>()
+            / input.len() as f32;
+
+        assert!(
+            mse_cal < mse_gauss,
+            "calibrated codebook MSE ({mse_cal:.4}) should beat Gaussian ({mse_gauss:.4}) on Laplace-distributed input"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "custom centroids must have")]
+    fn quantize_rejects_wrong_count_centroids() {
+        let wrong = vec![-1.0_f32, 0.0, 1.0];  // 3 entries, but bits=2 needs 4
+        let _ = quantize_vector_with_centroids::<MSE>(&[0.0_f32], 2, Some(&wrong));
     }
 
     #[test]

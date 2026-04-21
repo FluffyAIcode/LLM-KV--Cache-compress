@@ -14,9 +14,16 @@
 use half::f16;
 
 use crate::distortion::{Distortion, NormMode};
-use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
-use crate::pca::{fit_weighted_pca, fit_weighted_pca_randomized, project, unproject, PcaFit};
-use crate::quantize::{dequantize_vector, pack_bits, quantize_vector, unpack_bits};
+use crate::kmeans::{
+    assign_and_project, fit_spherical_kmeans_with_storage, residual,
+};
+use crate::pca::{
+    fit_weighted_pca_randomized_with_storage, fit_weighted_pca_with_storage_capped, project,
+    unproject, PcaFit, PcaStorage,
+};
+use crate::quantize::{
+    dequantize_vector_with_centroids, pack_bits, quantize_vector_with_centroids, unpack_bits,
+};
 use crate::skeleton::Skeleton;
 use crate::wht::{inverse_rotate, rotate};
 
@@ -26,6 +33,10 @@ use crate::wht::{inverse_rotate, rotate};
 /// - `seg_id`: K-means cluster id (`⌈log₂ K⌉` bits, stored as u32 to ease access)
 /// - `alpha, t, norm`: fp16 scalars
 /// - `residual`: packed `bit_width`-bit indices of length `wht_len`
+/// - `outliers`: optional sparse list of `(coord_index, f16 value)` pairs that
+///   override Lloyd-Max dequantization at those coordinates. Used to
+///   catch heavy-tail scaled residuals that lie outside Lloyd-Max's
+///   centroid coverage (see `CodecParams::outlier_threshold`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Code {
     /// K-means cluster index.
@@ -40,14 +51,29 @@ pub struct Code {
     pub norm: f16,
     /// Packed residual indices.
     pub residual_packed: Vec<u8>,
+    /// Sparse outlier list.  Each entry is `(coord_index_u16, exact_f16_value)`.
+    /// Empty if `CodecParams::outlier_threshold.is_none()`.
+    ///
+    /// The coord_index is into the scaled-residual vector of length
+    /// `wht_len`, i.e. into the WHT-rotated, per-vector-norm-scaled
+    /// residual just before Lloyd-Max quantization.  Decode re-applies
+    /// these values AFTER Lloyd-Max dequantization but BEFORE inverse
+    /// WHT and un-scaling.
+    pub outliers: Vec<(u16, f16)>,
 }
 
 impl Code {
     /// Total byte size of this code's payload.
     #[must_use]
     pub fn nbytes(&self) -> usize {
-        // seg_id(4) + 3×fp16(6) + packed bytes
-        4 + 3 * 2 + self.residual_packed.len()
+        // seg_id(4) + 3×fp16(6) + packed residual + outliers (2+2 bytes each)
+        4 + 3 * 2 + self.residual_packed.len() + self.outliers.len() * 4
+    }
+
+    /// Number of outlier entries (0 if outlier compensation is off).
+    #[must_use]
+    pub fn n_outliers(&self) -> usize {
+        self.outliers.len()
     }
 }
 
@@ -82,6 +108,27 @@ impl Default for PcaMethod {
     }
 }
 
+/// Storage precision for the Kakeya skeleton (PCA mean, PCA basis, K-means
+/// centres).  The residual quantiser (Lloyd-Max) is **not** affected.
+///
+/// `Fp16` is the v1.2/v1.3 default and matches the paper's byte accounting.
+/// `Fp32` doubles skeleton bytes; used only for ablation of the "f16
+/// skeleton as structural PPL floor" hypothesis raised in the pre-RoPE
+/// cache ablation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkeletonDtype {
+    /// IEEE-754 binary16 (v1.2/v1.3 default).
+    Fp16,
+    /// IEEE-754 binary32 (doubles skeleton bytes; ablation-only).
+    Fp32,
+}
+
+impl Default for SkeletonDtype {
+    fn default() -> Self {
+        Self::Fp16
+    }
+}
+
 /// Runtime parameters for a single `encode_block` call.
 ///
 /// Compile-time parameters (dimensions, distortion) are passed via
@@ -101,6 +148,35 @@ pub struct CodecParams {
     pub kmeans_max_iter: u32,
     /// PCA fit strategy (exact vs randomized SVD).
     pub pca_method: PcaMethod,
+    /// Storage precision for PCA mean, PCA basis, and K-means centres.
+    /// Does not affect the residual Lloyd-Max quantiser.
+    pub skeleton_dtype: SkeletonDtype,
+    /// Optional hard upper bound on `d_eff` for the exact PCA path.
+    /// `None` (the default) leaves `d_eff` controlled by `variance_ratio`.
+    /// `Some(r)` clips `d_eff ≤ r` even if variance_ratio would keep more
+    /// components — useful to match RSVD's rank budget while using exact
+    /// (un-approximated) eigenvectors.
+    pub exact_rank_cap: Option<usize>,
+    /// Optional caller-supplied Lloyd-Max centroid table for the residual
+    /// quantiser. When `Some`, must contain exactly `1 << bit_width`
+    /// sorted floats — typically the output of offline empirical Lloyd-Max
+    /// calibration on the model's real residual distribution.  When
+    /// `None`, the codec uses the unit-variance-Gaussian centroids from
+    /// [`crate::quantize::centroids_gaussian`].
+    pub custom_centroids: Option<Vec<f32>>,
+    /// Optional scalar threshold for outlier compensation on the scaled
+    /// residual (post-WHT, per-vector-norm-scaled, pre-Lloyd-Max).
+    ///
+    /// When `Some(T)`: any coordinate whose absolute scaled value exceeds
+    /// `T` is stored verbatim in the code's `outliers` list (as f16),
+    /// and its Lloyd-Max index becomes irrelevant (decoded but overridden).
+    /// When `None`: no outlier compensation.
+    ///
+    /// Storage cost per outlier = 2 bytes index + 2 bytes f16 = 4 bytes.
+    /// At T=2.0 on Gaussian-like residuals, outlier rate is ~4.5 %.
+    /// Targets Gap 1 (K-means + WHT residuals are only near-Gaussian,
+    /// so Lloyd-Max's heavy-tail quantization error is disproportionate).
+    pub outlier_threshold: Option<f32>,
 }
 
 impl Default for CodecParams {
@@ -112,25 +188,46 @@ impl Default for CodecParams {
             rotation_seed: 0xCAFE_BABE,
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
+            skeleton_dtype: SkeletonDtype::Fp16,
+            exact_rank_cap: None,
+            custom_centroids: None,
+            outlier_threshold: None,
         }
     }
 }
 
-/// Dispatch helper: fit the requested PCA variant.
+/// Convert the codec's skeleton-dtype flag to the PCA layer's storage flag.
+fn pca_storage(params: &CodecParams) -> PcaStorage {
+    match params.skeleton_dtype {
+        SkeletonDtype::Fp16 => PcaStorage::Fp16,
+        SkeletonDtype::Fp32 => PcaStorage::Fp32,
+    }
+}
+
+/// Dispatch helper: fit the requested PCA variant with the requested
+/// skeleton dtype.
 fn fit_pca_dispatch(
     vectors: &[f32],
     weights: &[f32],
     d: usize,
     params: &CodecParams,
 ) -> PcaFit {
+    let storage = pca_storage(params);
     match params.pca_method {
-        PcaMethod::Exact => fit_weighted_pca(vectors, weights, d, params.variance_ratio),
+        PcaMethod::Exact => fit_weighted_pca_with_storage_capped(
+            vectors,
+            weights,
+            d,
+            params.variance_ratio,
+            storage,
+            params.exact_rank_cap,
+        ),
         PcaMethod::Randomized {
             target_rank,
             oversample,
             power_iters,
             seed_offset,
-        } => fit_weighted_pca_randomized(
+        } => fit_weighted_pca_randomized_with_storage(
             vectors,
             weights,
             d,
@@ -139,8 +236,29 @@ fn fit_pca_dispatch(
             oversample,
             power_iters,
             u64::from(params.rotation_seed) ^ seed_offset,
+            storage,
         ),
     }
+}
+
+/// Dispatch helper for K-means: routes the codec's skeleton dtype into
+/// the K-means fp32-skeleton flag.
+fn fit_kmeans_dispatch(
+    coeffs: &[f32],
+    weights: &[f32],
+    d_eff: usize,
+    k: usize,
+    params: &CodecParams,
+) -> crate::kmeans::KmeansFit {
+    fit_spherical_kmeans_with_storage(
+        coeffs,
+        weights,
+        d_eff,
+        k,
+        params.rotation_seed,
+        params.kmeans_max_iter,
+        matches!(params.skeleton_dtype, SkeletonDtype::Fp32),
+    )
 }
 
 /// Round up to the nearest power of two, with a minimum of 1.
@@ -216,14 +334,7 @@ pub fn encode_block<R: Distortion>(
         .count();
     let effective_k = params.k.min(valid_rows.max(1));
 
-    let kmeans = fit_spherical_kmeans(
-        &coeffs,
-        weights,
-        pca.d_eff,
-        effective_k,
-        params.rotation_seed,
-        params.kmeans_max_iter,
-    );
+    let kmeans = fit_kmeans_dispatch(&coeffs, weights, pca.d_eff, effective_k, params);
 
     // --- Stage 2: Residual coding ---
     let wht_len = next_pow2(pca.d_eff);
@@ -242,18 +353,48 @@ pub fn encode_block<R: Distortion>(
         let rotated = rotate(&res_padded, params.rotation_seed);
 
         // Scale to approximately unit variance for the Lloyd-Max codebook.
-        // The WHT rotation preserves L2 norm up to sqrt(n), and the
-        // Gaussianisation argument assumes each coord ~ N(0, σ²/N_EFF).
-        // We divide by the empirical residual std to match the codebook.
+        // The `rotate` function implements an UNNORMALIZED Walsh-Hadamard
+        // transform, so for residual `res` of length d_eff (padded with
+        // zeros to wht_len), the rotated vector `rotated = H·D·res_padded`
+        // satisfies `‖rotated‖² = wht_len · ‖res‖²`, giving an average
+        // per-coordinate squared magnitude of `‖res‖²`. To match the
+        // Lloyd-Max codebook (calibrated for N(0, 1)) we therefore scale
+        // by `1 / ‖res‖`, so the result has unit per-coord variance.
+        //
+        // (Prior versions used `scale = √wht_len / ‖res‖`, which made the
+        // scaled values have per-coord variance `wht_len`, saturating the
+        // quantiser. Fixed in this revision.)
         let res_norm = l2_norm(&res);
         let scale = if res_norm > f32::EPSILON {
-            (wht_len as f32).sqrt() / res_norm
+            1.0 / res_norm
         } else {
             1.0
         };
         let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
 
-        let q = quantize_vector::<R>(&scaled, params.bit_width);
+        // Extract outliers BEFORE quantizing so the Lloyd-Max indices for
+        // outlier coordinates don't matter (they're overridden at decode).
+        // We still quantize the full vector for simplicity — the outlier
+        // list is additive metadata.
+        let outliers: Vec<(u16, f16)> = if let Some(t) = params.outlier_threshold {
+            scaled
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &v)| {
+                    if v.abs() > t {
+                        Some((i as u16, f16::from_f32(v)))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let q = quantize_vector_with_centroids::<R>(
+            &scaled, params.bit_width, params.custom_centroids.as_deref(),
+        );
         let packed = pack_bits(&q, params.bit_width);
 
         let norm = match R::NORM_MODE {
@@ -267,6 +408,7 @@ pub fn encode_block<R: Distortion>(
             t: f16::from_f32(t),
             norm,
             residual_packed: packed,
+            outliers,
         });
     }
 
@@ -282,17 +424,43 @@ pub fn encode_block<R: Distortion>(
 
 /// Decode a block of codes back into approximate vectors.
 ///
+/// Uses the unit-variance-Gaussian Lloyd-Max centroids.  For calibrated
+/// codebooks use [`decode_block_with_centroids`].
+///
 /// # Output
 ///
 /// Row-major `[n, d]` where `n = codes.len()` and `d = skeleton.pca.mean.len()`.
 pub fn decode_block<R: Distortion>(skeleton: &Skeleton, codes: &[Code]) -> Vec<f32> {
-    let d = skeleton.pca.mean.len();
+    decode_block_with_centroids::<R>(skeleton, codes, None)
+}
+
+/// Variant of [`decode_block`] that accepts an optional caller-supplied
+/// centroid table, to be used in tandem with
+/// [`crate::quantize::quantize_vector_with_centroids`] on the encode side.
+pub fn decode_block_with_centroids<R: Distortion>(
+    skeleton: &Skeleton,
+    codes: &[Code],
+    custom_centroids: Option<&[f32]>,
+) -> Vec<f32> {
+    let d = skeleton.pca.d();
     let d_eff = skeleton.pca.d_eff;
     let wht_len = skeleton.wht_len;
     let mut out = Vec::with_capacity(codes.len() * d);
     for code in codes {
         let indices = unpack_bits(&code.residual_packed, skeleton.bit_width, wht_len);
-        let q_vals = dequantize_vector(&indices, skeleton.bit_width);
+        let mut q_vals = dequantize_vector_with_centroids(
+            &indices, skeleton.bit_width, custom_centroids,
+        );
+
+        // Outlier patch: override Lloyd-Max dequantized values at outlier
+        // coordinates with their exact f16 values. These are still in the
+        // SCALED residual space, so the override happens before inv_scale.
+        for &(idx, val) in &code.outliers {
+            let i = idx as usize;
+            if i < q_vals.len() {
+                q_vals[i] = val.to_f32();
+            }
+        }
 
         // Inverse scale: match what encode_block did.
         // We stored 1/scale in `norm` when NORM_MODE == Absorbed.
@@ -396,9 +564,9 @@ pub fn encode_layer<R: Distortion>(
     // that tells it "the PCA is already fit" — but since encode_block's
     // signature doesn't expose that, we inline the pipeline here. The
     // inner ops (kmeans, rotation, quantise) are identical.
-    use crate::kmeans::{assign_and_project, fit_spherical_kmeans, residual};
+    use crate::kmeans::{assign_and_project, residual};
     use crate::pca::project;
-    use crate::quantize::{pack_bits, quantize_vector};
+    use crate::quantize::{pack_bits, quantize_vector_with_centroids};
     use crate::wht::rotate;
     use half::f16;
 
@@ -437,10 +605,7 @@ pub fn encode_layer<R: Distortion>(
                     .any(|c| c.abs() > f32::EPSILON)
         }).count();
         let effective_k = params.k.min(valid_rows.max(1));
-        let kmeans = fit_spherical_kmeans(
-            &coeffs, w, shared_pca.d_eff, effective_k,
-            params.rotation_seed, params.kmeans_max_iter,
-        );
+        let kmeans = fit_kmeans_dispatch(&coeffs, w, shared_pca.d_eff, effective_k, params);
 
         let mut codes = Vec::with_capacity(n);
         for i in 0..n {
@@ -455,9 +620,26 @@ pub fn encode_layer<R: Distortion>(
             let res_padded = pad_zero(&res, wht_len);
             let rotated = rotate(&res_padded, params.rotation_seed);
             let res_norm = l2_norm(&res);
-            let scale = if res_norm > f32::EPSILON { (wht_len as f32).sqrt() / res_norm } else { 1.0 };
+            let scale = if res_norm > f32::EPSILON { 1.0 / res_norm } else { 1.0 };
             let scaled: Vec<f32> = rotated.iter().map(|v| v * scale).collect();
-            let q = quantize_vector::<R>(&scaled, params.bit_width);
+            let outliers: Vec<(u16, f16)> = if let Some(thr) = params.outlier_threshold {
+                scaled
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, &v)| {
+                        if v.abs() > thr {
+                            Some((idx as u16, f16::from_f32(v)))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let q = quantize_vector_with_centroids::<R>(
+                &scaled, params.bit_width, params.custom_centroids.as_deref(),
+            );
             let packed = pack_bits(&q, params.bit_width);
             let norm = match R::NORM_MODE {
                 NormMode::Explicit => f16::from_f32(l2_norm(x)),
@@ -469,6 +651,7 @@ pub fn encode_layer<R: Distortion>(
                 t: f16::from_f32(t),
                 norm,
                 residual_packed: packed,
+                outliers,
             });
         }
 
@@ -490,9 +673,18 @@ pub fn encode_layer<R: Distortion>(
 
 /// Decode a whole layer. Dual of [`encode_layer`].
 pub fn decode_layer<R: Distortion>(enc: &LayerEncoding) -> Vec<Vec<f32>> {
+    decode_layer_with_centroids::<R>(enc, None)
+}
+
+/// Variant of [`decode_layer`] that accepts an optional caller-supplied
+/// centroid table — pass the same table used at encode time.
+pub fn decode_layer_with_centroids<R: Distortion>(
+    enc: &LayerEncoding,
+    custom_centroids: Option<&[f32]>,
+) -> Vec<Vec<f32>> {
     enc.per_block
         .iter()
-        .map(|(sk, codes)| decode_block::<R>(sk, codes))
+        .map(|(sk, codes)| decode_block_with_centroids::<R>(sk, codes, custom_centroids))
         .collect()
 }
 
@@ -566,6 +758,10 @@ mod tests {
             rotation_seed: 0xABCD,
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
+            skeleton_dtype: SkeletonDtype::Fp16,
+            exact_rank_cap: None,
+            custom_centroids: None,
+            outlier_threshold: None,
         };
         let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
         let recovered = decode_block::<MSE>(&sk, &codes);
@@ -808,6 +1004,272 @@ mod tests {
         assert!(p.k >= 1);
         assert!((1..=4).contains(&p.bit_width));
         assert!(p.kmeans_max_iter > 0);
+        assert_eq!(p.skeleton_dtype, SkeletonDtype::Fp16);
+        assert!(p.outlier_threshold.is_none());
+    }
+
+    // -------------------- outlier compensation --------------------
+
+    #[test]
+    fn outlier_off_by_default_means_no_outliers() {
+        let n = 8;
+        let d = 16;
+        let mut block = vec![0.0_f32; n * d];
+        for (i, v) in block.iter_mut().enumerate() {
+            *v = ((i as f32) * 0.123).sin() * 2.0;
+        }
+        let w = vec![1.0_f32; n];
+        let params = CodecParams { bit_width: 2, k: 4, ..Default::default() };
+        let (_, codes) = encode_block::<MSE>(&block, &w, d, &params);
+        for c in &codes {
+            assert!(c.outliers.is_empty(), "outliers should be empty when threshold is None");
+        }
+    }
+
+    #[test]
+    fn outlier_threshold_extracts_large_scaled_values() {
+        // Engineered: make residuals large enough that scaled values
+        // definitely exceed threshold T=0.5 on at least some coords.
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(7);
+        let n = 16;
+        let d = 8;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block {
+            *v = rng.gen_range(-1.0_f32..1.0);
+        }
+        let w = vec![1.0_f32; n];
+        let params = CodecParams {
+            bit_width: 2,
+            k: 4,
+            variance_ratio: 0.99,
+            outlier_threshold: Some(0.5),
+            ..Default::default()
+        };
+        let (_, codes) = encode_block::<MSE>(&block, &w, d, &params);
+        let total_outliers: usize = codes.iter().map(|c| c.outliers.len()).sum();
+        assert!(total_outliers > 0, "T=0.5 on this input should yield at least one outlier");
+    }
+
+    #[test]
+    fn outlier_round_trip_reduces_reconstruction_mse() {
+        // Compare MSE with/without outlier compensation on the same block.
+        // At b=2 with Gaussian-like residuals, outliers dominate the MSE,
+        // so enabling outlier compensation must strictly decrease MSE.
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(13);
+        let n = 64;
+        let d = 16;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block {
+            *v = rng.gen::<f32>() * 2.0 - 1.0;
+        }
+        let w = vec![1.0_f32; n];
+
+        let p_no = CodecParams { bit_width: 2, k: 8, variance_ratio: 0.99,
+                                 outlier_threshold: None, ..Default::default() };
+        let (sk_no, c_no) = encode_block::<MSE>(&block, &w, d, &p_no);
+        let rec_no = decode_block::<MSE>(&sk_no, &c_no);
+        let mse_no = mse_of(&block, &rec_no);
+
+        let p_on = CodecParams { bit_width: 2, k: 8, variance_ratio: 0.99,
+                                 outlier_threshold: Some(2.0), ..Default::default() };
+        let (sk_on, c_on) = encode_block::<MSE>(&block, &w, d, &p_on);
+        let rec_on = decode_block::<MSE>(&sk_on, &c_on);
+        let mse_on = mse_of(&block, &rec_on);
+
+        assert!(
+            mse_on <= mse_no,
+            "outlier compensation at T=2.0 must not make MSE worse: off={mse_no:.5e}, on={mse_on:.5e}"
+        );
+        // At b=2 with non-trivial data, the improvement should be real
+        // (≥ 10% MSE reduction).  Allow leeway but flag a regression.
+        assert!(
+            mse_on < mse_no,
+            "outlier T=2.0 should strictly reduce MSE at b=2 on Gaussian-like residuals; off={mse_no:.5e}, on={mse_on:.5e}"
+        );
+    }
+
+    #[test]
+    fn outlier_byte_cost_scales_with_outlier_count() {
+        // Each outlier entry should cost exactly 4 bytes (u16 index + f16 value).
+        let n = 32;
+        let d = 8;
+        let mut block = vec![0.0_f32; n * d];
+        for i in 0..n {
+            for j in 0..d {
+                block[i * d + j] = ((i + j) as f32 * 0.3).sin();
+            }
+        }
+        let w = vec![1.0_f32; n];
+        let p_no = CodecParams { bit_width: 2, k: 4, ..Default::default() };
+        let p_on = CodecParams {
+            bit_width: 2, k: 4,
+            outlier_threshold: Some(1.0),
+            ..Default::default()
+        };
+        let (_, c_no) = encode_block::<MSE>(&block, &w, d, &p_no);
+        let (_, c_on) = encode_block::<MSE>(&block, &w, d, &p_on);
+        for (a, b) in c_no.iter().zip(c_on.iter()) {
+            let expected_delta = b.outliers.len() * 4;
+            let actual_delta = b.nbytes() - a.nbytes();
+            assert_eq!(
+                actual_delta, expected_delta,
+                "outlier byte cost should be 4 bytes each (got {} for {} outliers)",
+                actual_delta, b.outliers.len()
+            );
+        }
+    }
+
+    #[test]
+    fn outlier_with_very_low_threshold_patches_all_coords() {
+        // T=0 means every coord is an outlier; reconstruction should then
+        // be near-perfect (limited only by f16 precision).
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(21);
+        let n = 8;
+        let d = 8;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block {
+            *v = rng.gen::<f32>() * 2.0 - 1.0;
+        }
+        let w = vec![1.0_f32; n];
+        let params = CodecParams {
+            bit_width: 2, k: 4, variance_ratio: 0.99,
+            outlier_threshold: Some(0.0),  // everything is an outlier
+            ..Default::default()
+        };
+        let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
+        let rec = decode_block::<MSE>(&sk, &codes);
+        let mse = mse_of(&block, &rec);
+        // With every coord patched as exact f16, the Lloyd-Max residual
+        // error is fully bypassed. Remaining error comes from f16
+        // precision on (i) outlier values, (ii) the K-means center / t
+        // scalar reconstruction, and (iii) the f16 PCA basis/mean.
+        // On uniform-random [-1, 1] input this floor is ~2e-3.
+        assert!(mse < 3e-3,
+                "T=0 patches every coord → near-lossless, got MSE={mse:.4e}");
+    }
+
+    // -------------------- skeleton_dtype ablation --------------------
+
+    /// FP32 skeleton must preserve the PCA mean and basis to full float
+    /// precision — no f16 rounding on the way in or out.
+    #[test]
+    fn skeleton_fp32_preserves_precision() {
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        let mut rng = SmallRng::seed_from_u64(0xABCD);
+        let n = 64;
+        let d = 32;
+        let mut block = vec![0.0_f32; n * d];
+        for v in &mut block {
+            *v = rng.gen_range(-1.0_f32..1.0);
+        }
+        let w = vec![1.0_f32; n];
+        let base = CodecParams {
+            variance_ratio: 0.99,
+            k: 4,
+            bit_width: 3,
+            ..Default::default()
+        };
+        let p_fp16 = CodecParams { skeleton_dtype: SkeletonDtype::Fp16, ..base.clone() };
+        let p_fp32 = CodecParams { skeleton_dtype: SkeletonDtype::Fp32, ..base };
+        let (sk16, _) = encode_block::<MSE>(&block, &w, d, &p_fp16);
+        let (sk32, _) = encode_block::<MSE>(&block, &w, d, &p_fp32);
+
+        // Same d_eff (fit is numerically identical; only storage differs).
+        assert_eq!(sk16.pca.d_eff, sk32.pca.d_eff);
+
+        // fp16 path: mean/basis are f16-rounded; mean_fp32 / basis_fp32 are None.
+        assert!(sk16.pca.mean_fp32.is_none());
+        assert!(sk16.pca.basis_fp32.is_none());
+
+        // fp32 path: mean_fp32 / basis_fp32 are Some; f16 buffers are empty.
+        let mean32 = sk32.pca.mean_fp32.as_ref().expect("fp32 mean");
+        let basis32 = sk32.pca.basis_fp32.as_ref().expect("fp32 basis");
+        assert!(sk32.pca.mean.is_empty());
+        assert!(sk32.pca.basis.is_empty());
+
+        // fp32 mean/basis must match the unrounded fp32 values exactly,
+        // while fp16 storage round-trips through f16 with non-zero error.
+        let mean16 = sk16.pca.mean_f32();
+        assert_eq!(mean32.len(), mean16.len());
+        let mean_delta: f32 = mean32
+            .iter()
+            .zip(&mean16)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0, f32::max);
+        // mean_delta > 0 would show f16 was doing some rounding; but if the
+        // mean happens to fall exactly on f16-representable grid points it
+        // may be zero. Either way the structural check above is the real
+        // guarantee. We include this loose sanity check without asserting.
+        let _ = mean_delta;
+
+        // K-means centres follow the same storage contract.
+        assert!(sk32.kmeans.centers_fp32.is_some());
+        assert!(sk32.kmeans.centers.is_empty());
+
+        // Byte accounting: fp32 skeleton must be ~2× fp16.
+        assert!(
+            sk32.pca.nbytes() >= 2 * sk16.pca.nbytes() - 8,
+            "fp32 PCA should be ~2× fp16 ({} vs {})",
+            sk32.pca.nbytes(),
+            sk16.pca.nbytes()
+        );
+
+        // basis32 values should have full fp32 precision (no rounding to f16
+        // grid); verify at least some value has more than 10 bits of mantissa
+        // beyond the f16 nearest.
+        let basis16 = sk16.pca.basis_f32();
+        let mut saw_finer = false;
+        for (a, b) in basis32.iter().zip(&basis16) {
+            if (a - b).abs() > 1e-6 {
+                saw_finer = true;
+                break;
+            }
+        }
+        assert!(
+            saw_finer,
+            "fp32 basis must differ from f16-rounded version in at least one coordinate"
+        );
+    }
+
+    /// Round-trip must still work under fp32 skeleton storage.
+    #[test]
+    fn skeleton_fp32_round_trip() {
+        let n = 16;
+        let d = 8;
+        let mut block = vec![0.0_f32; n * d];
+        for i in 0..n {
+            for j in 0..d {
+                block[i * d + j] = ((i + j) as f32).sin();
+            }
+        }
+        let w = vec![1.0_f32; n];
+        let params = CodecParams {
+            variance_ratio: 0.95,
+            k: 4,
+            bit_width: 3,
+            skeleton_dtype: SkeletonDtype::Fp32,
+            ..Default::default()
+        };
+        let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
+        let r = decode_block::<MSE>(&sk, &codes);
+        assert_eq!(r.len(), block.len());
+        for v in r {
+            assert!(v.is_finite());
+        }
+        // fp32 skeleton: mean_fp32 / basis_fp32 should be Some, f16 buffers empty.
+        assert!(sk.pca.mean_fp32.is_some());
+        assert!(sk.pca.basis_fp32.is_some());
+        assert!(sk.pca.mean.is_empty());
+        assert!(sk.pca.basis.is_empty());
+        assert!(sk.kmeans.centers_fp32.is_some());
+        assert!(sk.kmeans.centers.is_empty());
     }
 
     // -------------------- all-zero input --------------------
@@ -938,6 +1400,10 @@ mod tests {
             rotation_seed: 0xA5A5_A5A5,
             kmeans_max_iter: 32,
             pca_method: PcaMethod::Exact,
+            skeleton_dtype: SkeletonDtype::Fp16,
+            exact_rank_cap: None,
+            custom_centroids: None,
+            outlier_threshold: None,
         };
         let enc = encode_layer::<MSE>(&blocks, &ws, d, &params, false);
         assert!(enc.shared_pca.is_none());

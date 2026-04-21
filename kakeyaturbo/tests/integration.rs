@@ -42,7 +42,7 @@ fn end_to_end_mse_block_64x32() {
         bit_width: 4,
         rotation_seed: 0xFEED,
         kmeans_max_iter: 64,
-        pca_method: kakeyaturbo::PcaMethod::Exact,
+        ..Default::default()
     };
     let (sk, codes) = encode_block::<MSE>(&block, &w, d, &params);
     let recovered = decode_block::<MSE>(&sk, &codes);
