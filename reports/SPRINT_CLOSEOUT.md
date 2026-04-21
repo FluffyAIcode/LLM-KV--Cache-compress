@@ -19,13 +19,13 @@ reference.
 | B3 | RSVD b=3 + K cal + outlier T=2.0 + V Besi + 6 bdry | 4.30× | +5.36 % | 85.32 % | MARGINAL |
 | R1 | RSVD b=2 + K cal + outlier T=2.0 + V Besi + 6 bdry | 4.54× | +7.09 % | 82.54 % | MARGINAL |
 | R2 | RSVD b=2 + K cal + outlier T=1.5 + V Besi + 6 bdry | 3.92× | +3.88 % | 84.13 % | MARGINAL |
-| **NB3sv2** | **RSVD b=3 + K cal + outlier T=2.0 + V RSVD b=2 (shared-basis) + 6 bdry** | **4.61×** | **+7.82 %** | 78.97 % | **MARGINAL** |
+| **v1.3 PPL** | **v1.3 RSVD (K b=3 + V b=2 shared-basis) + K cal + outlier T=2.0 + 6 bdry** | **4.61×** | **+7.82 %** | 78.97 % | **MARGINAL** |
 
 Source JSON files:
 - v1.4 Pareto: `reports/v1_4_besicovitch_v_only/ds_kakeya_vbesi_d3m4q_prerope_kv_b4_exact_fp16_sk0_sv0.json`
 - R1/R2/R3: `reports/v1_3_riemann_b2/R{1,2,3}_*.json`
 - B3: `reports/v1_3_revival/B3_rsvd_b3_outlier_Vbesi_prerope_kv_b3_randomized_fp16_sk0_sv0.json`
-- NB3sv2 (new high-ratio MARGINAL): `reports/v1_3_v_rsvd_noBesi/NB3sv2_noVBesi_T20_Vb2_*.json`
+- v1.3 PPL (new high-ratio MARGINAL): `reports/v1_3_ppl/v1_3_ppl_*.json`
 
 ## v1.3 + guardrail stacking — the full progressive ladder
 
@@ -127,20 +127,22 @@ ratio advantage at matched Δppl tier.** See
 **8 % byte savings per middle layer → +26 % total ratio** after
 combining with 6 boundary layers' shared cost.
 
-### v1.3-native V-stream recipe — new high-ratio MARGINAL champion
+### v1.3 PPL — original v1.3 codec + PPL guardrails (new MARGINAL champion)
 
-**NB3sv2** (`reports/v1_3_v_rsvd_noBesi/NB3sv2_*.json`): keep K the
-same as B3, but use v1.3's **native** V-stream (RSVD b=2 with
-layer-shared basis) instead of V Besi.
+**v1.3 PPL** (`reports/v1_3_ppl/v1_3_ppl_*.json`) is the *original*
+v1.3 codec (K RSVD b=3 + V RSVD b=2 with `--share-basis-v`) wrapped
+by the four PPL guardrails: Q-precond, K calibrated Lloyd-Max, 6-bdry,
+outlier T=2.0. No Besicovitch, no asymmetric codec choice — just
+v1.3 with guardrails.
 
 | Config | Ratio | Δppl | top-1 | Verdict |
 |:---|---:|---:|---:|:---:|
-| B3-orig (V Besi) | 4.30× | +5.36 % | 85.32 % | MARGINAL |
-| **NB3sv2 (V RSVD b=2 shared)** | **4.61×** | **+7.82 %** | **78.97 %** | **MARGINAL 🎯** |
+| B3-orig (v1.3 K + V Besi) | 4.30× | +5.36 % | 85.32 % | MARGINAL |
+| **v1.3 PPL (v1.3 K + v1.3 V)** | **4.61×** | **+7.82 %** | **78.97 %** | **MARGINAL 🎯** |
 
-**+7 % ratio at +2.5 pp Δppl cost** — the highest-ratio point we
-have measured at Δppl ≤ 10 %. V RSVD b=2 with layer-shared basis is
-~33 B/v vs V Besi's 58 B/v (~43 % byte savings on V stream).
+**+7 % ratio at +2.5 pp Δppl cost** over B3-orig — the highest-ratio
+point we have measured at Δppl ≤ 10 %. V RSVD b=2 with layer-shared
+basis is ~33 B/v vs V Besi's 58 B/v (~43 % byte savings on V).
 
 Production-matrix use case: **ratio-first MARGINAL** deploys where
 top-1 ≥ 75 % is sufficient.
@@ -162,12 +164,13 @@ top-1 ≥ 75 % is sufficient.
    +7.18 % → +1.60 % Δppl on d=6 m=4 Riemann configs. 8 boundaries
    starts to hurt (extra compression burden on remaining layers).
 
-4. **Asymmetric K/V is tier-specific.**
-   - At ACCEPT ★ tier (K Δppl ≤ +2 %, e.g. R3): use K Kakeya-PCA +
-     V Besi d=3 m=4.
-   - At ratio-first MARGINAL tier: use K Kakeya-PCA + **v1.3 native
-     V RSVD b=2 shared-basis** (NB3sv2). +7 % ratio over B3-orig at
-     the cost of +2.5 pp Δppl. V Besi is dropped.
+4. **V-stream codec is tier-specific.**
+   - At ACCEPT ★ tier (K Δppl ≤ +2 %, e.g. R3): V Besicovitch d=3 m=4
+     is essential (−4.8 pp Δppl worth).
+   - At ratio-first MARGINAL tier: use **v1.3 original V RSVD b=2
+     with layer-shared basis** (the "v1.3 PPL" recipe). Same K guard-
+     rails, pure v1.3 V stream. +7 % ratio over B3-orig at the cost
+     of +2.5 pp Δppl.
 
 5. **Outlier compensation** T=1.5 (13.4 % of coords patched as f16)
    vs T=2.0 (4.5 % of coords): −3.3 pp Δppl, costs ~13 % ratio. On
