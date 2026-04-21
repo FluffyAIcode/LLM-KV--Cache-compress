@@ -1,22 +1,0 @@
-[NB3sv3_noVBesi_T20] loading model…
-Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 13996.70it/s]
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-  patched 28 attention layers; cache now stores PRE-RoPE K
-  sanity: logits finite = True,  K_pre[0] norm = 11968.000
-  Q-preconditioning: loaded 27 layers, n_kv=2, D=128, skip_layers=[0]
-  Q-precondition sanity: max_abs=2.170e-05, max_rel=5.045e-06
-  got 4 WikiText passages
-  passage 1/4…
-    ppl_ref=157.981 ppl_alt=159.393 Δppl=+0.89% KL=0.1494 top1=74.6%
-  passage 2/4…
-    ppl_ref=42.046 ppl_alt=44.562 Δppl=+5.98% KL=0.1182 top1=81.0%
-  passage 3/4…
-    ppl_ref=9.475 ppl_alt=9.718 Δppl=+2.57% KL=0.1011 top1=84.1%
-  passage 4/4…
-    ppl_ref=22.120 ppl_alt=27.894 Δppl=+26.11% KL=0.1311 top1=76.2%
-
-[NB3sv3_noVBesi_T20] PRE-ROPE CACHE  VERDICT = REJECT
-  compress=kv bit_width=3 vr=1.0 pca=randomized skeleton=fp16 share_k=False share_v=True
-  Δppl mean = +8.888%
-  top1 mean = 78.97%
-  KL mean   = 0.12494
