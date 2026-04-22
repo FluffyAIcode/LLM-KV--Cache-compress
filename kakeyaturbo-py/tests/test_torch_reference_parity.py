@@ -77,6 +77,8 @@ def rust_is_importable():
 def _one_case(seed: int, n: int, d: int, metric: str, bit_width: int,
               rotation_seed: int, variance_ratio: float, k: int,
               pca_method: str = "exact", rsvd_rank: int | None = None,
+              outlier_threshold: float | None = None,
+              custom_centroids: np.ndarray | None = None,
               ) -> None:
     """Assert bit-level parity for one fuzz case."""
     rng = np.random.default_rng(seed)
@@ -98,6 +100,10 @@ def _one_case(seed: int, n: int, d: int, metric: str, bit_width: int,
         kwargs["rsvd_target_rank"] = rsvd_rank if rsvd_rank is not None else max(d // 2, 8)
         kwargs["rsvd_oversample"] = 8
         kwargs["rsvd_power_iters"] = 2
+    if outlier_threshold is not None:
+        kwargs["outlier_threshold"] = float(outlier_threshold)
+    if custom_centroids is not None:
+        kwargs["centroids"] = custom_centroids.astype(np.float32).tolist()
 
     # 1. Get Rust's stage-1 output (the skeleton is the oracle).
     parts_rust = encode_block_codes(X, **kwargs)
@@ -107,8 +113,8 @@ def _one_case(seed: int, n: int, d: int, metric: str, bit_width: int,
     # 2. Run stages 2..=5 in PyTorch, using Rust's skeleton.
     parts_torch = encode_block_torch_stage2(
         X, parts_rust,
-        custom_centroids=None,
-        outlier_threshold=None,
+        custom_centroids=custom_centroids,
+        outlier_threshold=outlier_threshold,
         device="cpu",
     )
 
@@ -165,6 +171,48 @@ def _one_case(seed: int, n: int, d: int, metric: str, bit_width: int,
             f"on (seed={seed}, n={n}, d={d}, metric={metric}, "
             f"bit_width={bit_width})"
         )
+
+    # Outlier fields (Phase A.2): when outlier_threshold is set on the
+    # Rust side, both sides must extract the same (idx, val) pairs
+    # per row.  `outlier_count` must agree exactly for 99 %+ of rows;
+    # per-row bit-level agreement of idx + val requires the SCALED
+    # residual to be identical (it is, because it comes from the same
+    # Rust WHT helper), but again boundary crossings can flip a
+    # threshold-crossing coord.
+    if outlier_threshold is not None:
+        rust_oc = parts_rust["outlier_count"].astype(np.int64)
+        torch_oc = parts_torch["outlier_count"].astype(np.int64)
+        oc_bad = int((rust_oc != torch_oc).sum())
+        # Outlier-count can swing by ±1 on ≤ max_boundary_crossings rows.
+        assert oc_bad <= max_boundary_crossings, (
+            f"outlier_count: {oc_bad} rows disagree "
+            f"(bar={max_boundary_crossings}) on "
+            f"(seed={seed}, n={n}, d={d}, metric={metric}, bit_width={bit_width})"
+        )
+        # For rows where both sides agree on the count, the idx set
+        # and val vector must also agree to within fp16 ULP.
+        agree_rows = np.where(rust_oc == torch_oc)[0]
+        for i in agree_rows[:256]:  # cap runtime
+            cnt = int(rust_oc[i])
+            if cnt == 0:
+                continue
+            ri = parts_rust["outlier_idx"][i, :cnt]
+            ti = parts_torch["outlier_idx"][i, :cnt]
+            # Idx can reorder if both sides enumerate the same positions
+            # in different orders; we already enforce ascending in the
+            # Rust path, and torch also scans left-to-right.  Compare
+            # as sets to defend against future ordering drift.
+            assert sorted(ri.tolist()) == sorted(ti.tolist()), (
+                f"outlier_idx row {i}: {ri} vs {ti}"
+            )
+            rv_sorted = parts_rust["outlier_val"][i, np.argsort(ri)]
+            tv_sorted = parts_torch["outlier_val"][i, np.argsort(ti)]
+            np.testing.assert_allclose(
+                rv_sorted, tv_sorted,
+                rtol=0,
+                atol=np.finfo(np.float16).eps * max(1.0, float(np.max(np.abs(rv_sorted)))),
+                err_msg=f"outlier_val row {i}",
+            )
 
     # 3. Decode via Rust from torch's codes, and via torch from torch's codes;
     #    compare against decoded via Rust from Rust's codes.
@@ -265,4 +313,102 @@ def test_stage2_parity_small_tensors(rust_is_importable, seed, metric):
         rotation_seed=42,
         variance_ratio=1.0, k=8,
         pca_method="exact",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase A.2: outlier compensation.
+#
+# PR #15's production cell uses outlier_threshold=2.0 on the K stream
+# (metric=inner_product, b=3).  The outlier path extracts scaled-residual
+# coordinates with |v| > threshold, stores them as (u16 idx, f16 val)
+# pairs, and overrides the Lloyd-Max dequantised value at those
+# coordinates on decode.
+#
+# Fuzz budget: 8 seeds × 3 metrics × 3 bit_widths × 3 thresholds = 216
+# triples, on realistic (512 × 128) shape so the outlier rate is
+# non-degenerate (~4 % at T=2.0 on Gaussian residuals).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("seed", _SEEDS[:8])
+@pytest.mark.parametrize("metric", _METRICS)
+@pytest.mark.parametrize("bit_width", [2, 3, 4])
+@pytest.mark.parametrize("threshold", [1.5, 2.0, 2.5])
+def test_stage2_parity_with_outlier_threshold(
+        rust_is_importable, seed, metric, bit_width, threshold):
+    """Phase A.2: outlier compensation on the PR #15 production shape."""
+    _one_case(
+        seed=seed, n=512, d=128,
+        metric=metric, bit_width=bit_width,
+        rotation_seed=(seed * 2654435761) & 0xFFFFFFFF,
+        variance_ratio=0.95, k=16,
+        pca_method="exact",
+        outlier_threshold=threshold,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase A.3: custom (calibrated) centroids.
+#
+# The PR #15 production cell also supplies per-stream calibrated
+# Lloyd-Max centroids (see `reports/v1_4_q_pca/calibrated_codebook/`).
+# We synthesise a plausible calibrated table here — 2^b equi-spaced
+# centroids perturbed by ~5 % — and verify Torch's centroid argmin
+# matches Rust's.  This stresses `_quantize_rows` under non-Gaussian
+# centroid spacing.
+# ---------------------------------------------------------------------------
+
+
+def _synthetic_centroids(bit_width: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    k = 1 << bit_width
+    # Start from Gaussian defaults, perturb by 5 % (keeping ascending).
+    from kakeyaturbo_py import centroids_gaussian
+    c = np.asarray(centroids_gaussian(bit_width)).astype(np.float64)
+    jitter = rng.standard_normal(k) * 0.05 * np.abs(c).max()
+    c += jitter
+    c = np.sort(c)
+    # Ensure strict ascending with at least 1e-3 gap.
+    for i in range(1, k):
+        if c[i] - c[i - 1] < 1e-3:
+            c[i] = c[i - 1] + 1e-3
+    return c.astype(np.float32)
+
+
+@pytest.mark.parametrize("seed", _SEEDS[:6])
+@pytest.mark.parametrize("metric", _METRICS)
+@pytest.mark.parametrize("bit_width", [2, 3])
+def test_stage2_parity_with_custom_centroids(
+        rust_is_importable, seed, metric, bit_width):
+    """Phase A.3: calibrated Lloyd-Max centroid table."""
+    c = _synthetic_centroids(bit_width, seed)
+    _one_case(
+        seed=seed, n=512, d=128,
+        metric=metric, bit_width=bit_width,
+        rotation_seed=(seed * 2654435761) & 0xFFFFFFFF,
+        variance_ratio=0.95, k=16,
+        pca_method="exact",
+        custom_centroids=c,
+    )
+
+
+@pytest.mark.parametrize("seed", _SEEDS[:4])
+@pytest.mark.parametrize("metric", _METRICS)
+def test_stage2_parity_full_pr15_recipe(
+        rust_is_importable, seed, metric):
+    """Phase A.1 ∪ A.2 ∪ A.3 ∪ randomized-PCA: PR #15 production cell.
+
+    Hits the exact knobs the +35.33 % Delta-ppl run used (minus
+    share_basis — that's a layer-level feature, covered by M3 parity
+    tests at the roundtrip_layer level)."""
+    c = _synthetic_centroids(bit_width=3, seed=seed)
+    _one_case(
+        seed=seed, n=512, d=128,
+        metric=metric, bit_width=3,
+        rotation_seed=3405691582,
+        variance_ratio=0.95, k=16,
+        pca_method="randomized", rsvd_rank=64,
+        outlier_threshold=2.0,
+        custom_centroids=c,
     )
