@@ -93,6 +93,8 @@ def install_vllm_noise_patch() -> None:
 # =============================================================================
 
 def install_hf_noise_patch() -> None:
+    """Reimplements the transformers 4.51 Qwen2Attention.forward with an
+    inserted K/V perturbation between the q/k/v projection and RoPE."""
     import importlib
     mod_q = importlib.import_module(
         "transformers.models.qwen2.modeling_qwen2"
@@ -100,51 +102,58 @@ def install_hf_noise_patch() -> None:
     if getattr(mod_q.Qwen2Attention, "_kk_phase2_patched", False):
         return
     orig = mod_q.Qwen2Attention.forward
+    apply_rope = mod_q.apply_rotary_pos_emb
+    eager_attn = mod_q.eager_attention_forward
+    ALL_ATTN = getattr(mod_q, "ALL_ATTENTION_FUNCTIONS", {})
 
-    def patched(self, hidden_states, *args, **kwargs):  # type: ignore[no-untyped-def]
+    def patched(self, hidden_states, position_embeddings, attention_mask=None,
+                past_key_value=None, cache_position=None, **kwargs):  # type: ignore[no-untyped-def]
         if not NoiseState.active:
-            return orig(self, hidden_states, *args, **kwargs)
-        # Mirror the part of the eager forward that computes q/k/v
-        # before rotary_emb. We perturb K/V here, then splice back
-        # by temporarily replacing the k_proj/v_proj layers' outputs
-        # for THIS call via a small wrapper.
+            return orig(self, hidden_states, position_embeddings,
+                        attention_mask, past_key_value, cache_position,
+                        **kwargs)
+
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
+
         q = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        k_orig = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        v_orig = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
-        k = _perturb(k_orig, NoiseState.sigma_k)
-        v = _perturb(v_orig, NoiseState.sigma_v)
+        k = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        v = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
-        # Call the original forward but override its internal q/k/v
-        # by monkey-patching q_proj / k_proj / v_proj for exactly this
-        # call. This is fiddly but avoids re-implementing the rest of
-        # the eager forward.
-        class _Const:
-            def __init__(self, out: torch.Tensor):
-                self.out = out
-            def __call__(self, x: torch.Tensor) -> torch.Tensor:
-                return self.out
+        # >>> perturbation injection (pre-RoPE) <<<
+        k = _perturb(k, NoiseState.sigma_k)
+        v = _perturb(v, NoiseState.sigma_v)
 
-        # k/v are already in shape [bsz, n_kv, seq, head_dim]; undo the
-        # transpose+view so .view(hidden_shape).transpose(1,2) inside
-        # the original forward yields the perturbed tensor.
-        def _unshape(t: torch.Tensor) -> torch.Tensor:
-            # t: [bsz, n_kv, seq, head_dim] -> [bsz, seq, n_kv*head_dim]
-            return t.transpose(1, 2).reshape(*input_shape, -1)
+        cos, sin = position_embeddings
+        q, k = apply_rope(q, k, cos, sin)
 
-        q_proj_orig = self.q_proj
-        k_proj_orig = self.k_proj
-        v_proj_orig = self.v_proj
-        try:
-            self.q_proj = _Const(_unshape(q))
-            self.k_proj = _Const(_unshape(k))
-            self.v_proj = _Const(_unshape(v))
-            return orig(self, hidden_states, *args, **kwargs)
-        finally:
-            self.q_proj = q_proj_orig
-            self.k_proj = k_proj_orig
-            self.v_proj = v_proj_orig
+        if past_key_value is not None:
+            cache_kwargs = {"sin": sin, "cos": cos,
+                            "cache_position": cache_position}
+            k, v = past_key_value.update(k, v, self.layer_idx, cache_kwargs)
+
+        sliding_window = None
+        cfg = self.config
+        if (getattr(cfg, "use_sliding_window", False)
+                and getattr(cfg, "sliding_window", None) is not None
+                and self.layer_idx >= getattr(cfg, "max_window_layers", 1 << 30)):
+            sliding_window = cfg.sliding_window
+
+        attn_fn = eager_attn
+        impl = getattr(cfg, "_attn_implementation", "eager")
+        if impl != "eager" and impl in ALL_ATTN:
+            attn_fn = ALL_ATTN[impl]
+
+        attn_output, attn_weights = attn_fn(
+            self, q, k, v, attention_mask,
+            dropout=0.0 if not self.training else self.attention_dropout,
+            scaling=self.scaling,
+            sliding_window=sliding_window,
+            **kwargs,
+        )
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+        attn_output = self.o_proj(attn_output)
+        return attn_output, attn_weights
 
     mod_q.Qwen2Attention.forward = patched
     mod_q.Qwen2Attention._kk_phase2_patched = True  # type: ignore[attr-defined]
