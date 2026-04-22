@@ -261,7 +261,18 @@ def test_partial_block_rejects_non_bf16():
         decode_partial_block_bf16(x_fp32)
 
 
-def test_partial_block_rejects_non_2d():
-    x_bf16 = torch.zeros((4,), dtype=torch.bfloat16, device=DEVICE)
-    with pytest.raises(ValueError, match="2-D"):
+def test_partial_block_accepts_3d_staging_shape():
+    """M6 backend staging buffers have shape [m, n_kv_heads, d_eff].
+    decode_partial_block_bf16 must accept that shape and upcast
+    element-wise — the partial-block path is a simple dtype cast,
+    it has no opinion about head dims."""
+    x_bf16 = torch.zeros((17, 2, 64), dtype=torch.bfloat16, device=DEVICE)
+    out = decode_partial_block_bf16(x_bf16)
+    assert out.dtype == torch.float32
+    assert out.shape == (17, 2, 64)
+
+
+def test_partial_block_rejects_rank_0():
+    x_bf16 = torch.tensor(0.0, dtype=torch.bfloat16, device=DEVICE)
+    with pytest.raises(ValueError, match="rank="):
         decode_partial_block_bf16(x_bf16)

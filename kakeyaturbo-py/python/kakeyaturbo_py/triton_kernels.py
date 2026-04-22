@@ -541,11 +541,12 @@ def decode_partial_block_bf16(
     """Read a bf16 partial-block staging buffer back to fp32.
 
     Input:
-        staging_bf16: [m, d] torch.bfloat16, CUDA.  `m` may be any
-                      value in `1..block_size_codec`.
+        staging_bf16: any rank, bf16, CUDA.  Typical shapes:
+          - `[m, d]`               (flat)
+          - `[m, n_kv_heads, d]`   (the staging shape M6 allocates)
 
     Output:
-        x: [m, d] torch.float32, same device.
+        x: torch.float32, same shape and device.
 
     Contract: this is an identity dtype-cast, byte-identical to what
     vLLM's FlashAttention would read in the bf16 KV-cache case.  It
@@ -553,8 +554,10 @@ def decode_partial_block_bf16(
     partial dispatch without conditional logic leaking into the
     kernel layer.
     """
-    if staging_bf16.dim() != 2:
-        raise ValueError(f"expected 2-D tensor, got {tuple(staging_bf16.shape)}")
+    if staging_bf16.dim() < 1 or staging_bf16.dim() > 3:
+        raise ValueError(
+            f"expected 1-, 2- or 3-D tensor, got rank={staging_bf16.dim()}"
+        )
     if staging_bf16.dtype != torch.bfloat16:
         raise TypeError(
             f"expected bfloat16 staging buffer, got {staging_bf16.dtype}"

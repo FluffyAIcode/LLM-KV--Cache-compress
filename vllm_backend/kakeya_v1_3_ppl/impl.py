@@ -145,15 +145,45 @@ class KakeyaV13PPLMetadataBuilder(AttentionMetadataBuilder):
 
 
 @dataclass
+class _BlockStaging:
+    """Staging buffer for a single in-progress codec block.
+
+    One of these exists per (layer, partial-block-cache-index) combo
+    until the block seals.  After sealing, the slot bytes are written
+    to the paged cache and the staging entry is dropped.
+
+    PLAN.md §Consequence:
+        The paged cache has two slot types per layer:
+        (1) sealed codec blocks (compressed, full pipeline applied),
+        (2) trailing partial block (bf16, < block_size_codec tokens).
+
+    This is the carrier for (2).  The staging buffer is NOT in the
+    paged cache allocation — it would blow the 74 KB slot budget by
+    ~23×.  It lives on the impl, keyed by the paged-cache block_idx
+    the partial block will eventually write to.
+    """
+
+    k_bf16: torch.Tensor      # [block_size_codec, n_kv_heads, head_size] bf16
+    v_bf16: torch.Tensor      # same
+    count: int = 0            # how many rows have been filled
+
+
+@dataclass
 class _PerLayerState:
     """Held on `layer._kakeya_state` once the impl has initialised
-    its buffers for that layer."""
+    per-layer buffers.
 
-    staging_k_bf16: torch.Tensor  # [block_size_codec, n_kv_heads, head_size] bf16
-    staging_v_bf16: torch.Tensor  # same
-    staging_count: int = 0        # how many valid rows in the staging buffer
+    Multiple requests share a layer but not their partial blocks,
+    because two requests rarely write the same cache block.  We
+    therefore key the staging dict by *paged-cache block_idx* (which
+    vLLM's block_manager guarantees is per-request uniquely allocated)
+    rather than by request_id.
+    """
 
-    # Calibrated codec constants (loaded from M2 artefacts).
+    # block_idx → _BlockStaging.  Dropped on seal.
+    staging_per_block: dict[int, _BlockStaging] = field(default_factory=dict)
+
+    # Calibrated codec constants (loaded from M2 artefacts at first forward).
     sigma_q_chol: torch.Tensor | None = None      # [n_kv, D, D] fp32
     sigma_q_inv_chol: torch.Tensor | None = None  # [n_kv, D, D] fp32
     k_centroids: torch.Tensor | None = None       # [2^b_K] fp32
@@ -230,8 +260,9 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         # 8..12  : k_centers (u32)
         # 12..16 : bit_width (u32)
         # 16..20 : outlier_count_total (u32) — sum across all rows
-        # 20..24 : reserved
-        # 24..48 : reserved
+        # 20..24 : metric id (u32, 0=mse, 1=inner_product, 2=linf)
+        # 24..32 : rotation_seed (u64)
+        # 32..48 : reserved
         header = out[:config.header_bytes]
         header[0:4] = np.frombuffer(b"KK13", dtype=np.uint8)
         header[4:8] = np.frombuffer(
@@ -246,6 +277,14 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         oc_total = int(np.asarray(parts["outlier_count"]).sum())
         header[16:20] = np.frombuffer(
             np.uint32(oc_total).tobytes(), dtype=np.uint8,
+        )
+        metric_id = {"mse": 0, "inner_product": 1, "linf": 2}[str(parts["metric"])]
+        header[20:24] = np.frombuffer(
+            np.uint32(metric_id).tobytes(), dtype=np.uint8,
+        )
+        rotation_seed = int(parts.get("rotation_seed", 3405691582))
+        header[24:32] = np.frombuffer(
+            np.uint64(rotation_seed).tobytes(), dtype=np.uint8,
         )
         # --- PCA basis (fp16) ---
         basis_fp16 = np.asarray(parts["basis"]).astype(np.float16).tobytes(order="C")
@@ -502,6 +541,10 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
                     )[0])
                     used += 1
 
+        metric_id = int(np.frombuffer(bytes(header[20:24]), dtype="<u4")[0])
+        metric = {0: "mse", 1: "inner_product", 2: "linf"}.get(metric_id, "mse")
+        rotation_seed = int(np.frombuffer(bytes(header[24:32]), dtype="<u8")[0])
+
         return {
             "mean": mean,
             "basis": basis,
@@ -509,10 +552,10 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             "d": head_size,
             "d_eff": d_eff,
             "k": k_centers,
-            "rotation_seed": 3405691582,     # Phase A: hardcoded to match M2 cal
+            "rotation_seed": rotation_seed,
             "wht_len": config.wht_len,
             "bit_width": bit_width,
-            "metric": "mse",                  # Phase B: stored in header
+            "metric": metric,
             "seg_id": seg_id,
             "t": t,
             "norm": norm,
@@ -530,25 +573,141 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         layer: AttentionLayer,
         device: torch.device,
     ) -> _PerLayerState:
-        """Initialise the per-layer staging buffer + calibrated
-        constants.  Phase B plumbs the M2 safetensors load here."""
+        """Initialise the per-layer staging dict + (Phase B.2) load
+        calibrated constants from the M2 safetensors files."""
         state = getattr(layer, "_kakeya_state", None)
         if state is not None:
             return state
-        D = self.head_size
-        state = _PerLayerState(
-            staging_k_bf16=torch.zeros(
-                (self.block_size_codec, self.num_kv_heads, D),
-                dtype=torch.bfloat16, device=device,
-            ),
-            staging_v_bf16=torch.zeros(
-                (self.block_size_codec, self.num_kv_heads, D),
-                dtype=torch.bfloat16, device=device,
-            ),
-            staging_count=0,
-        )
+        state = _PerLayerState(staging_per_block={})
+        # Phase B.2 will load Σ_q + centroids here.  For Phase B.1 the
+        # encoder runs with the Gaussian default Lloyd-Max table (which
+        # is what M4 Phase A and M5 already tested against), and Σ_q
+        # whitening is off on K — PR #15 measured the gap this opens
+        # as a ~4× Δppl cost that Phase B.2 will close.
         layer._kakeya_state = state   # type: ignore[attr-defined]
         return state
+
+    def _get_or_create_staging(
+        self,
+        state: _PerLayerState,
+        block_idx: int,
+        device: torch.device,
+    ) -> _BlockStaging:
+        st = state.staging_per_block.get(block_idx)
+        if st is not None:
+            return st
+        D = self.head_size
+        st = _BlockStaging(
+            k_bf16=torch.zeros(
+                (self.block_size_codec, self.num_kv_heads, D),
+                dtype=torch.bfloat16, device=device,
+            ),
+            v_bf16=torch.zeros(
+                (self.block_size_codec, self.num_kv_heads, D),
+                dtype=torch.bfloat16, device=device,
+            ),
+            count=0,
+        )
+        state.staging_per_block[block_idx] = st
+        return st
+
+    # ---- Phase B.1: encode-seal + write + read paths ------------------
+
+    def _seal_and_write_block(
+        self,
+        st: _BlockStaging,
+        block_idx: int,
+        kv_cache: torch.Tensor,
+        layer: AttentionLayer,
+    ) -> None:
+        """Call the M4 Triton encoder on a full `_BlockStaging` (K and
+        V separately) and write the two slots into the per-layer
+        paged cache.
+
+        `kv_cache` has shape `[num_blocks, num_kv_heads, slot_budget_bytes]`
+        per `KakeyaV13PPLAttentionSpec.get_kv_cache_shape`; the K-slot
+        starts at byte 0 and the V-slot at `k_config.slot_size_bytes`
+        within each `kv_cache[block_idx, head, :]`.
+        """
+        from kakeyaturbo_py import encode_block_codes, encode_block_triton_stage2
+        n = self.block_size_codec
+        assert st.count == n, f"seal called on partial block ({st.count}/{n})"
+
+        # Stage 1 (PCA + K-means, CPU Rust) then Stage 2..=5 (Triton) per
+        # kv-head.  PLAN.md §Key design decision puts both stages on
+        # GPU eventually (randomized PCA + in-kernel Lloyd iteration),
+        # but Phase B.1 keeps the deterministic Rust stage-1 — the
+        # per-block CPU cost (~1 ms) is tolerable at prefill time and
+        # the combined parity with M4 Phase A is already proven.
+        k_cfg = self.k_config
+        v_cfg = self.v_config
+        K_fp32 = st.k_bf16.to(torch.float32)              # [n, n_kv, D]
+        V_fp32 = st.v_bf16.to(torch.float32)
+        for h in range(self.num_kv_heads):
+            Kh = K_fp32[:, h, :].contiguous().cpu().numpy()
+            Vh = V_fp32[:, h, :].contiguous().cpu().numpy()
+            # Encode K (inner_product metric, outlier on).
+            k_parts_rust = encode_block_codes(
+                Kh,
+                metric="inner_product",
+                block_size=n,
+                bit_width=k_cfg.bit_width,
+                variance_ratio=k_cfg.variance_ratio,
+                k=k_cfg.k_centers,
+                rotation_seed=3405691582,
+                pca_method="exact",
+                exact_rank_cap=k_cfg.d_eff,
+                skeleton_dtype="fp16",
+                share_basis=False,
+                outlier_threshold=2.0,
+            )
+            k_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
+                            for kk, vv in k_parts_rust.items()}
+            k_parts = encode_block_triton_stage2(
+                Kh, k_parts_rust,
+                custom_centroids=None,
+                outlier_threshold=2.0,
+                device=str(st.k_bf16.device),
+            )
+            # Encode V (MSE metric, no outlier, V bit-width).
+            v_parts_rust = encode_block_codes(
+                Vh,
+                metric="mse",
+                block_size=n,
+                bit_width=v_cfg.bit_width,
+                variance_ratio=v_cfg.variance_ratio,
+                k=v_cfg.k_centers,
+                rotation_seed=3405691582,
+                pca_method="exact",
+                exact_rank_cap=v_cfg.d_eff,
+                skeleton_dtype="fp16",
+                share_basis=False,
+            )
+            v_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
+                            for kk, vv in v_parts_rust.items()}
+            v_parts = encode_block_triton_stage2(
+                Vh, v_parts_rust,
+                custom_centroids=None,
+                outlier_threshold=None,
+                device=str(st.v_bf16.device),
+            )
+
+            # Pack into byte slots.
+            k_slot_bytes = self._pack_parts_into_slot(k_parts, k_cfg)
+            v_slot_bytes = self._pack_parts_into_slot(v_parts, v_cfg)
+
+            # Write into kv_cache[block_idx, h, :].  K-slot starts at
+            # byte 0, V-slot at k_cfg.slot_size_bytes.
+            target = kv_cache[block_idx, h]
+            k_end = k_cfg.slot_size_bytes
+            v_end = k_end + v_cfg.slot_size_bytes
+            # Copy from numpy to GPU uint8 tensor.
+            target[0:k_end].copy_(
+                torch.from_numpy(k_slot_bytes).to(target.device)
+            )
+            target[k_end:v_end].copy_(
+                torch.from_numpy(v_slot_bytes).to(target.device)
+            )
 
     def do_kv_cache_update(
         self,
@@ -558,20 +717,66 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         kv_cache: torch.Tensor,
         slot_mapping: torch.Tensor,
     ) -> None:
-        """Stage-1: append → seal full blocks → write.
+        """Stage-1: append to staging → seal full blocks → write.
 
-        Phase B implements; Phase A leaves this as a documented stub so
-        downstream test code can verify the rest of the pipeline without
-        needing a live vLLM engine.  The stub raises NotImplementedError
-        to enforce PLAN.md's 'no silent fallback' rule.
+        PLAN.md §Consequence: the paged cache has sealed codec blocks
+        (compressed) and a trailing partial block (bf16 staging).
+        `slot_mapping[i]` is the absolute slot index in the paged
+        cache where token `i` lands; we compute
+        `block_idx = slot // block_size_codec` and
+        `pos_in_block = slot % block_size_codec`.
+
+        For each token (in order):
+          1. Look up `(block_idx, pos_in_block)`.
+          2. Write `key[i]` / `value[i]` into `staging[block_idx]
+             .{k,v}_bf16[pos_in_block]` and bump that block's count.
+          3. If the count hits `block_size_codec`, seal: encode via
+             Triton, pack, write to `kv_cache[block_idx]`, drop the
+             staging entry.
         """
-        raise NotImplementedError(
-            "M6 Phase B: do_kv_cache_update lives here.  Phase A "
-            "delivers the slot (de)serialisation helpers "
-            "(_pack_parts_into_slot / _unpack_slot_into_parts) that "
-            "this method will call.  See vllm_backend/kakeya_v1_3_ppl/"
-            "impl.py docstring for the pipeline sketch."
-        )
+        N = int(slot_mapping.shape[0])
+        if N <= 0:
+            return
+        device = key.device
+        state = self._ensure_layer_state(layer, device)
+
+        # Reshape to (N, n_kv, D) even if the caller passed a 2-D view.
+        k_view = key[:N].view(N, self.num_kv_heads, self.head_size)
+        v_view = value[:N].view(N, self.num_kv_heads, self.head_size)
+
+        # CPU-side slot → (block_idx, pos) conversion, then group tokens
+        # by block so we do at most one encode per block per step.
+        # Calling .tolist() moves once per update; at prefill this is
+        # O(num_prefill_tokens).
+        slot_cpu = slot_mapping[:N].detach().cpu().tolist()
+
+        # Gather writes per block_idx, then process in sorted order so
+        # any block that seals is sealed in a deterministic order.
+        per_block: dict[int, list[tuple[int, int]]] = {}
+        for i, slot in enumerate(slot_cpu):
+            if slot < 0:
+                continue
+            blk = slot // self.block_size_codec
+            pos = slot % self.block_size_codec
+            per_block.setdefault(blk, []).append((i, pos))
+
+        for blk in sorted(per_block.keys()):
+            entries = per_block[blk]
+            st = self._get_or_create_staging(state, blk, device)
+            for i, pos in entries:
+                st.k_bf16[pos] = k_view[i]
+                st.v_bf16[pos] = v_view[i]
+                # `count` tracks the high-water mark of filled rows so
+                # we know when to seal; rewriting an existing pos is
+                # idempotent since vLLM guarantees per-slot write-once.
+                if pos + 1 > st.count:
+                    st.count = pos + 1
+            # Seal iff the block is full.  vLLM's block manager does
+            # not emit more writes for a sealed block (the block table
+            # advances), so seal-once-and-drop is safe.
+            if st.count == self.block_size_codec:
+                self._seal_and_write_block(st, blk, kv_cache, layer)
+                state.staging_per_block.pop(blk, None)
 
     def forward(
         self,
@@ -585,17 +790,154 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         output_scale: torch.Tensor | None = None,
         output_block_scale: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Stage-2: decode sealed blocks + read partial block + flash-attn.
+        """Stage-2: assemble K/V from sealed + partial blocks, then
+        attend.
 
-        Phase B implements.
+        For each request:
+          1. For every sealed block in the block_table (up to but not
+             including the trailing partial block), unpack the slot
+             via `_unpack_slot_into_parts` and decode K and V via
+             `kakeyaturbo_py.decode_block_triton_from_parts`.
+          2. For the trailing partial block (if any tokens staged for
+             this block and not yet sealed), read directly from
+             `state.staging_per_block[block_idx].{k,v}_bf16[:count]`
+             via `decode_partial_block_bf16`.
+          3. Concatenate sealed + partial K/V along seq-dim.
+          4. Feed Q (from the forward args) and assembled K/V into
+             `flash_attn_varlen_func`.
         """
-        raise NotImplementedError(
-            "M6 Phase B: forward lives here.  Wiring is:\n"
-            "  * For each sealed block in attn_metadata.block_table: "
-            "unpack the slot via _unpack_slot_into_parts and call "
-            "kakeyaturbo_py.decode_block_triton_from_parts.\n"
-            "  * For the trailing partial block: read from "
-            "layer._kakeya_state.staging_[kv]_bf16 via "
-            "kakeyaturbo_py.decode_partial_block_bf16.\n"
-            "  * Concat and feed into flash_attn_varlen_func."
+        from kakeyaturbo_py import (
+            decode_block_triton_from_parts,
+            decode_partial_block_bf16,
         )
+        from vllm.v1.attention.backends.fa_utils import flash_attn_varlen_func
+
+        if output is None:
+            output = torch.zeros(
+                query.shape[0], self.num_heads * self.head_size,
+                dtype=query.dtype, device=query.device,
+            )
+        if attn_metadata is None:
+            return output.fill_(0)
+        N = attn_metadata.num_actual_tokens
+        if N <= 0:
+            return output.fill_(0)
+
+        device = query.device
+        state = self._ensure_layer_state(layer, device)
+
+        num_reqs = attn_metadata.seq_lens.shape[0]
+        seq_lens_cpu = attn_metadata.seq_lens[:num_reqs].detach().cpu().tolist()
+        block_table_cpu = attn_metadata.block_table.detach().cpu().tolist()
+        query_start_loc_cpu = attn_metadata.query_start_loc.detach().cpu().tolist()
+
+        # Per-request assembled K/V, then concat + varlen flash-attn.
+        assembled_k: list[torch.Tensor] = []
+        assembled_v: list[torch.Tensor] = []
+        cu_seqlens_k = [0]
+
+        for req in range(num_reqs):
+            seq_len = int(seq_lens_cpu[req])
+            if seq_len <= 0:
+                cu_seqlens_k.append(cu_seqlens_k[-1])
+                continue
+            blocks_needed = (seq_len + self.block_size_codec - 1) // self.block_size_codec
+            block_ids = [int(block_table_cpu[req][b]) for b in range(blocks_needed)]
+            full_blocks = seq_len // self.block_size_codec
+            tail = seq_len - full_blocks * self.block_size_codec
+
+            req_k_chunks: list[torch.Tensor] = []
+            req_v_chunks: list[torch.Tensor] = []
+
+            for bi, block_idx in enumerate(block_ids):
+                if bi < full_blocks:
+                    # Sealed block.
+                    k_block = self._decode_sealed(
+                        kv_cache, block_idx, stream="K", device=device,
+                    )
+                    v_block = self._decode_sealed(
+                        kv_cache, block_idx, stream="V", device=device,
+                    )
+                    req_k_chunks.append(k_block)
+                    req_v_chunks.append(v_block)
+                else:
+                    # Trailing partial block.
+                    st = state.staging_per_block.get(block_idx)
+                    if st is None or tail == 0:
+                        continue
+                    k_partial = decode_partial_block_bf16(st.k_bf16[:tail])
+                    v_partial = decode_partial_block_bf16(st.v_bf16[:tail])
+                    # [tail, n_kv, D]  → [tail, n_kv, D]
+                    req_k_chunks.append(k_partial)
+                    req_v_chunks.append(v_partial)
+
+            if not req_k_chunks:
+                cu_seqlens_k.append(cu_seqlens_k[-1])
+                continue
+            k_req = torch.cat(req_k_chunks, dim=0)   # [seq_len, n_kv, D]
+            v_req = torch.cat(req_v_chunks, dim=0)
+            assembled_k.append(k_req)
+            assembled_v.append(v_req)
+            cu_seqlens_k.append(cu_seqlens_k[-1] + int(k_req.shape[0]))
+
+        if not assembled_k:
+            return output.fill_(0)
+
+        K_total = torch.cat(assembled_k, dim=0)      # [sum_seq, n_kv, D] fp32
+        V_total = torch.cat(assembled_v, dim=0)
+        # Match Q's dtype for flash_attn.
+        K_total = K_total.to(query.dtype)
+        V_total = V_total.to(query.dtype)
+
+        cu_seqlens_k_t = torch.tensor(
+            cu_seqlens_k, dtype=torch.int32, device=device,
+        )
+
+        q = query[:N].view(N, self.num_heads, self.head_size)
+        out_bhd = flash_attn_varlen_func(
+            q=q,
+            k=K_total,
+            v=V_total,
+            cu_seqlens_q=attn_metadata.query_start_loc,
+            cu_seqlens_k=cu_seqlens_k_t,
+            max_seqlen_q=attn_metadata.max_query_len,
+            max_seqlen_k=attn_metadata.max_seq_len,
+            softmax_scale=self.scale,
+            causal=True,
+        )
+        # out_bhd: [N, n_heads, D]
+        if output.ndim == 3:
+            output[:N] = out_bhd.to(output.dtype)
+        else:
+            output[:N] = out_bhd.reshape(N, -1).to(output.dtype)
+        return output
+
+    def _decode_sealed(
+        self,
+        kv_cache: torch.Tensor,
+        block_idx: int,
+        stream: str,
+        device: torch.device,
+    ) -> torch.Tensor:
+        """Decode one sealed (K or V) codec block to `[block_size_codec,
+        n_kv_heads, head_size]` fp32.
+
+        Iterates over kv_heads since each head has its own
+        skeleton + codes in our slot layout.
+        """
+        from kakeyaturbo_py import decode_block_triton_from_parts
+        cfg = self.k_config if stream == "K" else self.v_config
+        slot_off = 0 if stream == "K" else self.k_config.slot_size_bytes
+
+        rows = []
+        for h in range(self.num_kv_heads):
+            slot_bytes = kv_cache[block_idx, h, slot_off:slot_off + cfg.slot_size_bytes]
+            slot_np = slot_bytes.detach().cpu().numpy()
+            parts = self._unpack_slot_into_parts(slot_np, cfg, head_size=self.head_size)
+            decoded = decode_block_triton_from_parts(
+                parts, custom_centroids=None, device=str(device),
+            )
+            rows.append(torch.from_numpy(decoded).to(device))
+        # Stack to [block_size_codec, n_kv_heads, head_size].
+        return torch.stack(rows, dim=1)
+
