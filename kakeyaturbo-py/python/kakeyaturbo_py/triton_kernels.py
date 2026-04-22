@@ -263,6 +263,124 @@ def fused_wht_scale_quantize(
 
 
 # ---------------------------------------------------------------------------
+# DECODE kernel (M5) — inverse of fused_wht_scale_quantize, plus the
+# downstream coeff = t·center + residual + basis reconstruction.
+# ---------------------------------------------------------------------------
+
+
+if _TRITON_OK:
+
+    @triton.jit
+    def _inv_wht_rescale_kernel(
+        q_vals_ptr,       # [B, wht_len] fp32 — dequantized scaled residual
+                          # (Lloyd-Max dequant + outlier override done on the
+                          # torch side before launch)
+        H_ptr,            # [wht_len, wht_len] fp32 ±1 (Sylvester Hadamard)
+        sign_ptr,         # [wht_len] fp32 ±1 (Rust's wht sign pattern)
+        norm_ptr,         # [B] fp32 — the fp16-stored norm field (inv_scale)
+        out_ptr,          # [B, wht_len] fp32 — residual reconstructed
+        stride_q_b,
+        stride_H_row,
+        stride_out_b,
+        wht_len: tl.constexpr,
+    ):
+        """Inverse of stages 4b + 4c.  One program per row.
+
+        Stage decode-4c^-1: `q_scaled = q_vals * inv_scale`
+        Stage decode-4b^-1: `x = D · H · q_scaled / wht_len`
+            where `D = diag(sign_pattern)` and `H` is the Sylvester
+            Hadamard matrix.  Since `H = Hᵀ`, the forward `y = H·D·x`
+            and inverse `x = D·H·y/N` share the same matrix — only
+            the factor-of-1/N and sign-pattern order differ.
+
+        Emits the reconstructed residual (before coeff assembly) so
+        the caller can finish with a cuBLAS `coeff @ basis + mean`.
+        """
+        row = tl.program_id(0)
+
+        coord = tl.arange(0, wht_len)
+
+        # Load the dequantised scaled residual and the inv-scale (norm).
+        q_scaled = tl.load(q_vals_ptr + row * stride_q_b + coord).to(tl.float32)
+        norm = tl.load(norm_ptr + row)
+        y = q_scaled * norm                                       # undo 1/res_norm
+
+        # Inverse WHT via Hadamard matmul: x_prime[j] = sum_i y[i] * H[i, j]
+        # (H is symmetric so transpose is a no-op).
+        h_tile = tl.load(
+            H_ptr + tl.arange(0, wht_len)[:, None] * stride_H_row
+            + tl.arange(0, wht_len)[None, :]
+        )
+        x_prime = tl.sum(y[:, None] * h_tile, axis=0)             # [wht_len]
+
+        # Multiply by sign pattern and 1/wht_len.  `wht_len` is a
+        # constexpr Python int; cast by converting to a Triton tensor
+        # before the reciprocal.
+        sign = tl.load(sign_ptr + coord)
+        inv_n = 1.0 / tl.full([], wht_len, tl.float32)
+        x = x_prime * sign * inv_n
+
+        tl.store(out_ptr + row * stride_out_b + coord, x)
+
+
+def fused_inverse_wht_rescale(
+    q_vals: torch.Tensor,
+    sign: torch.Tensor,
+    norm: torch.Tensor,
+) -> torch.Tensor:
+    """Triton-fused decode stages 4b^-1 + 4c^-1.
+
+    Inputs (CUDA, fp32, C-contig):
+        q_vals: [B, wht_len]   — dequantised + outlier-overridden scaled residual
+        sign:   [wht_len]      — Rust WHT sign pattern
+        norm:   [B]            — fp16-stored inv_scale field
+
+    Returns:
+        x: [B, wht_len] fp32   — reconstructed residual (pre-padding)
+    """
+    _require_triton()
+    if q_vals.device.type != "cuda":
+        raise RuntimeError(
+            f"fused_inverse_wht_rescale requires CUDA; got {q_vals.device}"
+        )
+    for name, t in [("q_vals", q_vals), ("sign", sign), ("norm", norm)]:
+        if t.dtype != torch.float32:
+            raise TypeError(f"{name} must be float32, got {t.dtype}")
+        if t.device != q_vals.device:
+            raise RuntimeError(f"{name} on {t.device}, expected {q_vals.device}")
+
+    B, wht_len = q_vals.shape
+    if (wht_len & (wht_len - 1)) != 0 or wht_len < 1:
+        raise ValueError(f"wht_len must be a positive power of two, got {wht_len}")
+    if wht_len > 128:
+        raise ValueError(
+            f"wht_len={wht_len} exceeds the 128 upper bound (Hadamard "
+            "tile must fit in SRAM)"
+        )
+    if sign.shape != (wht_len,):
+        raise ValueError(f"sign shape {tuple(sign.shape)} != ({wht_len},)")
+    if norm.shape != (B,):
+        raise ValueError(f"norm shape {tuple(norm.shape)} != ({B},)")
+
+    q_c = q_vals.contiguous()
+    sign_c = sign.contiguous()
+    norm_c = norm.contiguous()
+
+    H_np = _sylvester_hadamard(wht_len)
+    H = torch.from_numpy(H_np).to(q_vals.device, torch.float32).contiguous()
+
+    out = torch.empty((B, wht_len), dtype=torch.float32, device=q_vals.device)
+
+    grid = (B,)
+    _inv_wht_rescale_kernel[grid](
+        q_c, H, sign_c, norm_c, out,
+        q_c.stride(0), H.stride(0), out.stride(0),
+        wht_len=wht_len,
+    )
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Host-side helpers
 # ---------------------------------------------------------------------------
 
@@ -288,6 +406,160 @@ def is_available() -> bool:
         return torch.cuda.is_available()
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# M5 end-to-end decode (inverse of encode_block_triton_stage2)
+# ---------------------------------------------------------------------------
+
+
+def decode_block_triton_from_parts(
+    parts: dict,
+    *,
+    custom_centroids: Optional[np.ndarray] = None,
+    device: str = "cuda",
+) -> np.ndarray:
+    """Triton-accelerated dual of `decode_block_from_parts`.
+
+    Input:
+        parts: dict with keys {mean, basis, centers, d, d_eff, k,
+               rotation_seed, wht_len, bit_width, metric, seg_id, t,
+               norm, residual_packed, outlier_idx, outlier_val,
+               outlier_count, max_outliers}.  Format is exactly what
+               `encode_block_codes` / `encode_block_triton_stage2`
+               emit, so callers can round-trip without re-serialising.
+
+    Output:
+        x_hat: [n, d] float32 numpy array — decoded vectors, same
+               semantics as `kakeyaturbo::codec::decode_block_with_centroids`.
+
+    Contract (tested in test_triton_decode_parity.py):
+        Byte-identical to `decode_block_from_parts(parts)` (Rust
+        decode) when `metric` and codes match, within the PLAN.md
+        1e-3 L2-rel or 1 %-row-flip bar.  Identical in shape and
+        meaning to `decode_block_torch_from_parts(parts)`.
+    """
+    _require_triton()
+    from . import _core
+    from . import reference_torch as rt
+
+    skel = rt._skeleton_from_dict(parts, device=device)
+    cb = rt._codes_from_dict(parts, device=device)
+    n = cb.seg_id.shape[0]
+
+    # --- Stage 5c^-1: unpack ---
+    # Rust's pack_bits is byte-exact and cheap; keep it on the Rust side
+    # so the byte stream → index stream is reference-correct.  We then
+    # move to CUDA once for the rest of the pipeline.
+    packed_np = cb.residual_packed.detach().cpu().numpy()
+    idx_np = np.empty((n, skel.wht_len), dtype=np.uint8)
+    for i in range(n):
+        idx_np[i, :] = np.asarray(
+            _core.unpack_bits(packed_np[i], skel.bit_width, skel.wht_len)
+        )
+    indices = torch.from_numpy(idx_np).to(device)
+
+    # --- Stage 5b^-1: dequantise against the centroid table ---
+    if custom_centroids is None:
+        centroids_np = np.asarray(_core.centroids_gaussian(skel.bit_width))
+    else:
+        centroids_np = np.asarray(custom_centroids, dtype=np.float32)
+        if centroids_np.size != (1 << skel.bit_width):
+            raise ValueError(
+                f"custom centroids size {centroids_np.size} != "
+                f"2^bit_width = {1 << skel.bit_width}"
+            )
+    centroids = torch.from_numpy(centroids_np).to(device, torch.float32)
+    q_vals = centroids[indices.long()]                            # [n, wht_len] fp32
+
+    # --- Stage 5a^-1: outlier override ---
+    # Before the inverse WHT / rescale, replace the dequantised value
+    # at each outlier coord with the f16-stored outlier value.  Rust
+    # does this as a sparse loop; we reproduce it with torch scatter.
+    if cb.max_outliers > 0:
+        # Gather-scatter in torch: for each row i, for each j < outlier_count[i],
+        # set q_vals[i, outlier_idx[i, j]] = outlier_val[i, j].
+        # We do this vectorised by masking inactive slots (j >= count[i]).
+        oi = cb.outlier_idx.long()                                 # [n, max_outliers]
+        ov = cb.outlier_val                                        # [n, max_outliers]
+        oc = cb.outlier_count.long()                               # [n]
+        row_idx = torch.arange(n, device=device).unsqueeze(1).expand_as(oi)
+        active = (torch.arange(cb.max_outliers, device=device).unsqueeze(0)
+                  < oc.unsqueeze(1))                               # [n, max_outliers]
+        active_flat = active.reshape(-1)
+        if bool(active_flat.any().item()):
+            flat_row = row_idx.reshape(-1)[active_flat]
+            flat_col = oi.reshape(-1)[active_flat]
+            flat_val = ov.reshape(-1)[active_flat]
+            q_vals[flat_row, flat_col] = flat_val
+
+    # --- Stages 4c^-1 + 4b^-1: Triton kernel (scale by norm, inverse WHT) ---
+    sign_np = np.asarray(_core.wht_sign_pattern(int(skel.rotation_seed),
+                                                int(skel.wht_len))).reshape(-1)
+    sign = torch.from_numpy(sign_np).to(device, torch.float32)
+
+    # Determine inv_scale = norm field when metric is absorbed (MSE / LInf),
+    # else 1.0 (Inner-product's residual is stored un-scaled).
+    metric = cb.metric
+    if metric in ("mse", "linf"):
+        inv_scale = cb.norm.to(torch.float32)
+    else:                                                          # inner_product
+        inv_scale = torch.ones_like(cb.norm, dtype=torch.float32)
+
+    x_full = fused_inverse_wht_rescale(q_vals, sign, inv_scale)    # [n, wht_len]
+
+    # --- Stage 4a^-1: trim to d_eff ---
+    residual_rec = x_full[:, :skel.d_eff]                          # [n, d_eff]
+
+    # --- Stage 3^-1: coeff = t * center[seg] + residual ---
+    chosen = skel.centers[cb.seg_id]                               # [n, d_eff]
+    coeff = cb.t.unsqueeze(1) * chosen + residual_rec
+
+    # --- Stage 2^-1: unproject = coeff @ basis + mean ---
+    x_hat = coeff @ skel.basis + skel.mean.unsqueeze(0)            # [n, d]
+    return x_hat.detach().cpu().numpy().astype(np.float32)
+
+
+# ---------------------------------------------------------------------------
+# M5 partial-block bf16 passthrough path.
+#
+# Per PLAN.md §"Consequence: the paged cache has two slot types per layer:
+#   * Sealed codec blocks   (compressed, full codec pipeline applied)
+#   * Trailing partial block (bf16, < block_size_codec tokens)"
+#
+# This function is the partial-block "decoder": it takes a bf16 staging
+# buffer holding `m < block_size_codec` tokens and returns the fp32
+# view that downstream attention would have seen had the block been
+# sealed.  In the actual vLLM backend (M6), attention will simply fuse
+# the sealed-block decoder's output with this partial-block read.
+# ---------------------------------------------------------------------------
+
+
+def decode_partial_block_bf16(
+    staging_bf16: torch.Tensor,
+) -> torch.Tensor:
+    """Read a bf16 partial-block staging buffer back to fp32.
+
+    Input:
+        staging_bf16: [m, d] torch.bfloat16, CUDA.  `m` may be any
+                      value in `1..block_size_codec`.
+
+    Output:
+        x: [m, d] torch.float32, same device.
+
+    Contract: this is an identity dtype-cast, byte-identical to what
+    vLLM's FlashAttention would read in the bf16 KV-cache case.  It
+    exists as a named function so M6's backend can swap sealed /
+    partial dispatch without conditional logic leaking into the
+    kernel layer.
+    """
+    if staging_bf16.dim() != 2:
+        raise ValueError(f"expected 2-D tensor, got {tuple(staging_bf16.shape)}")
+    if staging_bf16.dtype != torch.bfloat16:
+        raise TypeError(
+            f"expected bfloat16 staging buffer, got {staging_bf16.dtype}"
+        )
+    return staging_bf16.to(torch.float32)
 
 
 # ---------------------------------------------------------------------------

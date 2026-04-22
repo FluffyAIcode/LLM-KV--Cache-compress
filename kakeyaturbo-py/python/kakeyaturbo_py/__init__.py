@@ -83,6 +83,10 @@ __all__ = [
     "encode_block_triton_stage2",
     "fused_wht_scale_quantize",
     "triton_is_available",
+    # M5: Triton DECODE kernel + partial-block passthrough.
+    "decode_block_triton_from_parts",
+    "fused_inverse_wht_rescale",
+    "decode_partial_block_bf16",
 ]
 
 
@@ -99,6 +103,9 @@ def __getattr__(name):
         "encode_block_triton_stage2",
         "fused_wht_scale_quantize",
         "triton_is_available",
+        "decode_block_triton_from_parts",
+        "fused_inverse_wht_rescale",
+        "decode_partial_block_bf16",
     }:
         from . import triton_kernels  # noqa: F401
         if name == "triton_is_available":
