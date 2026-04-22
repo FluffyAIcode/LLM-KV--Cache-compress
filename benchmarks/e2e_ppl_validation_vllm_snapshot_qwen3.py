@@ -144,6 +144,194 @@ def rust_roundtrip(
 
 
 # =============================================================================
+# GPU per-head codec roundtrip
+# =============================================================================
+#
+# Strict CPU-vs-GPU comparison on real Qwen3-4B layer-15 post-qk-norm K
+# (see /tmp/strict_cpu_vs_gpu.py run on H200) showed the CPU CLI path
+# decoding at 37.66% L2 rel-err while the GPU per-head path achieved
+# 16.67% rel-err on the SAME input.  The root cause is the data-grouping
+# difference:
+#
+#   CPU path  flattens K [n, H, D] → [n*H, D]       and slices 512 rows
+#             into each codec block, so one block sees 64 tokens × 8 heads
+#             interleaved.  Qwen3-style qk-norm has per-head independent
+#             scales; the pooled-heads PCA basis can only capture
+#             shared directions and wastes d_eff on the head-scale
+#             variance rather than on intra-head signal.
+#
+#   GPU path  processes each kv-head independently: K [n, H, D] →
+#             [H, n, D] with batch=H.  Each block's PCA basis is fit to
+#             a single head's distribution, so all d_eff basis rows
+#             point at head-intrinsic variance.
+#
+# This per-head helper replaces `rust_roundtrip()` when --gpu-codec is
+# passed on the CLI.  It reuses the exact same GPU kernels the vLLM
+# attention backend uses in production (fit_skeleton_batched +
+# encode_and_pack_batched + _unpack_slot_into_parts +
+# decode_block_torch_from_parts), so the harness measures the
+# same codec as the live deployment path.
+
+def _gpu_codec_per_head(
+    K_bnd: np.ndarray,
+    *,
+    block_size: int,
+    bit_width: int,
+    d_eff: int,
+    k: int,
+    metric: str,
+    variance_ratio: float,
+    centroids_file: str | None,
+    outlier_threshold: float | None,
+) -> np.ndarray:
+    """Run the GPU codec per kv-head on a [n, H, D] fp32 tensor and
+    return the decoded [n, H, D] fp32 array.
+
+    Only full codec blocks are processed (trailing partial rows are
+    returned unchanged).  `centroids_file`, if given, is a raw fp32
+    file with `2^bit_width` entries matching
+    `kakeyaturbo_py._core.centroids_gaussian(bit_width)`'s layout.
+    """
+    import torch
+    # Package name is `kakeya_v1_3_ppl` as installed via
+    # `vllm_backend/pyproject.toml`; NOT the source-tree path.
+    from kakeya_v1_3_ppl.config import KakeyaV13PPLConfig
+    from kakeya_v1_3_ppl.impl import KakeyaV13PPLAttentionImpl
+    from kakeyaturbo_py.gpu_skeleton import fit_skeleton_batched
+    from kakeyaturbo_py.gpu_encode import encode_and_pack_batched
+    from kakeyaturbo_py.reference_torch import decode_block_torch_from_parts
+    from kakeyaturbo_py import _core
+
+    n_total, H, D = K_bnd.shape
+    n_comp = (n_total // block_size) * block_size
+    if n_comp == 0:
+        return K_bnd.astype(np.float32, copy=False)
+
+    cfg = KakeyaV13PPLConfig(
+        head_dim=D, d_eff=d_eff, block_size_codec=block_size,
+        variance_ratio=variance_ratio, k_centers=k, bit_width=bit_width,
+        # Budget large enough to accept outliers on any realistic
+        # scaled-residual distribution; harmless when
+        # outlier_threshold is None (the side-buffer is left at 0).
+        outlier_budget_frac=0.15 if outlier_threshold is not None else 0.0,
+    )
+    impl = KakeyaV13PPLAttentionImpl(
+        num_heads=H, head_size=D, scale=1.0,
+        num_kv_heads=H, kv_cache_dtype="kakeya_v1_3_ppl",
+    )
+    cfg_offsets = impl._config_offsets(cfg)
+
+    # Custom Lloyd-Max centroids (optional).  Raw fp32 file, `2^bit_width`
+    # little-endian floats — same format kakeyaturbo-bench expects.
+    if centroids_file is not None:
+        raw = np.fromfile(centroids_file, dtype=np.float32)
+        expected = 1 << int(bit_width)
+        if raw.size != expected:
+            raise ValueError(
+                f"centroids file {centroids_file} has {raw.size} f32 "
+                f"values, expected 2^bit_width = {expected}"
+            )
+        centroids_gpu = torch.from_numpy(raw).cuda()
+    else:
+        centroids_gpu = None
+
+    K_gpu = torch.from_numpy(
+        K_bnd[:n_comp].astype(np.float32, copy=False)
+    ).cuda()                                           # [n_comp, H, D]
+
+    out = np.empty((n_total, H, D), dtype=np.float32)
+    if n_comp < n_total:
+        out[n_comp:] = K_bnd[n_comp:]
+
+    n_blocks = n_comp // block_size
+    for bi in range(n_blocks):
+        lo, hi = bi * block_size, (bi + 1) * block_size
+        # [H, block_size, D] — batch = num_kv_heads.
+        K_block = K_gpu[lo:hi].permute(1, 0, 2).contiguous()
+        skel = fit_skeleton_batched(
+            K_block, d_eff=d_eff, k=k, seed=3405691582,
+            rsvd_oversample=8, rsvd_power_iters=2,
+            kmeans_max_iter=8, variance_ratio=variance_ratio,
+        )
+        sign_np = np.asarray(
+            _core.wht_sign_pattern(
+                int(skel["rotation_seed"]), int(skel["wht_len"]),
+            )
+        ).reshape(-1).astype(np.float32)
+        sign = torch.from_numpy(sign_np).cuda()
+
+        slots = encode_and_pack_batched(
+            K_block, skel,
+            bit_width=bit_width, metric=metric,
+            slot_size_bytes=cfg.slot_size_bytes,
+            config_offsets=cfg_offsets,
+            custom_centroids=centroids_gpu,
+            outlier_threshold=outlier_threshold,
+            wht_sign=sign,
+        )                                              # [H, slot_bytes]
+
+        # Decode each head slot (decode_block_torch_from_parts is
+        # light-weight and byte-matched to the production decoder).
+        for h in range(H):
+            slot_cpu = slots[h].cpu().numpy()
+            parts = impl._unpack_slot_into_parts(
+                slot_cpu, cfg, head_size=D,
+            )
+            dec_h = decode_block_torch_from_parts(parts, device="cpu")
+            dec_h = dec_h.numpy() if hasattr(dec_h, "numpy") else np.asarray(dec_h)
+            out[lo:hi, h, :] = dec_h
+
+    return out
+
+
+def gpu_roundtrip(
+    K_bnd: np.ndarray,
+    *,
+    block_size: int,
+    bit_width: int,
+    rsvd_target_rank: int,
+    metric: str,
+    variance_ratio: float = 0.95,
+    centroids_file: str | None = None,
+    outlier_threshold: float | None = None,
+) -> tuple[np.ndarray, dict]:
+    """Signature-compatible stand-in for `rust_roundtrip` operating
+    on the [n, H, D] pre-flatten layout.  Returns (decoded, report)."""
+    n, H, D = K_bnd.shape
+    dec = _gpu_codec_per_head(
+        K_bnd,
+        block_size=block_size,
+        bit_width=bit_width,
+        d_eff=rsvd_target_rank,
+        k=16,
+        metric=metric,
+        variance_ratio=variance_ratio,
+        centroids_file=centroids_file,
+        outlier_threshold=outlier_threshold,
+    )
+    # Best-effort report: mean per-block MSE + compressed-bytes
+    # estimate (matching kakeyaturbo-bench's report keys).
+    mse = float(np.mean((dec - K_bnd.astype(np.float32)) ** 2))
+    # Compressed bytes per block are deterministic from config;
+    # compute via KakeyaV13PPLConfig.slot_size_bytes for one head × one block.
+    from kakeya_v1_3_ppl.config import KakeyaV13PPLConfig
+    cfg = KakeyaV13PPLConfig(
+        head_dim=D, d_eff=rsvd_target_rank,
+        block_size_codec=block_size,
+        variance_ratio=variance_ratio,
+        k_centers=16, bit_width=bit_width,
+        outlier_budget_frac=0.15 if outlier_threshold is not None else 0.0,
+    )
+    n_blocks = (n // block_size)
+    compressed_bytes = n_blocks * H * cfg.slot_size_bytes
+    return dec, {
+        "mean_block_mse": mse,
+        "compressed_bytes": compressed_bytes,
+        "codec_backend": "gpu-per-head",
+    }
+
+
+# =============================================================================
 # Offline codec of a per-layer K (or V) snapshot — same recipe as PR #17
 # =============================================================================
 
@@ -155,10 +343,15 @@ def codec_layer(
     k_outlier_threshold: float | None, v_outlier_threshold: float | None,
     boundary_skip: set[int], rsvd_target_rank_factor: float = 0.5,
     share_basis_v: bool = True, share_basis_k: bool = False,
+    use_gpu_codec: bool = False, disable_share_basis_v: bool = False,
 ) -> tuple[np.ndarray, dict]:
-    """Port of e2e_ppl_validation_vllm_snapshot.codec_layer — unchanged
-    body; kept local so this file can be run without importing the
-    Qwen2 harness."""
+    """Per-layer codec of a captured K/V tensor.
+
+    When `use_gpu_codec=True`, the CPU Rust CLI path is bypassed and
+    the codec runs per-kv-head on the [n, H, D] layout — see the
+    `_gpu_codec_per_head` docstring for the rationale.  The Rust path
+    is retained for exact PR #17 reproducibility.
+    """
     n, n_kv, hd = K_or_V.shape
     if layer_id in boundary_skip:
         return K_or_V.astype(np.float32, copy=False), {
@@ -173,20 +366,12 @@ def codec_layer(
         and q_precond.is_active(layer_id)
     )
     arr_enc = q_precond.whiten(K_or_V, layer=layer_id) if use_whiten else K_or_V
-    flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
-    n_total = flat.shape[0]
-    n_comp = (n_total // block_size) * block_size
-    if n_comp == 0:
-        return K_or_V.astype(np.float32, copy=False), {
-            "layer": layer_id, "stream": "V" if is_v else "K",
-            "skipped_short": True,
-        }
 
     if is_v:
         bit_width = bit_width_v
         centroids = v_centroids
         outlier_thr = v_outlier_threshold
-        share = share_basis_v
+        share = share_basis_v and not disable_share_basis_v
         metric = "mse"
     else:
         bit_width = bit_width_k
@@ -195,23 +380,60 @@ def codec_layer(
         share = share_basis_k
         metric = "mse" if use_whiten else "inner_product"
 
-    dec, rep = rust_roundtrip(
-        flat[:n_comp], block_size=block_size, bit_width=bit_width,
-        rsvd_target_rank=rank, metric=metric, share_basis=share,
-        centroids_file=centroids, outlier_threshold=outlier_thr,
-    )
-    if n_comp < n_total:
-        dec = np.concatenate([dec, flat[n_comp:]], axis=0)
-    dec = dec.reshape(n, n_kv, hd)
+    if use_gpu_codec:
+        # GPU path operates on [n, H, D] directly — no flatten.
+        # share_basis is NOT yet implemented on the GPU path; when
+        # the caller asked for it we fall back to Rust CLI.  (Qwen3
+        # V-stream with share_basis=True needs the pooled-across-
+        # blocks basis that only Rust currently provides.)
+        if share:
+            dec, rep = rust_roundtrip(
+                arr_enc.reshape(-1, hd).astype(np.float32, copy=False),
+                block_size=block_size, bit_width=bit_width,
+                rsvd_target_rank=rank, metric=metric, share_basis=share,
+                centroids_file=centroids, outlier_threshold=outlier_thr,
+            )
+            # Reshape back to [n, n_kv, hd]; the Rust path uses the
+            # pooled-heads layout so we have to un-pool the result.
+            dec = dec.reshape(n, n_kv, hd)
+        else:
+            dec, rep = gpu_roundtrip(
+                arr_enc.astype(np.float32, copy=False),
+                block_size=block_size, bit_width=bit_width,
+                rsvd_target_rank=rank, metric=metric,
+                centroids_file=centroids, outlier_threshold=outlier_thr,
+            )
+    else:
+        flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
+        n_total = flat.shape[0]
+        n_comp = (n_total // block_size) * block_size
+        if n_comp == 0:
+            return K_or_V.astype(np.float32, copy=False), {
+                "layer": layer_id, "stream": "V" if is_v else "K",
+                "skipped_short": True,
+            }
+        dec, rep = rust_roundtrip(
+            flat[:n_comp], block_size=block_size, bit_width=bit_width,
+            rsvd_target_rank=rank, metric=metric, share_basis=share,
+            centroids_file=centroids, outlier_threshold=outlier_thr,
+        )
+        if n_comp < n_total:
+            dec = np.concatenate([dec, flat[n_comp:]], axis=0)
+        dec = dec.reshape(n, n_kv, hd)
+
     if use_whiten:
         dec = q_precond.unwhiten(dec, layer=layer_id)
+    # Both paths process floor(n / block_size) full blocks and pass
+    # any trailing partial rows through unchanged.
+    n_compressible = (n // block_size) * block_size
     return dec.astype(np.float32, copy=False), {
         "layer": layer_id, "stream": "V" if is_v else "K",
-        "n_tokens": int(n), "n_compressible": int(n_comp),
+        "n_tokens": int(n), "n_compressible": int(n_compressible),
         "mean_block_mse": float(rep.get("mean_block_mse", -1.0)),
         "compressed_bytes": int(rep.get("compressed_bytes", 0)),
         "whitened": bool(use_whiten),
         "metric": metric, "bit_width": bit_width,
+        "codec_backend": rep.get("codec_backend", "rust-pooled"),
     }
 
 
@@ -310,6 +532,17 @@ def main() -> int:
                     help="Use Gaussian default Lloyd-Max centroids.")
     ap.add_argument("--disable-outlier", action="store_true",
                     help="Skip outlier side-buffer extraction.")
+    ap.add_argument("--gpu-codec", action="store_true",
+                    help="Route codec through per-kv-head GPU path "
+                         "(vllm_backend.kakeya_v1_3_ppl + kakeyaturbo_py "
+                         "gpu_skeleton/gpu_encode) instead of the CPU Rust "
+                         "CLI pooled-heads path.  See codec_layer docstring.")
+    ap.add_argument("--no-share-basis-v", action="store_true",
+                    help="Disable share_basis=True on the V stream.  Required "
+                         "to exercise the GPU codec on V (which doesn't yet "
+                         "support share_basis); without this flag the V "
+                         "stream falls back to the CPU Rust path even when "
+                         "--gpu-codec is on.")
     ap.add_argument("--out-dir", type=Path, required=True)
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -380,6 +613,8 @@ def main() -> int:
                 k_centroids=k_centroids_arg, v_centroids=v_centroids_arg,
                 k_outlier_threshold=outlier_thr_arg,
                 v_outlier_threshold=None, boundary_skip=boundary_skip,
+                use_gpu_codec=args.gpu_codec,
+                disable_share_basis_v=args.no_share_basis_v,
             )
             v_hat, v_rep = codec_layer(
                 kv["V"], is_v=True, layer_id=lid, q_precond=qp,
@@ -388,6 +623,8 @@ def main() -> int:
                 k_centroids=k_centroids_arg, v_centroids=v_centroids_arg,
                 k_outlier_threshold=outlier_thr_arg,
                 v_outlier_threshold=None, boundary_skip=boundary_skip,
+                use_gpu_codec=args.gpu_codec,
+                disable_share_basis_v=args.no_share_basis_v,
             )
             replacements[lid] = {
                 "K": torch.from_numpy(k_hat).cuda(),

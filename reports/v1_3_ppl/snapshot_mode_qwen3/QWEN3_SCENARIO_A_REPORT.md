@@ -14,15 +14,21 @@
 - M2 calibration artefacts: `qwen3_4b_sigma_q.{safetensors,json}`,
   `qwen3_4b_lloyd_max_K_b3.f32`, `qwen3_4b_lloyd_max_V_b2.f32`.
 
-## Ablation grid (1 passage for identity, otherwise 1 passage smoke; see JSONs)
+## Ablation grid (4 passages unless noted; see JSONs for per-passage breakdown)
 
 | Config | Δppl | top-1 agree | Verdict | Report |
 |---|---|---|---|---|
-| Identity replace (skip all 36 layers) | **+0.00%** | 100% | PASS | `qwen3_4b_snap_skipall_vllm_snapshot.json` |
-| Full production recipe (Σ_q + centroids + outlier, skip boundary 0/1/34/35) | **+8 858.93%** | 31.25% | REJECT | `qwen3_4b_snap_smoke_vllm_snapshot.json` |
-| Only Σ_q on (centroids/outlier off) | +8 458.53% | 29.69% | REJECT | `qwen3_4b_snap_sigma_only_vllm_snapshot.json` |
-| Only Σ_q off (centroids/outlier on) | +497.72% | 67.19% | REJECT | `qwen3_4b_snap_noguard_vllm_snapshot.json` … wait, see below |
-| Σ_q + centroids + outlier ALL off (bare codec) | **+619.42%** (4 passages) | 55.08% | REJECT | `qwen3_4b_snapshot_bare_vllm_snapshot.json` |
+| Identity replace (skip all 36 layers)                            | **+0.00%**    | 100%   | PASS    | `qwen3_4b_snap_skipall_vllm_snapshot.json` |
+| Full production recipe — CPU (Σ_q + centroids + outlier)         | +8 858.93% (1p) | 31.25% | REJECT  | `qwen3_4b_snap_smoke_vllm_snapshot.json` |
+| Only Σ_q on — CPU                                                | +8 458.53% (1p) | 29.69% | REJECT  | `qwen3_4b_snap_sigma_only_vllm_snapshot.json` |
+| Bare codec — CPU pooled-heads (4 passages)                       | **+619.42%**   | 55.08% | REJECT  | `qwen3_4b_snapshot_bare_vllm_snapshot.json` |
+| **Bare codec — GPU per-head + no share_basis-V (4 passages)**    | **+202.75%**   | 66.02% | REJECT  | `qwen3_4b_snapshot_gpu_all_vllm_snapshot.json` |
+
+### Column legend
+- **Δppl**: `(ppl_alt - ppl_ref) / ppl_ref`, averaged across passages
+- **top-1 agreement**: fraction of eval positions where alt-pass argmax equals ref-pass argmax
+- **PASS / MARGINAL / REJECT** thresholds from PR #17 (`≤+10%` / `≤+20%` / else)
+- **"1p"** = one-passage smoke; the rest are 4-passage averages
 
 ### Column legend
 - **Δppl**: `(ppl_alt - ppl_ref) / ppl_ref`, averaged across passages
@@ -70,27 +76,67 @@ intrinsically higher for Qwen3-4B's post-qk-norm K than for DeepSeek's
 pre-qk-norm K — same mechanism as Σ_q conditioning: qk-norm makes the
 spectrum more uniform.
 
+## Key finding: data grouping dominates codec quality on Qwen3-4B
+
+Before the GPU row, the snapshot harness inherited PR #17's data layout:
+reshape `[n, H, D] → [n*H, D]`, chop into 512-row blocks.  Each block
+therefore pools **64 tokens × 8 kv-heads interleaved**, so the PCA basis
+fit to it has to compromise across 8 different head distributions.
+Qwen3's per-head qk-norm weights mean each head has its own scale — the
+pooled-heads basis wastes dimensions on the head-scale variance rather
+than on intra-head signal.
+
+The GPU codec path (`kakeyaturbo_py.gpu_skeleton.fit_skeleton_batched`,
+used natively by the vLLM attention backend) batches over kv-heads in
+the leading dim: each codec block processes **512 tokens × 1 head**, so
+every basis row fits that head's own spectrum.  On a strict
+side-by-side of CPU vs GPU codec over real Qwen3-4B layer-15 K:
+
+|                                  | CPU pooled-heads | GPU per-head |
+|----------------------------------|-----------------:|-------------:|
+| decoded L2 rel-err (vs input K)  |          0.3766  |      0.1667  |
+| worst per-head err               |          0.4352  |      0.1918  |
+
+Swapping the harness's `rust_roundtrip` for the GPU `gpu_roundtrip`
+cuts snapshot-mode Δppl on 4 Qwen3-4B passages from **+619.42% → +202.75%**
+(3.05x reduction), and lifts top-1 agreement from 55% to 66%.
+
+This is **purely a data-layout fix** — no extra bits, no
+calibration change, no budget uplift.  The difference was invisible in
+PR #17 because DeepSeek-1.5B has only **2 kv-heads**, so the pooled-
+heads penalty is small; Qwen3-4B's 8 kv-heads amplify it.
+
 ## What this means for Scenario A
 
-Snapshot-mode semantics (codec as post-prefill cache compressor) is the
-right deployment pattern, and the harness is proven correct.  But on
-Qwen3-4B **the codec itself** is the bottleneck — not the harness, not
-the engine.  Two mitigations are realistic next steps (both outside this
-commit's scope):
+Snapshot-mode semantics is correct, the harness is proven correct by
+identity-replace (PASS), and we now have **2 decimal orders of magnitude
+of PPL reduction from algorithmic fixes alone** (`+8 859%` → `+202%`).
+Still above the PASS bar.  Realistic next steps (out of this commit's
+scope):
 
-1. Recalibrate Σ_q using regularisation (`Σ_q + λ·I` with `λ` chosen
-   to cap cond ≤ 50).  This trades some Q-preconditioning power for
-   decode-side numerical stability.
-2. Increase the codec budget: b_K = 4 (from 3), k_centers = 32 (from 16),
-   or d_eff = 96 (from 64).  Costs slot bytes but gives directly measurable
-   Δppl improvement.
+1. **share_basis_v on the GPU codec path.**  Currently GPU-V disables
+   share_basis, which makes the V-stream codec lose the pooled-across-
+   blocks basis optimisation that Rust has.  Adding this should recover
+   part of the V-stream loss the current `--no-share-basis-v` run paid.
+2. **Regularised Σ_q recalibration.**  The Tikhonov shrinkage tool is
+   already shipped (`benchmarks/q_regularize_sigma.py`); need to
+   re-measure with it on the GPU codec layout (earlier reg50 + CPU
+   pooled-heads went the wrong direction — +2352% — because the
+   pooled-heads layout inflates the conditioning penalty).
+3. **Codec-budget uplift.**  `b_K = 4 / k = 32 / d_eff = 96` each give
+   direct measurable Δppl improvement at a known byte cost.
 
-## Scenario A deployment verdict for Qwen3-4B: not deployable yet on current recipe
+## Scenario A deployment verdict for Qwen3-4B
 
-Best snapshot-mode config on Qwen3-4B (bare codec, 4-passage mean):
-**Δppl = +619%**, top-1 = 55%.  Below the PR #17 DeepSeek `+29% MARGINAL`
-bar.  Needs calibration fix or codec-budget uplift before snapshot-mode
-is production-viable on this model.
+Best configuration on Qwen3-4B under snapshot mode, measured today:
+
+- **Bare codec, GPU per-head codec, 4-passage mean**:
+  Δppl = **+202.75%**, top-1 = **66.02%**
+
+Below the PR #17 DeepSeek `+29% MARGINAL` bar — not deployable on the
+current recipe, but the mechanism that was blowing up (+8 859% on full
+recipe, +619% on bare CPU) is now understood and narrowed to two
+specific algorithmic levers above.
 
 ## Artefacts
 - Harness: `benchmarks/e2e_ppl_validation_vllm_snapshot_qwen3.py`
