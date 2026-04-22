@@ -77,87 +77,19 @@ def _derive_omega(
     rotation_seed: int,
     seed_offset: int,
     device: torch.device,
-    *,
-    sketch_kind: str = "gaussian",
 ) -> torch.Tensor:
-    """Generate the RSVD test matrix Ω ∈ ℝ^{n×r}.
+    """Generate the Gaussian test matrix Ω ∈ ℝ^{n×r}.
 
-    Two variants:
-
-    * ``sketch_kind='gaussian'`` (default): iid N(0,1) entries via
-      torch.Generator(Philox4x32) seeded from rotation_seed XOR
-      seed_offset.  Matches the Rust RSVD reference.
-
-    * ``sketch_kind='srht'`` (Subsampled Randomized Hadamard
-      Transform): Ω = (1/√r) · D · H[:, cols] where
-      D = diag(±1) Rademacher, H is the n×n Sylvester Hadamard,
-      and `cols` is a deterministic r-subset of [0,n).  This is
-      the structured sketch closest to the Besicovitch-Kakeya
-      construction: rows of Ω are unit-norm and distributed to
-      cover directions approximately uniformly on the unit sphere.
-      Requires n to be a power of 2.  Halko-Martinsson-Tropp
-      (2011) §4.6 proves a tighter error bound for SRHT than
-      Gaussian when n is large and r is moderate.
-
-    seed_offset defaults to the Rust-compatible SplitMix64 constant
-    so seed derivation stays reproducible across {Gaussian, SRHT}
-    at the same rotation_seed (they share the same RNG stream for
-    the sign/column subset).
+    We use `torch.Generator(device).normal_` which is Philox4x32 on
+    CUDA — NOT bit-identical to Rust's `SmallRng` + Box-Muller, but
+    draws from the same N(0,1) population.  The rotation_seed +
+    seed_offset combination matches Rust's
+    `u64::from(rotation_seed) ^ seed_offset`.
     """
     seed = (int(rotation_seed) ^ int(seed_offset)) & ((1 << 63) - 1)
-
-    if sketch_kind == "gaussian":
-        gen = torch.Generator(device=device)
-        gen.manual_seed(seed)
-        return torch.randn(
-            n, r, generator=gen, device=device, dtype=torch.float32,
-        )
-
-    if sketch_kind != "srht":
-        raise ValueError(
-            f"unknown sketch_kind {sketch_kind!r}; expected "
-            "'gaussian' or 'srht'"
-        )
-
-    # SRHT.  Requires n to be a power of 2 (Sylvester Hadamard is
-    # only defined then).  If the caller passes a non-power-of-2 n,
-    # fall back to Gaussian loudly.
-    if n & (n - 1) != 0:
-        raise ValueError(
-            f"SRHT requires n to be a power of 2 (got n={n}); "
-            "either pad the design matrix or keep sketch_kind=gaussian"
-        )
-
     gen = torch.Generator(device=device)
     gen.manual_seed(seed)
-    # Rademacher signs D ∈ {±1}^n.
-    d = (torch.randint(
-        0, 2, (n,), generator=gen, device=device, dtype=torch.int64,
-    ) * 2 - 1).to(torch.float32)                   # [n]
-    # Column subset — r distinct columns of H.
-    perm = torch.randperm(n, generator=gen, device=device)
-    cols = perm[:r]                                 # [r] int64
-    # Build Ω one-shot: Ω[i, j] = D[i] · H[i, cols[j]] / √r.
-    # Using the same Sylvester construction as _hadamard_matrix in
-    # gpu_encode; reimplemented here to avoid a cross-module import
-    # cycle.
-    assert n >= 1, f"n must be positive, got {n}"
-    H = torch.ones(1, 1, device=device, dtype=torch.float32)
-    while H.shape[0] < n:
-        H = torch.cat([
-            torch.cat([H,  H], dim=1),
-            torch.cat([H, -H], dim=1),
-        ], dim=0)
-    H_cols = H[:, cols]                             # [n, r]
-    scale = 1.0 / float(n) ** 0.5                   # √(1/n) — see below
-    # Note on normalisation: with D Rademacher and H scaled to ±1
-    # (Sylvester), (D H)^T (D H) = H^T D^T D H = H^T H = n · I, so
-    # each column of (D H) has norm √n.  Dividing by √n gives
-    # unit-norm columns, matching the iid-Gaussian Ω scale
-    # (E[Ω^T Ω] = n · I for Ω ~ N(0, 1)^{n×r} → scale by √n to
-    # match).  HMT Alg 2 operates on normalised sketch Q, so the
-    # constant factor gets absorbed into the QR anyway.
-    return (d.unsqueeze(1) * H_cols) * scale
+    return torch.randn(n, r, generator=gen, device=device, dtype=torch.float32)
 
 
 def _batched_qr_thin(M: torch.Tensor) -> torch.Tensor:
@@ -180,7 +112,6 @@ def _fit_rsvd_batched(
     variance_ratio: float,
     rotation_seed: int,
     seed_offset: int = 0x9E37_79B9_7F4A_7C15,
-    sketch_kind: str = "gaussian",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
     """Batched randomised SVD (HMT 2011 §4.4) on the weighted centred
     design matrix.
@@ -232,10 +163,7 @@ def _fit_rsvd_batched(
     # `from_fn(n, r, Box-Muller)` per block but with the same seed
     # formula.  (In Rust, seed varies per block via the caller's
     # rotation_seed; we pass the same scheme here.)
-    omega = _derive_omega(
-        n, r, rotation_seed, seed_offset, device,
-        sketch_kind=sketch_kind,
-    )                                                        # [n, r]
+    omega = _derive_omega(n, r, rotation_seed, seed_offset, device)  # [n, r]
 
     # Z = Aᵀ · Ω  → [B, d, r]
     Z = torch.einsum("bnd,nr->bdr", A, omega)                # [B, d, r]
@@ -381,7 +309,6 @@ def fit_skeleton_batched(
     rsvd_oversample: int = 8,
     rsvd_power_iters: int = 2,
     variance_ratio: float = 1.0,
-    sketch_kind: str = "gaussian",
 ) -> dict:
     """Batched stage-1 skeleton fit: mean + RSVD PCA basis + K-means centres.
 
@@ -408,7 +335,6 @@ def fit_skeleton_batched(
         oversample=rsvd_oversample,
         power_iters=rsvd_power_iters,
         variance_ratio=variance_ratio,
-        sketch_kind=sketch_kind,
         rotation_seed=seed,
     )
 

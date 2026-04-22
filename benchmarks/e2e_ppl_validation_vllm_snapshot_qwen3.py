@@ -183,8 +183,6 @@ def _gpu_codec_per_head(
     variance_ratio: float,
     centroids_file: str | None,
     outlier_threshold: float | None,
-    disable_wht: bool = False,
-    sketch_kind: str = "gaussian",
 ) -> np.ndarray:
     """Run the GPU codec per kv-head on a [n, H, D] fp32 tensor and
     return the decoded [n, H, D] fp32 array.
@@ -254,7 +252,6 @@ def _gpu_codec_per_head(
             K_block, d_eff=d_eff, k=k, seed=3405691582,
             rsvd_oversample=8, rsvd_power_iters=2,
             kmeans_max_iter=8, variance_ratio=variance_ratio,
-            sketch_kind=sketch_kind,
         )
         sign_np = np.asarray(
             _core.wht_sign_pattern(
@@ -271,7 +268,6 @@ def _gpu_codec_per_head(
             custom_centroids=centroids_gpu,
             outlier_threshold=outlier_threshold,
             wht_sign=sign,
-            disable_wht=disable_wht,
         )                                              # [H, slot_bytes]
 
         # Decode each head slot (decode_block_torch_from_parts is
@@ -281,9 +277,7 @@ def _gpu_codec_per_head(
             parts = impl._unpack_slot_into_parts(
                 slot_cpu, cfg, head_size=D,
             )
-            dec_h = decode_block_torch_from_parts(
-                parts, device="cpu", disable_wht=disable_wht,
-            )
+            dec_h = decode_block_torch_from_parts(parts, device="cpu")
             dec_h = dec_h.numpy() if hasattr(dec_h, "numpy") else np.asarray(dec_h)
             out[lo:hi, h, :] = dec_h
 
@@ -300,8 +294,6 @@ def gpu_roundtrip(
     variance_ratio: float = 0.95,
     centroids_file: str | None = None,
     outlier_threshold: float | None = None,
-    disable_wht: bool = False,
-    sketch_kind: str = "gaussian",
 ) -> tuple[np.ndarray, dict]:
     """Signature-compatible stand-in for `rust_roundtrip` operating
     on the [n, H, D] pre-flatten layout.  Returns (decoded, report)."""
@@ -316,8 +308,6 @@ def gpu_roundtrip(
         variance_ratio=variance_ratio,
         centroids_file=centroids_file,
         outlier_threshold=outlier_threshold,
-        disable_wht=disable_wht,
-        sketch_kind=sketch_kind,
     )
     # Best-effort report: mean per-block MSE + compressed-bytes
     # estimate (matching kakeyaturbo-bench's report keys).
@@ -354,7 +344,6 @@ def codec_layer(
     boundary_skip: set[int], rsvd_target_rank_factor: float = 0.5,
     share_basis_v: bool = True, share_basis_k: bool = False,
     use_gpu_codec: bool = False, disable_share_basis_v: bool = False,
-    k_disable_wht: bool = False, k_sketch_kind: str = "gaussian",
 ) -> tuple[np.ndarray, dict]:
     """Per-layer codec of a captured K/V tensor.
 
@@ -408,20 +397,11 @@ def codec_layer(
             # pooled-heads layout so we have to un-pool the result.
             dec = dec.reshape(n, n_kv, hd)
         else:
-            # K-stream-only knobs: both `disable_wht` and
-            # `sketch_kind="srht"` (Besicovitch-ish structured sketch)
-            # are ablations over how the K codec builds its RSVD
-            # skeleton and handles the residual rotation.  V stream
-            # keeps the defaults — it doesn't have a Q-preconditioning
-            # analogue and RSVD-sketch variant has never been
-            # measured on V in the CPU reference either.
             dec, rep = gpu_roundtrip(
                 arr_enc.astype(np.float32, copy=False),
                 block_size=block_size, bit_width=bit_width,
                 rsvd_target_rank=rank, metric=metric,
                 centroids_file=centroids, outlier_threshold=outlier_thr,
-                disable_wht=(k_disable_wht if not is_v else False),
-                sketch_kind=(k_sketch_kind if not is_v else "gaussian"),
             )
     else:
         flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
@@ -563,21 +543,6 @@ def main() -> int:
                          "support share_basis); without this flag the V "
                          "stream falls back to the CPU Rust path even when "
                          "--gpu-codec is on.")
-    ap.add_argument("--k-disable-wht", action="store_true",
-                    help="K-stream only: skip stage 4b Walsh-Hadamard "
-                         "rotation of the residual (encode AND decode side).  "
-                         "Ablation — test whether post-qk-norm K residuals "
-                         "are already in a Lloyd-Max-friendly basis without "
-                         "the codec-internal 'RoPE' rotation.")
-    ap.add_argument("--k-sketch-kind", default="gaussian",
-                    choices=["gaussian", "srht"],
-                    help="K-stream RSVD sketch matrix construction.  "
-                         "'gaussian' (default) = iid N(0,1) via Philox4x32, "
-                         "matches the Rust RSVD reference.  'srht' = "
-                         "Subsampled Randomised Hadamard Transform "
-                         "(Halko-Martinsson-Tropp 2011 §4.6), the "
-                         "structured-sketch cousin of Besicovitch-Kakeya "
-                         "constructions.")
     ap.add_argument("--out-dir", type=Path, required=True)
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -650,8 +615,6 @@ def main() -> int:
                 v_outlier_threshold=None, boundary_skip=boundary_skip,
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
-                k_disable_wht=args.k_disable_wht,
-                k_sketch_kind=args.k_sketch_kind,
             )
             v_hat, v_rep = codec_layer(
                 kv["V"], is_v=True, layer_id=lid, q_precond=qp,
@@ -662,9 +625,6 @@ def main() -> int:
                 v_outlier_threshold=None, boundary_skip=boundary_skip,
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
-                # Explicit identity for V stream.
-                k_disable_wht=False,
-                k_sketch_kind="gaussian",
             )
             replacements[lid] = {
                 "K": torch.from_numpy(k_hat).cuda(),
