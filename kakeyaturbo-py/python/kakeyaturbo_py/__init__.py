@@ -79,6 +79,10 @@ __all__ = [
     "decode_block_torch_from_parts",
     "Skeleton",
     "CodeBatch",
+    # Triton Phase B kernel — also lazy, requires CUDA torch + triton.
+    "encode_block_triton_stage2",
+    "fused_wht_scale_quantize",
+    "triton_is_available",
 ]
 
 
@@ -91,4 +95,13 @@ def __getattr__(name):
     }:
         from . import reference_torch  # noqa: F401
         return getattr(reference_torch, name)
+    if name in {
+        "encode_block_triton_stage2",
+        "fused_wht_scale_quantize",
+        "triton_is_available",
+    }:
+        from . import triton_kernels  # noqa: F401
+        if name == "triton_is_available":
+            return triton_kernels.is_available
+        return getattr(triton_kernels, name)
     raise AttributeError(f"module 'kakeyaturbo_py' has no attribute {name!r}")
