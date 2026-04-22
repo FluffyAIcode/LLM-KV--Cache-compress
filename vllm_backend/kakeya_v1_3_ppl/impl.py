@@ -753,6 +753,39 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         k_centroids = state.k_centroids   # np.ndarray or None
         v_centroids = state.v_centroids
 
+        def _pad_to_d_eff(parts: dict, target_d_eff: int, head_size: int) -> dict:
+            """Pad PCA basis / per-vec coeffs / K-means centers / seg_id /
+            norm to a fixed `target_d_eff`.
+
+            Rationale: the Rust codec returns a data-dependent `d_eff`
+            (the intrinsic PCA rank of the block after variance-ratio +
+            exact_rank_cap).  For vLLM slot sizing, we need a
+            *configuration-constant* `d_eff` so the slot layout is
+            deterministic.  On rank-deficient blocks (e.g. repetitive
+            text), d_eff can come back smaller than the configured
+            value; we pad the basis with zero-eigenvectors and the
+            K-means centroids with zero-rows so that the round-trip is
+            still exact (projecting onto a zero basis row adds 0 to
+            the reconstruction).
+            """
+            cur = int(parts["d_eff"])
+            if cur >= target_d_eff:
+                return parts
+            padded = dict(parts)
+            pad = target_d_eff - cur
+            # basis: (d_eff, head_size)
+            b = np.asarray(parts["basis"]).reshape(cur, head_size)
+            padded["basis"] = np.concatenate(
+                [b, np.zeros((pad, head_size), dtype=b.dtype)], axis=0,
+            )
+            # K-means centers: (k, d_eff)
+            c = np.asarray(parts["centers"]).reshape(-1, cur)
+            padded["centers"] = np.concatenate(
+                [c, np.zeros((c.shape[0], pad), dtype=c.dtype)], axis=1,
+            )
+            padded["d_eff"] = target_d_eff
+            return padded
+
         for h in range(self.num_kv_heads):
             Kh = K_fp32[:, h, :].contiguous().cpu().numpy()
             Vh = V_fp32[:, h, :].contiguous().cpu().numpy()
@@ -780,6 +813,7 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             k_parts_rust = encode_block_codes(Kh, **k_rust_kwargs)
             k_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
                             for kk, vv in k_parts_rust.items()}
+            k_parts_rust = _pad_to_d_eff(k_parts_rust, k_cfg.d_eff, self.head_size)
             k_parts = encode_block_triton_stage2(
                 Kh, k_parts_rust,
                 custom_centroids=k_centroids,
@@ -805,6 +839,7 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             v_parts_rust = encode_block_codes(Vh, **v_rust_kwargs)
             v_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
                             for kk, vv in v_parts_rust.items()}
+            v_parts_rust = _pad_to_d_eff(v_parts_rust, v_cfg.d_eff, self.head_size)
             v_parts = encode_block_triton_stage2(
                 Vh, v_parts_rust,
                 custom_centroids=v_centroids,

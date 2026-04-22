@@ -218,6 +218,13 @@ def main() -> int:
     )
     if args.block_size is not None:
         llm_kwargs["block_size"] = args.block_size
+    # Our custom backend is registered under AttentionBackendEnum.CUSTOM
+    # (the reserved third-party slot); vLLM's auto-selector doesn't
+    # enumerate it, so we have to ask for it explicitly.
+    if args.kv_cache_dtype == "kakeya_v1_3_ppl":
+        llm_kwargs["attention_backend"] = "CUSTOM"
+        if "block_size" not in llm_kwargs:
+            llm_kwargs["block_size"] = 512
     llm = LLM(**llm_kwargs)
 
     sp = SamplingParams(
