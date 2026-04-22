@@ -1,0 +1,100 @@
+{
+  "model_name": "ds_distill_qwen_1_5b_snapshot",
+  "model_path": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+  "engine": "vllm",
+  "recipe": "v1.3 PPL snapshot-mode",
+  "ctx_len": 2048,
+  "n_eval": 64,
+  "bit_width_k": 3,
+  "bit_width_v": 2,
+  "outlier_threshold": 2.0,
+  "boundary_skip_layers": [
+    0,
+    1,
+    7,
+    14,
+    26,
+    27
+  ],
+  "q_calib": "reports/v1_4_q_pca/flagship/deepseek_distill_q_calib.safetensors",
+  "k_centroids": "reports/v1_4_q_pca/calibrated_codebook/ds_K_b3_centroids.f32",
+  "v_centroids": "reports/v1_4_q_pca/calibrated_codebook/ds_V_b2_centroids.f32",
+  "n_passages": 4,
+  "mean_ppl_delta_rel": 0.2907341820201673,
+  "mean_top1_agreement": 0.7421875,
+  "verdict": "REJECT",
+  "per_passage": [
+    {
+      "passage": 0,
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.5709743406623602,
+      "t_codec_sec": 18.436915713362396,
+      "t_alt_sec": 0.17307950370013714,
+      "metrics": {
+        "ppl_ref": 124.8755040661336,
+        "ppl_alt": 139.2633315805399,
+        "ppl_delta_rel": 0.11521737287071576,
+        "top1_agreement": 0.75,
+        "mean_abs_dlogp_true": 0.615901511066113,
+        "n_tokens": 64
+      },
+      "n_layers_captured": 28,
+      "n_boundary_skipped": 12
+    },
+    {
+      "passage": 1,
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.370645166374743,
+      "t_codec_sec": 18.282061660662293,
+      "t_alt_sec": 0.16927639301866293,
+      "metrics": {
+        "ppl_ref": 33.0042923548772,
+        "ppl_alt": 37.29780340392389,
+        "ppl_delta_rel": 0.13008947451079708,
+        "top1_agreement": 0.71875,
+        "mean_abs_dlogp_true": 0.6054980524500024,
+        "n_tokens": 64
+      },
+      "n_layers_captured": 28,
+      "n_boundary_skipped": 12
+    },
+    {
+      "passage": 2,
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 1.1817497191950679,
+      "t_codec_sec": 18.702266693115234,
+      "t_alt_sec": 0.14620758593082428,
+      "metrics": {
+        "ppl_ref": 8.535555997020436,
+        "ppl_alt": 11.573601542264326,
+        "ppl_delta_rel": 0.3559282542700675,
+        "top1_agreement": 0.734375,
+        "mean_abs_dlogp_true": 0.6271230471502349,
+        "n_tokens": 64
+      },
+      "n_layers_captured": 28,
+      "n_boundary_skipped": 12
+    },
+    {
+      "passage": 3,
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.2077221991494298,
+      "t_codec_sec": 18.759372600354254,
+      "t_alt_sec": 0.14944668672978878,
+      "metrics": {
+        "ppl_ref": 25.35456860935595,
+        "ppl_alt": 39.59627103463911,
+        "ppl_delta_rel": 0.5617016264290888,
+        "top1_agreement": 0.765625,
+        "mean_abs_dlogp_true": 0.7038803878494946,
+        "n_tokens": 64
+      },
+      "n_layers_captured": 28,
+      "n_boundary_skipped": 12
+    }
+  ]
+}
