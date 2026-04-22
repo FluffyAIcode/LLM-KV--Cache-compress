@@ -159,8 +159,9 @@ counter-productive, but together with larger `k` they compound to
 regresses — the codec is PCA-saturated beyond d_eff=96 on
 Qwen3-4B's post-qk-norm K.
 
-The best-measured configuration is **b_K=4, k=64, d_eff=96** at
-`--boundary-skip-layers 0..6 29..35`:
+The best-measured configuration is **b_K=4, k_K=64, d_eff=96** at
+`--boundary-skip-layers 0..6 29..35` (V-stream kept at defaults
+`b_V=2, k_V=16`):
 
   * Δppl = **+61.84 %**
   * top-1 = **79.30 %**
@@ -170,6 +171,46 @@ The best-measured configuration is **b_K=4, k=64, d_eff=96** at
     by ~1.7 × (larger k-means cluster table + fp16 centroids ×
     more clusters + larger basis).  Exact slot-size impact can be
     read off `KakeyaV13PPLConfig.slot_size_bytes` for the config.
+
+### V-stream budget is NOT symmetric with K
+
+The "bigger-is-better" K-stream observation does NOT extend to V.
+On the same `b_K=4, k_K=64, d_eff=96` base, pushing V's k / b in
+the K direction REGRESSES on Δppl:
+
+| b_V | k_V | Δppl       | top-1    | Δ vs baseline |
+|:---:|:---:|-----------:|---------:|--------------:|
+| 2   | 16  | **+61.84 %** | 79.30 %  | baseline |
+| 2   | 32  | +70.71 %   | 79.30 %  | +8.9 pp worse |
+| 2   | 64  | +68.03 %   | **80.47 %** | +6.2 pp worse |
+| 3   | 16  | +66.52 %   | 79.30 %  | +4.7 pp worse |
+| 3   | 64  | +68.16 %   | 78.91 %  | +6.3 pp worse |
+| 4   | 64  | +65.63 %   | 80.47 %  | +3.8 pp worse |
+
+Reading:
+* **Attention-score sensitivity**: K error is exponentially
+  amplified by softmax, V error is linearly weighted and dampened.
+  Per-bit ROI on K ≫ per-bit ROI on V.
+* **Qwen3's qk-norm** only normalises Q/K, not V.  V's spectrum
+  is flatter and has less compressible structure; larger `d_eff`
+  (shared K/V) is *already* providing all the dim-budget V can
+  usefully absorb.
+* **Fixed `b_V=2` residual budget**: `ceil(log2(k))` seg_id bits
+  grow with `k_V`.  At `b_V=2`, going `k_V=16→32` eats one extra
+  seg_id bit per token with only 4 Lloyd-Max levels of residual
+  precision left to compensate, so residual precision is degraded.
+* **Top-1 does rise by ~1 pp at `k_V=64`** (independent of the
+  Δppl drop), suggesting the structured V-codebook helps the
+  model pick the right top prediction more often even when its
+  logit spread is noisier.  Not enough to change the verdict.
+
+If further V work is worthwhile, the right direction is the
+*opposite* of K: **reduce** V's slot budget (e.g. `b_V=1` or
+`k_V=8`) and shift the saved bytes to K.  Or implement GPU
+`share_basis_v=True` (the PR #17 DS-1.5B recipe, which PR #17
+confirmed helps the V-stream via pooled-across-blocks basis) —
+currently only the CPU path supports it, and mixing GPU-K with
+CPU-V-share_basis was tested and regresses (+226.79 %).
 
 ## Report index (JSONs in this directory)
 
@@ -197,6 +238,12 @@ Codec-budget sweep (`budget_sweep/` subfolder, all 4-passage, on
 - `qwen3_4b_budget_all3_vllm_snapshot.json` — all 3: +61.80 %, 78.12 %.
 - `qwen3_4b_budget_k64_bK4_deff96_vllm_snapshot.json` — **best: +61.84 %, 79.30 %**.
 - `qwen3_4b_budget_k64_bK4_deff128_vllm_snapshot.json` — d_eff=128 (regresses): +69.78 %, 79.69 %.
+- `qwen3_4b_budget_bestK_Vdefault_vllm_snapshot.json` — V defaults pinned, best-K base (= re-run of the best config): +61.84 %, 79.30 %.
+- `qwen3_4b_budget_bestK_Vk32_vllm_snapshot.json` — V k=32: +70.71 %, 79.30 % (regresses 8.9 pp).
+- `qwen3_4b_budget_bestK_Vk64_vllm_snapshot.json` — V k=64: +68.03 %, 80.47 % (Δppl regresses 6.2 pp; top-1 +1.17 pp).
+- `qwen3_4b_budget_bestK_VbV3_vllm_snapshot.json` — V b=3: +66.52 %, 79.30 % (regresses 4.7 pp).
+- `qwen3_4b_budget_bestK_Vk64_bV3_vllm_snapshot.json` — V k=64 + b=3: +68.16 %, 78.91 %.
+- `qwen3_4b_budget_bestK_Vk64_bV4_vllm_snapshot.json` — V k=64 + b=4 (full K/V symmetry): +65.63 %, 80.47 %.
 
 Boundary-skip sweep (`bdry_sweep/` subfolder, all 4-passage):
 
