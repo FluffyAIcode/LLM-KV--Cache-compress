@@ -1,13 +1,58 @@
-# RESUME — Option C (full v1.3 PPL vLLM backend) on new H200 instance
+# RESUME — Option C (full v1.3 PPL vLLM backend)
 
-**For the next cloud agent on the new Vast.ai instance.**
+**For the next cloud agent.**
 
-You are continuing the v1.3 PPL vLLM backend work. The previous
-agent got blocked at M1 because the old instance's Nvidia driver
-was 575.57.08 (supports CUDA 12.9), while vLLM nightly (the only
-build with TurboQuant PR #38479) requires torch 2.11 + CUDA 13.0
-which needs driver ≥ 580. A new instance with a newer driver has
-been provisioned and you are on it.
+## HEAD-OF-LINE BLOCKER (2026-04-22): git push is forbidden
+
+**Symptom.** On the current cloud-agent profile, `git push` to
+`FluffyAIcode/LLM-KV--Cache-compress.git` returns:
+
+```
+remote: Permission to FluffyAIcode/LLM-KV--Cache-compress.git denied to cursor[bot].
+fatal: unable to access ...: The requested URL returned error: 403
+```
+
+The workspace ships a pre-baked token for `FluffyAIcode/AgentMemorySystem`
+(the original workspace repo), but there is no token with `contents:write`
+scope on `FluffyAIcode/LLM-KV--Cache-compress`. `gh auth token` returns
+the same token and 403s identically. Nothing on the agent side can fix
+this — it is a GitHub permissions / Cursor Dashboard secrets issue.
+
+**User action required.** In the Cursor Dashboard → Cloud Agents →
+Secrets, add a fine-grained PAT with `contents:write` on
+`FluffyAIcode/LLM-KV--Cache-compress` (name it e.g. `GH_TOKEN_KVCACHE`)
+and/or grant `cursor[bot]` write on that repo. Until that lands,
+subsequent M2..M7 work will be *committed locally* but **not pushed**,
+and every new cloud-agent VM starts from whatever is on origin — so
+unpushed commits WILL be lost across sessions.
+
+**What is on origin right now** (pre-M1):
+  * `61a288f` — RESUME doc (the previous agent's version of this file)
+  * `521c546` — Option C plan
+  * `2fae6ff` — Plan: v1.3 PPL as a deployable vLLM attention backend
+
+**What lives only on the current agent's local branch** (M1 artifacts;
+please push ASAP once credentials are fixed):
+
+```
+a750351 M1: vLLM cu130 install + TurboQuant k8v4 baseline reproduced on H200
+7eb0b36 M1: add GSM8K accuracy + TPOT benchmark harnesses (Qwen3-4B, H200)
+```
+
+If you wake up on a fresh Vast.ai VM and those SHAs are not on origin,
+the corresponding work needs to be re-run. Everything needed is already
+encoded in this file (install commands, wheel URL, sanity tests) plus
+`benchmarks/m1_*.py` — but those files are unpushed too, so you'd have
+to re-create the harnesses.
+
+## Why you are here
+
+You are continuing the v1.3 PPL vLLM backend work. A previous agent
+got blocked at M1 because the old instance's Nvidia driver was
+575.57.08 (supports CUDA 12.9), while vLLM nightly (the only build
+with TurboQuant PR #38479) requires torch 2.11 + CUDA 13.0 which
+needs driver ≥ 580. A new instance with driver 580.95.05 / CUDA 13.0
+has been provisioned; this agent has completed M1 on it.
 
 ## Ground truth
 
@@ -38,12 +83,11 @@ been provisioned and you are on it.
 
 ## Completed milestones
 
-- [x] **M0** Plan document
-- [x] **M1 (partial)** Disk cleanup done; vLLM nightly install attempted; BLOCKED on driver
+- [x] **M0** Plan document — on origin
+- [x] **M1** Environment setup + TQ-k8v4 baseline reproduction — **LOCAL ONLY**, blocked on push (see top-of-file). M1_REPORT.md in this directory has full results: GSM8K 0.8673 (eager) / 0.8620 (compiled) on full 1319-question test split, TPOT 5.53 ms (TQ-k8v4 compiled) vs 3.84 ms (baseline compiled) on H200, single stream. Accuracy bar cleanly passed; TPOT ratio analyzed in §4 of the report.
 
 ## Incomplete milestones
 
-- [ ] **M1** Environment setup
 - [ ] **M2** Offline calibration (Σ_q + Lloyd-Max centroids) on Qwen3-4B
 - [ ] **M3** Rust reference codec refactored to in-process library
 - [ ] **M4** Triton STORE kernel (encode path)
@@ -61,16 +105,25 @@ been provisioned and you are on it.
     Required: driver ≥ 580 (reports `CUDA Version: 13.0` or higher in
     `nvidia-smi`). If not, SSH back to Vast.ai and get a real
     CUDA-13 instance before doing anything else.
-2. **Install vLLM nightly that contains TurboQuant**:
+2. **Install vLLM nightly that contains TurboQuant** — the default wheel is cu12 and does NOT work on driver 580 + CUDA 13. You must pull the **cu130 variant** from the nested cu130 index:
     ```bash
     /venv/main/bin/pip install --pre --no-cache-dir \
-      --extra-index-url https://wheels.vllm.ai/nightly \
-      "vllm==0.19.2rc1.dev98+gcefa5281a" \
+      --extra-index-url https://wheels.vllm.ai/nightly/cu130 \
+      "vllm==0.19.2rc1.dev100+gf946659ff.cu130" \
       "transformers>=4.56,<5" datasets safetensors
     ```
-    (If that commit is no longer on the nightly index, pick the
-    newest commit there — TurboQuant has been merged on main since
-    2026-04-15 so any post-4-15 nightly has it.)
+    If that exact commit is gone from the nightly index, go one level
+    up (`https://wheels.vllm.ai/nightly/cu130`) and pick the newest
+    `*.cu130` wheel. Verify with:
+    ```bash
+    python -c "import vllm._C; print('_C OK')"
+    python -c "from vllm.v1.attention.backends.turboquant_attn import TurboQuantAttentionBackend; print('TQ OK')"
+    ```
+    Common failure: installing the plain `vllm==...` wheel (no
+    `.cu130` suffix) loads cleanly but then `import vllm._C` fails
+    with `libcudart.so.12: cannot open shared object file`, because
+    the plain wheel links CUDA 12 runtime. This is how the previous
+    agent got confused on the CUDA-13 instance; avoid it.
 3. **Verify TurboQuant is importable**:
     ```python
     from vllm.v1.attention.backends.turboquant_attn import TurboQuantAttentionBackend
@@ -152,7 +205,9 @@ vllm_backend/kakeya_v1_3_ppl/
     test_attention.py
 ```
 
-## Timeline of the previous agent's work (for audit)
+## Timeline of prior agents' work (for audit)
+
+### Pre-CUDA-13 agent
 
 - Cleaned /workspace disk from 8 GB free → 17 GB free (DS-Distill
   and stale Qwen2.5 caches removed)
@@ -161,6 +216,29 @@ vllm_backend/kakeya_v1_3_ppl/
 - Tried to run TurboQuant `k8v4` — got `RuntimeError: Engine core
   initialization failed` due to driver too old for CUDA 13
 - Pivoted: wrote RESUME (this file), let user switch instance
+
+### Post-CUDA-13 agent (this one, 2026-04-22)
+
+- Verified H200 + driver 580.95.05 + CUDA 13.0 at IP 208.64.254.72:19253
+- Installed `vllm==0.19.2rc1.dev100+gf946659ff.cu130` (the
+  `gcefa5281a` pin from the original RESUME was no longer on the
+  nightly index; picked the newest post-2026-04-15 build)
+- Imported TurboQuant backend and config successfully
+- Downloaded Qwen3-4B into `/workspace/.hf_home` (7.6 GB)
+- First TQ-k8v4 forward pass (temperature 0, prompt "The capital of
+  France is"): produced coherent factual continuation, confirming
+  the backend is live
+- Wrote `benchmarks/m1_gsm8k_eval.py` and `benchmarks/m1_tpot_bench.py`
+  (identical harness across every kv-cache-dtype — no config-specific
+  branches, no fallback paths, no prompt tuning per dtype)
+- Ran full GSM8K (1319 questions) × 4 configs (baseline eager/compiled,
+  TQ-k8v4 eager/compiled) + single-stream TPOT 4096→1024 × 4 configs.
+  Logs in `reports/v1_3_ppl/vllm_backend/logs/`, JSON artifacts next
+  to them. Headline: TQ-k8v4 compiled 0.8620 accuracy (vs 0.8726
+  baseline); TQ-k8v4/baseline TPOT ratio +44 % on H200 vs PR's +28 %
+  on 4× Blackwell (see M1_REPORT.md §4 for root-cause analysis)
+- Blocked on `git push` (see top-of-file); wrote this RESUME update,
+  stopped before M2 to avoid losing work across sessions.
 
 ## Key decisions already made — do NOT relitigate
 
