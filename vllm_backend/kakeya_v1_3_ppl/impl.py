@@ -34,6 +34,7 @@ and finished in Phase B on the H200.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
@@ -730,6 +731,15 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         doesn't have a Q-preconditioning analogue.
         """
         from kakeyaturbo_py import encode_block_codes, encode_block_triton_stage2
+        # M4 Phase C: batched GPU stage-1 skeleton.  Replaces the
+        # per-head Rust CPU path that used to take 30–80 ms per call
+        # and dominated the seal loop (32 layers × 8 heads ×
+        # 50 ms ≈ 13 s/window).  The GPU path does all kv_heads
+        # concurrently in a single torch.linalg.eigh batch.
+        from kakeyaturbo_py.gpu_skeleton import (
+            fit_skeleton_batched,
+            unbatched_skeleton_to_rust_dict,
+        )
         n = self.block_size_codec
         assert st.count == n, f"seal called on partial block ({st.count}/{n})"
 
@@ -740,8 +750,22 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         V_fp32 = st.v_bf16.to(torch.float32)
 
         # Optional Σ_q whitening on K (per-kv-head).
-        if state.sigma_q_chol is not None:
-            # K_tilde[t, h, :] = K[t, h, :] @ L[h, :, :]
+        #
+        # NOTE: The Σ_q bundle in M2 was calibrated on *pre-RoPE*
+        # queries, whereas vLLM's attention backend sees *post-RoPE*
+        # K activations (the Q/K rotation happens before `Attention`
+        # calls into the backend).  Applying pre-RoPE-fitted Σ_q to
+        # post-RoPE K is a semantic mismatch: the reconstruction
+        # error ε in the whitened space gets amplified to ε · L^{-1}
+        # in the decode path, and for ill-conditioned heads the
+        # condition number of L^{-1} can be >5×, blowing PPL.
+        #
+        # Env toggle: set KAKEYA_DISABLE_SIGMA_Q=1 to bypass.
+        # Default: ON, because measured PPL is actually worse with
+        # it disabled (70k → 14k, vs 14k baseline → 13.6k with Σ_q
+        # on) — despite the semantic mismatch, the rotation helps.
+        disable_sigma_q = os.environ.get("KAKEYA_DISABLE_SIGMA_Q", "0") == "1"
+        if state.sigma_q_chol is not None and not disable_sigma_q:
             K_fp32 = torch.einsum(
                 "thj,hjk->thk",
                 K_fp32,
@@ -786,60 +810,61 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             padded["d_eff"] = target_d_eff
             return padded
 
+        # Stage 1 (batched, GPU): fit PCA + K-means skeleton for K
+        # and V of all kv-heads in a single torch.linalg.eigh call
+        # (batch = 2·num_kv_heads) — both streams share d_eff and
+        # k_centers per the KakeyaV13PPLConfig invariant, so they
+        # compose trivially along the batch axis.  The stream split
+        # happens when we slice `KV_batched` back apart.
+        KV_batched = torch.cat(
+            [K_fp32.permute(1, 0, 2), V_fp32.permute(1, 0, 2)],
+            dim=0,
+        ).contiguous()                                           # [2·H, n, D]
+        assert k_cfg.d_eff == v_cfg.d_eff
+        assert k_cfg.k_centers == v_cfg.k_centers
+
+        kv_skel_batch = fit_skeleton_batched(
+            KV_batched,
+            d_eff=k_cfg.d_eff,
+            k=k_cfg.k_centers,
+            seed=3405691582,
+        )
+
+        # Split back into K and V skeletons.  kv_skel_batch holds the
+        # per-batch tensors with K rows first (indices 0..H) and V
+        # rows second (H..2H).
+        def _slice_skel(batch_dict, idx_lo, idx_hi):
+            return {
+                **{k_: v_[idx_lo:idx_hi] if hasattr(v_, "shape") else v_
+                   for k_, v_ in batch_dict.items()},
+            }
+        H = self.num_kv_heads
+        k_skel_batch = _slice_skel(kv_skel_batch, 0, H)
+        v_skel_batch = _slice_skel(kv_skel_batch, H, 2 * H)
+
         for h in range(self.num_kv_heads):
             Kh = K_fp32[:, h, :].contiguous().cpu().numpy()
             Vh = V_fp32[:, h, :].contiguous().cpu().numpy()
-            # Encode K (inner_product metric, outlier on).  We pin
-            # d_eff via variance_ratio=1.0 + exact_rank_cap=d_eff so
-            # the slot layout assumption holds regardless of the
-            # block's actual spectrum (variance_ratio<1 can return a
-            # smaller d_eff on low-rank inputs, which would mis-fit
-            # the slot).
-            k_rust_kwargs = dict(
+
+            # Slice one kv-head's skeleton out of the batch, reshape
+            # into the dict that encode_block_triton_stage2 expects.
+            # The GPU skeleton already returns exactly `d_eff` rows
+            # (no rank-deficiency gap), so no _pad_to_d_eff needed.
+            k_parts_rust = unbatched_skeleton_to_rust_dict(
+                k_skel_batch, h, bit_width=k_cfg.bit_width,
                 metric="inner_product",
-                block_size=n,
-                bit_width=k_cfg.bit_width,
-                variance_ratio=1.0,
-                k=k_cfg.k_centers,
-                rotation_seed=3405691582,
-                pca_method="exact",
-                exact_rank_cap=k_cfg.d_eff,
-                skeleton_dtype="fp16",
-                share_basis=False,
-                outlier_threshold=2.0,
             )
-            if k_centroids is not None:
-                k_rust_kwargs["centroids"] = k_centroids.tolist()
-            k_parts_rust = encode_block_codes(Kh, **k_rust_kwargs)
-            k_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
-                            for kk, vv in k_parts_rust.items()}
-            k_parts_rust = _pad_to_d_eff(k_parts_rust, k_cfg.d_eff, self.head_size)
             k_parts = encode_block_triton_stage2(
                 Kh, k_parts_rust,
                 custom_centroids=k_centroids,
                 outlier_threshold=2.0,
                 device=str(st.k_bf16.device),
             )
-            # Encode V (MSE metric, no outlier, V bit-width).  Same
-            # d_eff-pinning as K.
-            v_rust_kwargs = dict(
+
+            v_parts_rust = unbatched_skeleton_to_rust_dict(
+                v_skel_batch, h, bit_width=v_cfg.bit_width,
                 metric="mse",
-                block_size=n,
-                bit_width=v_cfg.bit_width,
-                variance_ratio=1.0,
-                k=v_cfg.k_centers,
-                rotation_seed=3405691582,
-                pca_method="exact",
-                exact_rank_cap=v_cfg.d_eff,
-                skeleton_dtype="fp16",
-                share_basis=False,
             )
-            if v_centroids is not None:
-                v_rust_kwargs["centroids"] = v_centroids.tolist()
-            v_parts_rust = encode_block_codes(Vh, **v_rust_kwargs)
-            v_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
-                            for kk, vv in v_parts_rust.items()}
-            v_parts_rust = _pad_to_d_eff(v_parts_rust, v_cfg.d_eff, self.head_size)
             v_parts = encode_block_triton_stage2(
                 Vh, v_parts_rust,
                 custom_centroids=v_centroids,
@@ -1117,10 +1142,12 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         out = torch.stack(rows, dim=1)
 
         # Σ_q un-whitening (K only; V-stream has no whitening).
+        # Must match the toggle in `_seal_and_write_block`.
+        disable_sigma_q = os.environ.get("KAKEYA_DISABLE_SIGMA_Q", "0") == "1"
         if (stream == "K"
             and state is not None
-            and state.sigma_q_inv_chol is not None):
-            # K_hat[t, h, :] = K_tilde[t, h, :] @ L^{-1}[h, :, :]
+            and state.sigma_q_inv_chol is not None
+            and not disable_sigma_q):
             out = torch.einsum(
                 "thj,hjk->thk",
                 out,
