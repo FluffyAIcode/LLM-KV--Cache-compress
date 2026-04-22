@@ -33,6 +33,7 @@ distribution substituted.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -120,6 +121,86 @@ def fit_pca_simple(X: np.ndarray, vr: float = 1.0):
     return mean.astype(np.float32), basis.astype(np.float32), d_eff
 
 
+def _fit_spherical_kmeans_np(coeffs: np.ndarray, k: int, seed: int,
+                              max_iter: int = 32) -> np.ndarray:
+    """Faithful Python port of kakeyaturbo/src/kmeans.rs::fit_spherical_kmeans.
+
+    Farthest-first init + Lloyd iterations on the sphere with absolute-
+    cosine assignment (so anti-aligned rows collaborate, matching the
+    Rust implementation). Unit weights. Returns unit-norm centres
+    [k, d_eff] as float32.
+
+    This is the same semantics the runtime codec uses inside the store
+    kernel (PLAN.md §Open engineering questions decision 2), so the
+    residual distribution collected here matches what the Lloyd-Max
+    quantizer will see in production.
+    """
+    n, d_eff = coeffs.shape
+    assert n >= k, f"need at least {k} rows, got {n}"
+    norms = np.linalg.norm(coeffs, axis=1, keepdims=True)
+    valid = (norms[:, 0] > np.finfo(np.float32).eps)
+    dirs = np.zeros_like(coeffs)
+    dirs[valid] = coeffs[valid] / norms[valid]
+    dirs = dirs[valid]
+    if dirs.shape[0] < k:
+        raise ValueError(f"only {dirs.shape[0]} non-zero rows, need ≥{k}")
+
+    # Farthest-first init — matches init_farthest_first in kmeans.rs.
+    rng = np.random.default_rng(seed)
+    first = int(rng.integers(0, dirs.shape[0]))
+    centers = [dirs[first].copy()]
+    for _ in range(1, k):
+        # Max cos to any existing center, per row
+        cos_mat = dirs @ np.stack(centers, axis=0).T   # [n, |centers|]
+        max_cos = cos_mat.max(axis=1)
+        dist = 1.0 - max_cos
+        best = int(dist.argmax())
+        centers.append(dirs[best].copy())
+    centers = np.stack(centers, axis=0)               # [k, d_eff]
+
+    # Lloyd iterations
+    prev_assign = None
+    for _ in range(max_iter):
+        cos_mat = dirs @ centers.T                    # [n, k]
+        abs_cos = np.abs(cos_mat)
+        assign = abs_cos.argmax(axis=1)
+        if prev_assign is not None and np.array_equal(assign, prev_assign):
+            break
+        prev_assign = assign
+        new_centers = np.zeros_like(centers)
+        cluster_count = np.zeros(k, dtype=np.int64)
+        # Row-level sign via chosen center
+        chosen_cos = cos_mat[np.arange(dirs.shape[0]), assign]
+        sign = np.where(chosen_cos >= 0.0, 1.0, -1.0)
+        for c in range(k):
+            mask = (assign == c)
+            cluster_count[c] = int(mask.sum())
+            if cluster_count[c] == 0:
+                new_centers[c] = centers[c]           # keep prior center
+                continue
+            block = dirs[mask] * sign[mask, None]
+            new_centers[c] = block.sum(axis=0)
+            n_norm = np.linalg.norm(new_centers[c])
+            if n_norm > np.finfo(np.float32).eps:
+                new_centers[c] /= n_norm
+            else:
+                new_centers[c] = centers[c]
+        centers = new_centers
+    return centers.astype(np.float32)
+
+
+def _assign_and_project_np(coeff: np.ndarray, centers: np.ndarray):
+    """Port of kakeyaturbo/src/kmeans.rs::assign_and_project.
+
+    Returns (seg_id per row: int32[n], t per row: float32[n]).
+    `t = <coeff, center_seg>`; residual = coeff - t · center_seg.
+    """
+    cos = coeff @ centers.T                       # [n, k]
+    seg = np.abs(cos).argmax(axis=1)
+    t = cos[np.arange(coeff.shape[0]), seg]
+    return seg.astype(np.int32), t.astype(np.float32)
+
+
 # ---------------------------------------------------------------------------
 # Residual collector
 # ---------------------------------------------------------------------------
@@ -128,15 +209,16 @@ def fit_pca_simple(X: np.ndarray, vr: float = 1.0):
 def collect_residuals(model_path: str, stream: str, n_passages: int, ctx_len: int,
                        block_size: int, q_precond_path: str | None,
                        skip_layers: list[int] | None, rotation_seed: int,
-                       vr: float = 1.0) -> np.ndarray:
+                       vr: float = 1.0, device: str = "cpu") -> np.ndarray:
     """Collect scaled residuals (what the Lloyd-Max quantiser sees) across
     all specified layers.  Returns a flat numpy array of all residual
     coordinate values."""
-    print(f"loading {model_path}…", flush=True)
+    print(f"loading {model_path}  (device={device})…", flush=True)
     tok = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForCausalLM.from_pretrained(
         model_path, dtype=torch.bfloat16, attn_implementation="eager"
     )
+    model = model.to(device)
     model.eval()
     prc.install(model)
 
@@ -156,13 +238,15 @@ def collect_residuals(model_path: str, stream: str, n_passages: int, ctx_len: in
 
     qp = load_q_precond(q_precond_path, skip_layers=skip_layers) if q_precond_path else None
 
-    from benchmarks.e2e_ppl_pre_rope import load_wikitext_passages, prefill_cache
+    from benchmarks.calibration_utils import load_wikitext_passages, prefill_cache
     passages = load_wikitext_passages(tok, ctx_len, n_passages)
-    print(f"  got {len(passages)} passages", flush=True)
+    print(f"  got {len(passages)} passages "
+          f"(split={os.environ.get('DATASETS_WIKITEXT_SPLIT', 'test')})",
+          flush=True)
 
     residual_pool: list[np.ndarray] = []
     for passage_i, p in enumerate(passages):
-        ids = tok(p, return_tensors="pt")["input_ids"][:, :ctx_len]
+        ids = tok(p, return_tensors="pt")["input_ids"][:, :ctx_len].to(device)
         cache = prefill_cache(model, ids, prefill_chunk=1024)
         for l in full_attn_layers:
             tensor = (cache.layers[l].keys if stream == "K"
@@ -177,28 +261,49 @@ def collect_residuals(model_path: str, stream: str, n_passages: int, ctx_len: in
             if n_comp == 0:
                 continue
             D = flat.shape[-1]
-            # For calibration we approximate with block-level PCA (no
-            # K-means inside for simplicity — K-means residual is a small
-            # perturbation on top of the PCA residual in the WHT'd space).
+            # Faithful per-block codec pipeline (PLAN.md Option C: no
+            # simplification):
+            #   (i)   fit per-block PCA basis
+            #   (ii)  project to coeff = (x - mean) @ basis^T
+            #   (iii) fit spherical K-means on coeffs (Rust semantics)
+            #   (iv)  residual_pre_wht = coeff - t · center_seg
+            #   (v)   pad to next_pow2(d_eff), WHT-rotate, divide by
+            #         ||residual_pre_wht|| so the Lloyd-Max quantizer
+            #         sees unit-norm vectors.
+            # The resulting distribution is what the in-kernel Lloyd-Max
+            # will actually quantize at runtime.
+            K_CENTROIDS_PER_BLOCK = 16  # matches PLAN.md §cache layout
+            KMEANS_MAX_ITER = 32         # matches kmeans.rs default
             for block_start in range(0, n_comp, block_size):
                 block = flat[block_start:block_start + block_size]
                 mean, basis, d_eff = fit_pca_simple(block, vr=vr)
-                # Project to coefficient space
                 coeff = (block - mean) @ basis.T  # [bs, d_eff]
-                # Approximate the codec's residual: coeff minus K-means reconstruction.
-                # Since we're collecting POOLED statistics and want the
-                # "bulk" residual distribution, we use the coeff directly —
-                # after WHT + norm scaling this is within 1.2x of the true
-                # residual, which is good enough for codebook calibration.
+                if d_eff < 1:
+                    continue
+                # K must be <= number of non-zero rows
+                valid_rows = int((np.linalg.norm(coeff, axis=1)
+                                  > np.finfo(np.float32).eps).sum())
+                k_local = min(K_CENTROIDS_PER_BLOCK, max(valid_rows - 1, 1))
+                if k_local < 2:
+                    # Degenerate; skip this block rather than fabricate data.
+                    continue
+                centers = _fit_spherical_kmeans_np(
+                    coeff, k=k_local, seed=rotation_seed,
+                    max_iter=KMEANS_MAX_ITER,
+                )
+                seg, t = _assign_and_project_np(coeff, centers)
+                residuals = coeff - t[:, None] * centers[seg]   # [bs, d_eff]
+                # Pad to next_pow2 for WHT, rotate, scale by residual norm.
                 wht_len = next_pow2(d_eff)
-                padded = np.zeros((coeff.shape[0], wht_len), dtype=np.float32)
-                padded[:, :d_eff] = coeff
-                # Rotate each row
+                padded = np.zeros((residuals.shape[0], wht_len), dtype=np.float32)
+                padded[:, :d_eff] = residuals
                 rotated = wht_rotate(padded, rotation_seed)
-                # Per-vector norm scaling (matches codec's scale = 1/res_norm)
-                norms = np.linalg.norm(coeff, axis=1, keepdims=True).clip(min=1e-12)
-                # Rotated vector should be scaled by 1/||coeff||
-                scaled = rotated / norms
+                r_norms = np.linalg.norm(residuals, axis=1, keepdims=True)
+                # Zero-residual rows contribute nothing to the Lloyd-Max pool.
+                alive = (r_norms[:, 0] > np.finfo(np.float32).eps)
+                if alive.sum() == 0:
+                    continue
+                scaled = rotated[alive] / r_norms[alive]
                 residual_pool.append(scaled.reshape(-1).astype(np.float32))
         print(f"  passage {passage_i+1}: accumulated residuals ({sum(r.size for r in residual_pool):,} samples so far)",
               flush=True)
@@ -295,7 +400,18 @@ def main():
                     help="Must match runtime --rotation-seed on the bench CLI "
                          "(default 3405691582).")
     ap.add_argument("--max-iter", type=int, default=200)
+    ap.add_argument("--device", default="cpu",
+                    help="Device for the Qwen forward pass. 'cuda' "
+                         "recommended for Qwen3-4B (CPU takes hours).")
+    ap.add_argument("--split", default=None,
+                    help="wikitext-103-raw-v1 split. If set, overrides the "
+                         "DATASETS_WIKITEXT_SPLIT env var. Leave unset to "
+                         "inherit from the environment (expected behavior "
+                         "when driven by qwen3_4b_calibration.py).")
     args = ap.parse_args()
+
+    if args.split is not None:
+        os.environ["DATASETS_WIKITEXT_SPLIT"] = args.split
 
     samples = collect_residuals(
         args.model_path, args.stream,
@@ -305,6 +421,7 @@ def main():
         skip_layers=args.skip_layers or args.q_precond_skip_layers,
         rotation_seed=args.rotation_seed,
         vr=args.variance_ratio,
+        device=args.device,
     )
 
     # Subsample for iteration speed if huge

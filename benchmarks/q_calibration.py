@@ -55,7 +55,7 @@ sys.path.insert(0, str(REPO))
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import benchmarks.pre_rope_cache as prc
-from benchmarks.e2e_ppl_pre_rope import load_wikitext_passages
+from benchmarks.calibration_utils import load_wikitext_passages
 
 
 def _kv_group_ranges(num_q_heads: int, num_kv_heads: int):
@@ -69,12 +69,17 @@ def _kv_group_ranges(num_q_heads: int, num_kv_heads: int):
 @torch.inference_mode()
 def calibrate(model_path: str, out_path: Path, *,
               n_passages: int, ctx_len: int, prefill_chunk: int,
-              ridge: float):
-    print(f"loading {model_path}…", flush=True)
+              ridge: float, split: str = "train",
+              device: str = "cpu", dtype: str = "bfloat16"):
+    print(f"loading {model_path}  (device={device}, dtype={dtype})…", flush=True)
     tok = AutoTokenizer.from_pretrained(model_path)
+    torch_dtype = {"bfloat16": torch.bfloat16,
+                   "float16":  torch.float16,
+                   "float32":  torch.float32}[dtype]
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, dtype=torch.bfloat16, attn_implementation="eager"
+        model_path, dtype=torch_dtype, attn_implementation="eager"
     )
+    model = model.to(device)
     model.eval()
     info = prc.install(model)
     print(f"  patched {info['patched_layers']} attention layers", flush=True)
@@ -93,8 +98,9 @@ def calibrate(model_path: str, out_path: Path, *,
     )
     print(f"  D={head_dim}, n_q={n_q}, n_kv={n_kv}, groups per kv = {len(groups[0])}")
 
-    passages = load_wikitext_passages(tok, ctx_len, n_passages)
-    print(f"  using {len(passages)} WikiText passages of >= {ctx_len} tokens", flush=True)
+    passages = load_wikitext_passages(tok, ctx_len, n_passages, split=split)
+    print(f"  using {len(passages)} WikiText-103 (split={split}) passages "
+          f"of >= {ctx_len} tokens", flush=True)
 
     # Accumulate gram sums, not per-passage tensors — cheap and bounded memory.
     # gram[l][h_kv]  shape [D, D]   sum_{all tokens in group} q q^T
@@ -104,7 +110,7 @@ def calibrate(model_path: str, out_path: Path, *,
     count = [0 for _ in range(n_layers)]
 
     for i, passage in enumerate(passages):
-        ids = tok(passage, return_tensors="pt")["input_ids"][:, :ctx_len]
+        ids = tok(passage, return_tensors="pt")["input_ids"][:, :ctx_len].to(device)
         if ids.shape[-1] < ctx_len:
             print(f"  passage {i+1}: SKIP (too short: {ids.shape[-1]})")
             continue
@@ -133,7 +139,7 @@ def calibrate(model_path: str, out_path: Path, *,
                     # Sum over all q heads in this kv group
                     group = groups[h_kv]
                     q_group = q[group]  # [g, seq, D]
-                    q_flat = q_group.reshape(-1, head_dim).numpy()  # [g*seq, D]
+                    q_flat = q_group.reshape(-1, head_dim).to(torch.float32).cpu().numpy()  # [g*seq, D]
                     gram[l_idx][h_kv] += q_flat.T @ q_flat
                 count[l_idx] += q.shape[1]  # seq, same for every layer
         cfg._q_recorder = None
@@ -195,6 +201,9 @@ def calibrate(model_path: str, out_path: Path, *,
         "num_kv_heads": n_kv,
         "num_layers": n_layers,
         "layer_types": layer_types,
+        "calibration_split": split,
+        "calibration_source": f"wikitext-103-raw-v1:{split}",
+        "n_passages_requested": n_passages,
         "n_passages_used": sum(1 for c in count if c > 0),
         "ctx_len": ctx_len,
         "ridge": ridge,
@@ -227,11 +236,21 @@ def main():
     ap.add_argument("--prefill-chunk", type=int, default=0)
     ap.add_argument("--ridge", type=float, default=1e-3,
                     help="Cholesky ridge = ridge * mean_diag(Sigma) for numerical stability")
+    ap.add_argument("--split", default="train",
+                    help="WikiText-103 split to draw calibration passages from. "
+                         "Default 'train' keeps calibration disjoint from any "
+                         "evaluation harness that reads the 'test' split.")
+    ap.add_argument("--device", default="cpu",
+                    help="Device to run the forward pass on. 'cuda' recommended "
+                         "for Qwen3-4B to keep calibration tractable on long ctx.")
+    ap.add_argument("--dtype", default="bfloat16",
+                    choices=["bfloat16", "float16", "float32"])
     args = ap.parse_args()
     calibrate(
         args.model_path, args.out_path,
         n_passages=args.n_passages, ctx_len=args.ctx_len,
         prefill_chunk=args.prefill_chunk, ridge=args.ridge,
+        split=args.split, device=args.device, dtype=args.dtype,
     )
 
 
