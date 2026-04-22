@@ -66,8 +66,47 @@ except ImportError:
         pass
 
 
+from .calibration import CalibrationBundle, load_calibration_bundle
 from .config import KakeyaV13PPLConfig
 from .spec import KakeyaV13PPLAttentionSpec
+
+
+# Process-global calibration bundle.  vLLM instantiates AttentionImpl
+# per (layer, worker) and we don't own the construction site, so the
+# clean way to plumb calibration data is a module-level register that
+# the plugin entry point (Phase B.2d) populates before model init.
+_GLOBAL_CALIBRATION: CalibrationBundle | None = None
+
+
+def set_global_calibration(bundle: CalibrationBundle | None) -> None:
+    """Install a calibration bundle that every new
+    `KakeyaV13PPLAttentionImpl` instance will pick up.
+
+    Call this once at plugin init (Phase B.2d) with the M2
+    safetensors + Lloyd-Max tables loaded via
+    `calibration.load_calibration_bundle(...)`.
+
+    Setting to None reverts to Gaussian-default centroids and no
+    Σ_q whitening — the Phase B.1 behaviour.
+    """
+    global _GLOBAL_CALIBRATION
+    _GLOBAL_CALIBRATION = bundle
+
+
+def _parse_layer_idx_from_name(layer_name: str | None) -> int | None:
+    """vLLM exposes `layer.layer_name = "model.layers.{L}.self_attn.attn"`.
+    Parse L; return None on unknown format so calibration can stay
+    identity instead of crashing."""
+    if not layer_name:
+        return None
+    parts = layer_name.split(".")
+    for i, p in enumerate(parts):
+        if p == "layers" and i + 1 < len(parts):
+            try:
+                return int(parts[i + 1])
+            except ValueError:
+                return None
+    return None
 
 
 @dataclass
@@ -183,11 +222,19 @@ class _PerLayerState:
     # block_idx → _BlockStaging.  Dropped on seal.
     staging_per_block: dict[int, _BlockStaging] = field(default_factory=dict)
 
-    # Calibrated codec constants (loaded from M2 artefacts at first forward).
+    # Layer index inside the model (parsed from `layer.layer_name`).
+    # None iff we couldn't parse — in which case calibration is disabled.
+    layer_idx: int | None = None
+
+    # Σ_q Cholesky factors for this specific layer's kv-heads, if the
+    # calibration bundle covers this layer.  None = no whitening
+    # (identity) for this layer.
     sigma_q_chol: torch.Tensor | None = None      # [n_kv, D, D] fp32
     sigma_q_inv_chol: torch.Tensor | None = None  # [n_kv, D, D] fp32
-    k_centroids: torch.Tensor | None = None       # [2^b_K] fp32
-    v_centroids: torch.Tensor | None = None       # [2^b_V] fp32
+
+    # Per-stream Lloyd-Max tables (None = Gaussian default).
+    k_centroids: np.ndarray | None = None         # [2^b_K] fp32
+    v_centroids: np.ndarray | None = None         # [2^b_V] fp32
 
 
 class KakeyaV13PPLAttentionImpl(AttentionImpl):
@@ -240,6 +287,12 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             outlier_budget_frac=0.0,
         )
         self.block_size_codec = self.k_config.block_size_codec
+
+        # Phase B.2a: calibration bundle (shared across all layers).
+        # Set by `set_calibration_bundle` or fetched lazily from a
+        # process-global default.  Tests can construct an impl with
+        # `bundle=None` to exercise the Gaussian-default path.
+        self._calibration = _GLOBAL_CALIBRATION
 
     # ---- Phase A: slot (de)serialisation ------------------------------
 
@@ -573,17 +626,49 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         layer: AttentionLayer,
         device: torch.device,
     ) -> _PerLayerState:
-        """Initialise the per-layer staging dict + (Phase B.2) load
-        calibrated constants from the M2 safetensors files."""
+        """Initialise the per-layer staging dict + calibration.
+
+        Phase B.2a: if a `CalibrationBundle` is registered via
+        `set_global_calibration`, pull this layer's Σ_q factors
+        (indexed by `layer_idx` parsed from `layer.layer_name`) and
+        the per-stream Lloyd-Max centroid tables.  Missing layers
+        (e.g. boundary layers skipped during calibration) fall
+        through to identity whitening + Gaussian-default Lloyd-Max.
+        """
         state = getattr(layer, "_kakeya_state", None)
         if state is not None:
             return state
-        state = _PerLayerState(staging_per_block={})
-        # Phase B.2 will load Σ_q + centroids here.  For Phase B.1 the
-        # encoder runs with the Gaussian default Lloyd-Max table (which
-        # is what M4 Phase A and M5 already tested against), and Σ_q
-        # whitening is off on K — PR #15 measured the gap this opens
-        # as a ~4× Δppl cost that Phase B.2 will close.
+
+        layer_idx = _parse_layer_idx_from_name(
+            getattr(layer, "layer_name", None)
+        )
+        state = _PerLayerState(
+            staging_per_block={}, layer_idx=layer_idx,
+        )
+
+        bundle = self._calibration
+        if bundle is not None:
+            # Attach per-stream Lloyd-Max tables (None if the bundle
+            # didn't include them).
+            state.k_centroids = bundle.lloyd_max_k
+            state.v_centroids = bundle.lloyd_max_v
+            # Σ_q factors are per-layer; look up by parsed idx.
+            if layer_idx is not None and layer_idx in bundle.sigma_q_chol:
+                L = bundle.sigma_q_chol[layer_idx]
+                Linv = bundle.sigma_q_inv_chol[layer_idx]
+                if L.shape != (self.num_kv_heads, self.head_size, self.head_size):
+                    raise ValueError(
+                        f"layer {layer_idx} Σ_q chol shape {L.shape} != "
+                        f"({self.num_kv_heads}, {self.head_size}, "
+                        f"{self.head_size})"
+                    )
+                state.sigma_q_chol = torch.from_numpy(L).to(
+                    device, torch.float32,
+                ).contiguous()
+                state.sigma_q_inv_chol = torch.from_numpy(Linv).to(
+                    device, torch.float32,
+                ).contiguous()
+
         layer._kakeya_state = state   # type: ignore[attr-defined]
         return state
 
@@ -628,31 +713,50 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         per `KakeyaV13PPLAttentionSpec.get_kv_cache_shape`; the K-slot
         starts at byte 0 and the V-slot at `k_config.slot_size_bytes`
         within each `kv_cache[block_idx, head, :]`.
+
+        Phase B.2a: if `_PerLayerState.sigma_q_chol` is set, whiten
+        K per-kv-head before encode (`K_tilde = K @ L[h]`).  Decode
+        will later unwhiten.  Σ_q whitening is K-stream only — V
+        doesn't have a Q-preconditioning analogue.
         """
         from kakeyaturbo_py import encode_block_codes, encode_block_triton_stage2
         n = self.block_size_codec
         assert st.count == n, f"seal called on partial block ({st.count}/{n})"
 
-        # Stage 1 (PCA + K-means, CPU Rust) then Stage 2..=5 (Triton) per
-        # kv-head.  PLAN.md §Key design decision puts both stages on
-        # GPU eventually (randomized PCA + in-kernel Lloyd iteration),
-        # but Phase B.1 keeps the deterministic Rust stage-1 — the
-        # per-block CPU cost (~1 ms) is tolerable at prefill time and
-        # the combined parity with M4 Phase A is already proven.
+        state: _PerLayerState = layer._kakeya_state  # type: ignore[attr-defined]
         k_cfg = self.k_config
         v_cfg = self.v_config
         K_fp32 = st.k_bf16.to(torch.float32)              # [n, n_kv, D]
         V_fp32 = st.v_bf16.to(torch.float32)
+
+        # Optional Σ_q whitening on K (per-kv-head).
+        if state.sigma_q_chol is not None:
+            # K_tilde[t, h, :] = K[t, h, :] @ L[h, :, :]
+            K_fp32 = torch.einsum(
+                "thj,hjk->thk",
+                K_fp32,
+                state.sigma_q_chol,
+            ).contiguous()
+
+        # Per-stream Lloyd-Max tables — None falls back to Gaussian default
+        # inside kakeyaturbo_py.
+        k_centroids = state.k_centroids   # np.ndarray or None
+        v_centroids = state.v_centroids
+
         for h in range(self.num_kv_heads):
             Kh = K_fp32[:, h, :].contiguous().cpu().numpy()
             Vh = V_fp32[:, h, :].contiguous().cpu().numpy()
-            # Encode K (inner_product metric, outlier on).
-            k_parts_rust = encode_block_codes(
-                Kh,
+            # Encode K (inner_product metric, outlier on).  We pin
+            # d_eff via variance_ratio=1.0 + exact_rank_cap=d_eff so
+            # the slot layout assumption holds regardless of the
+            # block's actual spectrum (variance_ratio<1 can return a
+            # smaller d_eff on low-rank inputs, which would mis-fit
+            # the slot).
+            k_rust_kwargs = dict(
                 metric="inner_product",
                 block_size=n,
                 bit_width=k_cfg.bit_width,
-                variance_ratio=k_cfg.variance_ratio,
+                variance_ratio=1.0,
                 k=k_cfg.k_centers,
                 rotation_seed=3405691582,
                 pca_method="exact",
@@ -661,21 +765,24 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
                 share_basis=False,
                 outlier_threshold=2.0,
             )
+            if k_centroids is not None:
+                k_rust_kwargs["centroids"] = k_centroids.tolist()
+            k_parts_rust = encode_block_codes(Kh, **k_rust_kwargs)
             k_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
                             for kk, vv in k_parts_rust.items()}
             k_parts = encode_block_triton_stage2(
                 Kh, k_parts_rust,
-                custom_centroids=None,
+                custom_centroids=k_centroids,
                 outlier_threshold=2.0,
                 device=str(st.k_bf16.device),
             )
-            # Encode V (MSE metric, no outlier, V bit-width).
-            v_parts_rust = encode_block_codes(
-                Vh,
+            # Encode V (MSE metric, no outlier, V bit-width).  Same
+            # d_eff-pinning as K.
+            v_rust_kwargs = dict(
                 metric="mse",
                 block_size=n,
                 bit_width=v_cfg.bit_width,
-                variance_ratio=v_cfg.variance_ratio,
+                variance_ratio=1.0,
                 k=v_cfg.k_centers,
                 rotation_seed=3405691582,
                 pca_method="exact",
@@ -683,11 +790,14 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
                 skeleton_dtype="fp16",
                 share_basis=False,
             )
+            if v_centroids is not None:
+                v_rust_kwargs["centroids"] = v_centroids.tolist()
+            v_parts_rust = encode_block_codes(Vh, **v_rust_kwargs)
             v_parts_rust = {kk: (np.asarray(vv) if hasattr(vv, "shape") else vv)
                             for kk, vv in v_parts_rust.items()}
             v_parts = encode_block_triton_stage2(
                 Vh, v_parts_rust,
-                custom_centroids=None,
+                custom_centroids=v_centroids,
                 outlier_threshold=None,
                 device=str(st.v_bf16.device),
             )
@@ -854,9 +964,11 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
                     # Sealed block.
                     k_block = self._decode_sealed(
                         kv_cache, block_idx, stream="K", device=device,
+                        layer=layer,
                     )
                     v_block = self._decode_sealed(
                         kv_cache, block_idx, stream="V", device=device,
+                        layer=layer,
                     )
                     req_k_chunks.append(k_block)
                     req_v_chunks.append(v_block)
@@ -918,16 +1030,34 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         block_idx: int,
         stream: str,
         device: torch.device,
+        *,
+        layer: AttentionLayer | None = None,
     ) -> torch.Tensor:
         """Decode one sealed (K or V) codec block to `[block_size_codec,
         n_kv_heads, head_size]` fp32.
 
         Iterates over kv_heads since each head has its own
         skeleton + codes in our slot layout.
+
+        Phase B.2a: if `layer._kakeya_state` carries calibrated
+        centroids, pass them as `custom_centroids` to the Triton
+        decoder.  If it carries a `sigma_q_inv_chol` tensor and this
+        is the K stream, un-whiten the decoded K per-head
+        (`K_hat = K_hat_tilde @ L^{-1}`).
         """
         from kakeyaturbo_py import decode_block_triton_from_parts
         cfg = self.k_config if stream == "K" else self.v_config
         slot_off = 0 if stream == "K" else self.k_config.slot_size_bytes
+
+        # Pull calibration from layer state (if available).
+        state: _PerLayerState | None = (
+            getattr(layer, "_kakeya_state", None) if layer is not None else None
+        )
+        custom_centroids = None
+        if state is not None:
+            custom_centroids = (
+                state.k_centroids if stream == "K" else state.v_centroids
+            )
 
         rows = []
         for h in range(self.num_kv_heads):
@@ -935,9 +1065,22 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             slot_np = slot_bytes.detach().cpu().numpy()
             parts = self._unpack_slot_into_parts(slot_np, cfg, head_size=self.head_size)
             decoded = decode_block_triton_from_parts(
-                parts, custom_centroids=None, device=str(device),
+                parts, custom_centroids=custom_centroids, device=str(device),
             )
             rows.append(torch.from_numpy(decoded).to(device))
         # Stack to [block_size_codec, n_kv_heads, head_size].
-        return torch.stack(rows, dim=1)
+        out = torch.stack(rows, dim=1)
+
+        # Σ_q un-whitening (K only; V-stream has no whitening).
+        if (stream == "K"
+            and state is not None
+            and state.sigma_q_inv_chol is not None):
+            # K_hat[t, h, :] = K_tilde[t, h, :] @ L^{-1}[h, :, :]
+            out = torch.einsum(
+                "thj,hjk->thk",
+                out,
+                state.sigma_q_inv_chol,
+            ).contiguous()
+
+        return out
 
