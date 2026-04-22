@@ -18,6 +18,23 @@ def register_plugin() -> None:
     import logging
     logger = logging.getLogger("kakeya_v1_3_ppl.plugin")
 
+    # ---- Mode A: snapshot-harness patch (pure bf16 path) ----
+    # Used by benchmarks/e2e_ppl_validation_vllm_snapshot_qwen3.py
+    # to install a three-phase hook on Qwen3Attention in EVERY
+    # vLLM process (incl. the engine-core subprocess).  Gate via
+    # env var so a normal vLLM run (no snapshot harness) is unaffected.
+    if os.environ.get("KAKEYA_SNAPSHOT_QWEN3", "0") == "1":
+        try:
+            from . import snapshot_hook
+            snapshot_hook.install_qwen3_snapshot_patch()
+        except Exception as e:
+            logger.exception("Failed to install Qwen3 snapshot patch: %s", e)
+            raise
+        # The snapshot harness doesn't use our custom attention
+        # backend; registering it would add unnecessary patches to
+        # CacheConfig / STR_DTYPE_TO_TORCH_DTYPE.  Early-return.
+        return
+
     from .registration import register_kakeya_backend
     register_kakeya_backend()
     logger.info("kakeya_v1_3_ppl backend registered")
