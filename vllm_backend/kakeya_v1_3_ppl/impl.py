@@ -741,6 +741,84 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
             cache[key] = torch.from_numpy(arr).to(device)
         return cache[key]
 
+    def _boundary_skip_set(self) -> frozenset[int]:
+        """Parsed `KAKEYA_BOUNDARY_SKIP_LAYERS` as an int set, cached
+        on the impl so we don't re-parse on every seal.
+
+        Format: comma-separated ints, e.g. `"0,1,34,35"`.  Empty or
+        unset → no skip (codec applies to every layer, unchanged
+        behaviour).
+        """
+        cached = getattr(self, "_boundary_skip_cache", None)
+        if cached is not None:
+            return cached
+        raw = os.environ.get("KAKEYA_BOUNDARY_SKIP_LAYERS", "")
+        ids: list[int] = []
+        for tok in raw.split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            try:
+                ids.append(int(tok))
+            except ValueError:
+                # Surface the typo loudly — silently dropping a boundary
+                # skip would be a subtle PPL bug at runtime.
+                raise RuntimeError(
+                    f"KAKEYA_BOUNDARY_SKIP_LAYERS: cannot parse "
+                    f"{tok!r} as int (full value: {raw!r})"
+                )
+        cached = frozenset(ids)
+        self._boundary_skip_cache = cached
+        return cached
+
+    def _is_boundary_layer(self, layer_idx: int | None) -> bool:
+        return layer_idx is not None and layer_idx in self._boundary_skip_set()
+
+    def _seal_block_as_bf16_boundary(
+        self,
+        st: _BlockStaging,
+        block_idx: int,
+        kv_cache: torch.Tensor,
+        state: _PerLayerState,
+    ) -> None:
+        """Skip-layer path: the block's K/V are kept as bf16 in the
+        per-layer shadow dict `state.bf16_shadow`, keyed by block_idx.
+        `_decode_sealed` consults the shadow first and returns the
+        uncompressed tensor directly, short-circuiting the codec.
+
+        Two constraints make this the right place to stash the bf16
+        (rather than trying to write into `kv_cache`):
+
+        1.  The `kv_cache` byte slot was sized from
+            `KakeyaV13PPLConfig.slot_size_bytes` (~37 KB per K-slot
+            at d_eff=64/k=16/b=3), which is ~3x smaller than a raw
+            bf16 block for the same (block_size_codec, num_kv_heads,
+            head_size) geometry (~128 KB).  The paged-cache byte
+            tensor has no room.
+
+        2.  vLLM's paged allocator doesn't know about our
+            out-of-cache shadow, so the shadow consumes GPU memory
+            beyond `gpu_memory_utilization`.  For boundary layers
+            (typically 4–6 out of 32–36) at snapshot-sized workloads
+            this is a few MB per block × a small blocks-per-request
+            count — negligible.  For long production contexts this
+            could be tracked in a follow-up if it ever matters.
+
+        The K/V staging tensors are .clone()'d so the shadow owns
+        its own storage; without the clone, releasing `st` (the
+        caller drops it after seal) would free the shadow's memory.
+        """
+        state.bf16_shadow[block_idx] = (
+            st.k_bf16.clone(), st.v_bf16.clone(),
+        )
+        # Write zeros into the paged-cache slot so that a downstream
+        # consumer that accidentally reads uncalibrated bytes gets a
+        # deterministic value rather than undefined memory.  The
+        # forward path always checks the shadow first for skipped
+        # layers, so these zeros are never actually decoded.
+        v_end = self.k_config.slot_size_bytes + self.v_config.slot_size_bytes
+        kv_cache[block_idx, :, :v_end].zero_()
+
     def _config_offsets(self, cfg: "KakeyaV13PPLConfig") -> dict:
         """Extract the byte-layout properties that
         `gpu_encode.encode_and_pack_batched` needs into a plain dict
@@ -808,6 +886,31 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         assert st.count == n, f"seal called on partial block ({st.count}/{n})"
 
         state: _PerLayerState = layer._kakeya_state  # type: ignore[attr-defined]
+
+        # ---- Guardrail #3: boundary-layer skip (PR #17 recipe) ----
+        # PR #17's production cell for DeepSeek-R1-Distill-Qwen-1.5B used
+        # a 6-layer boundary skip: [0, 1, 7, 14, 26, 27] passed through
+        # as bf16 (no codec) because those layers' attention patterns
+        # are disproportionately sensitive to codec reconstruction error.
+        # FINDINGS.md §"V-only + outlier" measured this configuration
+        # as the closest-to-MARGINAL verdict (+7.04% Δppl, 75.39% top-1).
+        #
+        # Environment-var driven so one backend binary can serve
+        # different models / recipes:
+        #
+        #   KAKEYA_BOUNDARY_SKIP_LAYERS="0,1,7,14,26,27"    # PR #17 on DS-1.5B
+        #   KAKEYA_BOUNDARY_SKIP_LAYERS="0,1,34,35"         # Qwen3-4B boundary
+        #   KAKEYA_BOUNDARY_SKIP_LAYERS=""                  # no skip (default)
+        #
+        # NOTE: distinct from `KAKEYA_SKIP_LAYERS` (plugin.py) which
+        # controls which layers the Σ_q calibration bundle covers —
+        # those two concepts happen to coincide in the DeepSeek recipe
+        # but are semantically independent.
+        if self._is_boundary_layer(state.layer_idx):
+            self._seal_block_as_bf16_boundary(
+                st, block_idx, kv_cache, state,
+            )
+            return
         k_cfg = self.k_config
         v_cfg = self.v_config
         K_fp32 = st.k_bf16.to(torch.float32)              # [n, n_kv, D]
@@ -1228,18 +1331,40 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         cfg = self.k_config if stream == "K" else self.v_config
         slot_off = 0 if stream == "K" else self.k_config.slot_size_bytes
 
-        # Debug bypass: if the bf16 shadow is populated for this
-        # block, skip the codec and return the raw bf16 directly.
-        # Used to isolate "codec quality" vs "assembly plumbing"
-        # when debugging PPL regressions.
-        if os.environ.get("KAKEYA_DEBUG_BF16_SHADOW", "0") == "1":
-            state_dbg: _PerLayerState | None = (
-                getattr(layer, "_kakeya_state", None) if layer is not None else None
-            )
-            if state_dbg is not None and block_idx in state_dbg.bf16_shadow:
-                k_shadow, v_shadow = state_dbg.bf16_shadow[block_idx]
+        # ---- Guardrail #3 read side: boundary-layer bf16 shadow ----
+        # If _seal_and_write_block detected this layer was on the
+        # `KAKEYA_BOUNDARY_SKIP_LAYERS` list, the codec was bypassed
+        # at seal time and the bf16 K/V are in state.bf16_shadow.
+        # Return them directly — the paged-cache slot for this block
+        # is zeros (kept deterministic but never decoded).
+        #
+        # Also used by the older `KAKEYA_DEBUG_BF16_SHADOW=1` probe
+        # that forced the shadow on every block regardless of layer
+        # id, so the check is merged.
+        state: _PerLayerState | None = (
+            getattr(layer, "_kakeya_state", None) if layer is not None else None
+        )
+        boundary = (
+            state is not None and self._is_boundary_layer(state.layer_idx)
+        )
+        debug_shadow = (
+            os.environ.get("KAKEYA_DEBUG_BF16_SHADOW", "0") == "1"
+        )
+        if (boundary or debug_shadow) and state is not None:
+            entry = state.bf16_shadow.get(block_idx)
+            if entry is not None:
+                k_shadow, v_shadow = entry
                 sh = k_shadow if stream == "K" else v_shadow
                 return sh.to(device=device, dtype=torch.float32)
+            elif boundary:
+                # This shouldn't happen — if we marked the layer as
+                # boundary at seal time the shadow must be populated.
+                # Fail loud to surface the mismatch at test time.
+                raise RuntimeError(
+                    f"boundary layer {state.layer_idx} block {block_idx} "
+                    f"{stream}-stream missing from bf16_shadow — seal "
+                    f"and decode saw inconsistent skip sets?"
+                )
 
         # Pull calibration from layer state (if available).  We must
         # use the SAME centroid table that _seal_and_write_block used
@@ -1248,9 +1373,7 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         # catastrophic PPL blowup.  The encode-side opt-in flag is
         # KAKEYA_USE_M2_CENTROIDS (default off matches CPU reference
         # which uses the Gaussian default).
-        state: _PerLayerState | None = (
-            getattr(layer, "_kakeya_state", None) if layer is not None else None
-        )
+        # `state` already bound above for the boundary-skip check.
         use_m2_centroids = os.environ.get("KAKEYA_USE_M2_CENTROIDS", "0") == "1"
         custom_centroids = None
         if state is not None and use_m2_centroids:
