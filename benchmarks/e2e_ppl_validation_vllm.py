@@ -42,10 +42,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import struct
-import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -54,41 +51,24 @@ import numpy as np
 import torch
 
 REPO = Path(__file__).resolve().parent.parent
-BENCH_BIN = REPO / "kakeyaturbo" / "target" / "release" / "kakeyaturbo-bench"
-KKTV_MAGIC = 0x4B4B5456
 
 
 # =============================================================================
-# KKTV I/O (matches the Rust bench binary)
+# v1.3 Rust codec round-trip (in-process via pyo3)
 # =============================================================================
+#
+# See `benchmarks/e2e_ppl_validation_vllm_full.py` for the full M3
+# rationale.  In-process call is bit-identical to the old CLI subprocess
+# path (verified by kakeyaturbo-py/tests/test_roundtrip_cli_parity.py).
 
-def write_kktv(path: Path, arr: np.ndarray) -> None:
-    assert arr.dtype == np.float32 and arr.ndim == 2, (arr.dtype, arr.shape)
-    n, d = arr.shape
-    with path.open("wb") as f:
-        f.write(struct.pack("<I", KKTV_MAGIC))
-        f.write(struct.pack("<I", 1))
-        f.write(struct.pack("<Q", n))
-        f.write(struct.pack("<I", d))
-        f.write(struct.pack("<I", 0))
-        f.write(arr.tobytes(order="C"))
+try:
+    from kakeyaturbo_py import roundtrip_layer as _rust_roundtrip_layer
+except ImportError as _import_err:  # pragma: no cover
+    _rust_roundtrip_layer = None
+    _rust_import_error = _import_err
+else:
+    _rust_import_error = None
 
-
-def read_kktv_f32(path: Path) -> np.ndarray:
-    with path.open("rb") as f:
-        magic = struct.unpack("<I", f.read(4))[0]
-        assert magic == KKTV_MAGIC, f"{path}: bad magic {magic:#x}"
-        _version = struct.unpack("<I", f.read(4))[0]
-        n = struct.unpack("<Q", f.read(8))[0]
-        d = struct.unpack("<I", f.read(4))[0]
-        _pad = struct.unpack("<I", f.read(4))[0]
-        raw = f.read(n * d * 4)
-    return np.frombuffer(raw, dtype=np.float32).reshape(n, d).copy()
-
-
-# =============================================================================
-# v1.3 Rust codec round-trip
-# =============================================================================
 
 def rust_roundtrip(
     arr: np.ndarray,
@@ -105,49 +85,29 @@ def rust_roundtrip(
     rsvd_power_iters: int = 2,
 ) -> tuple[np.ndarray, dict]:
     """Encode `arr` (N, D) through the v1.3 codec, return (decoded, report)."""
-    if not BENCH_BIN.exists():
-        raise FileNotFoundError(
-            f"{BENCH_BIN} missing; run "
-            "`cargo build --release --bin kakeyaturbo-bench` in kakeyaturbo/"
+    if _rust_roundtrip_layer is None:
+        raise RuntimeError(
+            "kakeyaturbo_py extension not importable; build it with "
+            "`cd kakeyaturbo-py && maturin develop --release`. "
+            f"Original import error: {_rust_import_error!r}"
         )
-
-    with tempfile.TemporaryDirectory(dir="/tmp") as td:
-        tdp = Path(td)
-        in_path = tdp / "x.kktv"
-        rep_path = tdp / "report.json"
-        dec_path = tdp / "decoded.kktv"
-        write_kktv(in_path, arr.astype(np.float32, copy=False))
-        cmd = [
-            str(BENCH_BIN),
-            "--input", str(in_path),
-            "--output", str(rep_path),
-            "--metric", metric,
-            "--block-size", str(block_size),
-            "--variance-ratio", str(variance_ratio),
-            "--k", str(k_means_k),
-            "--bit-width", str(bit_width),
-            "--rotation-seed", "3405691582",
-            "--pca-method", pca_method,
-            "--verify",
-            "--dump-decoded", str(dec_path),
-        ]
-        if pca_method == "randomized":
-            cmd += [
-                "--rsvd-target-rank", str(rsvd_target_rank),
-                "--rsvd-oversample", str(rsvd_oversample),
-                "--rsvd-power-iters", str(rsvd_power_iters),
-            ]
-        if share_basis:
-            cmd.append("--share-basis")
-
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        if res.returncode != 0:
-            raise RuntimeError(
-                f"kakeyaturbo-bench failed (rc={res.returncode}): {res.stderr}"
-            )
-        report = json.loads(rep_path.read_text())
-        decoded = read_kktv_f32(dec_path)
-        return decoded, report
+    arr32 = np.ascontiguousarray(arr, dtype=np.float32)
+    kwargs: dict[str, Any] = dict(
+        metric=metric,
+        block_size=block_size,
+        bit_width=bit_width,
+        variance_ratio=variance_ratio,
+        k=k_means_k,
+        rotation_seed=3405691582,
+        pca_method=pca_method,
+        share_basis=share_basis,
+    )
+    if pca_method == "randomized":
+        kwargs["rsvd_target_rank"] = rsvd_target_rank
+        kwargs["rsvd_oversample"] = rsvd_oversample
+        kwargs["rsvd_power_iters"] = rsvd_power_iters
+    decoded, report = _rust_roundtrip_layer(arr32, **kwargs)
+    return decoded, dict(report)
 
 
 # =============================================================================

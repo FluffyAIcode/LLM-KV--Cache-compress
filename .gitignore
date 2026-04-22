@@ -2,3 +2,12 @@ __pycache__/
 *.py[cod]
 models/
 turboquant_plus/
+
+# Rust + maturin build artefacts (kakeyaturbo-py wheel is rebuilt from
+# source; the target/ tree is huge and platform-specific).
+kakeyaturbo/target/
+kakeyaturbo-py/target/
+*.so
+*.dylib
+*.pyd
+
