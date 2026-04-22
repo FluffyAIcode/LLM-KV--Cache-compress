@@ -91,7 +91,7 @@ Reading: interior skip is **model-specific** to DS-1.5B; on
 Qwen3-4B the better ROI is **more boundary depth**, not interior
 skip.
 
-## Knobs that did **not** help (5 distinct experiments)
+## Knobs that did **not** help (7 distinct experiments)
 
 Each row was measured against a 6-layer-boundary base (the best
 symmetric baseline at the time these ablations were run; the
@@ -105,6 +105,8 @@ but the guardrail ablations are paired against 6-layer).
 | (f) **Outlier compensation T=2.0** on top of 6-layer bdry        | +169.60 % (vs +169.36 % off, noise-level) | Post-qk-norm K residuals don't have the heavy tail the outlier side-buffer was designed to catch. |
 | (g) **Approach B: query-subspace codec** (replace Σ_q with hard projection onto top-r eigenvectors of Q) at r ∈ {32, 64, 80, 96, 112, 128} | r=32: +17 758 %; r=64: +926 %; r=128 (identity): +292 % — all worse than bare +202 % | Qwen3-4B post-qk-norm Q is NOT low-rank (r=32 → 83 % energy; r=64 → 93 %; need r≥112 for 99 %). Projection steals codec budget from K's natural spectrum. |
 | (h) **Share_basis on V stream** (V falls back to CPU Rust pooled-heads path that supports share_basis; K stays on GPU per-head) | +226.79 % vs nearly-paired-config 6-layer bare +169.36 % | Share_basis in CPU Rust has to pool across the whole layer; combined with pooled-heads layout it loses more V quality than share_basis saves. |
+| (i) **K-stream: disable stage 4b Walsh-Hadamard rotation** (encode + decode symmetric skip via `--k-disable-wht`) | +95.88 % vs baseline +96.86 % (noise-level, 4-passage) | Residual after K-means already has a particular structure; WHT smears it uniformly for Lloyd-Max; skipping it neither helps nor hurts on post-qk-norm Qwen3-4B. |
+| (j) **K-stream: SRHT sketch matrix** (Besicovitch-ish structured Ω = (1/√n) D · H[:, cols] replacing iid-Gaussian) via `--k-sketch-kind=srht` | +96.23 % (alone); +93.75 % combined with `--k-disable-wht` (noise-level) | HMT's SRHT error-bound advantage shows at large n; our n=512 is small enough that Gaussian's constants dominate.  Combined with WHT-off gives a 3 pp improvement that's within 4-passage variance band. |
 
 ## Architectural reading
 

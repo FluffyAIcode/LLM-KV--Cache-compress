@@ -386,6 +386,7 @@ def decode_block_torch_from_parts(
     *,
     custom_centroids: Optional[np.ndarray] = None,
     device: str | torch.device = "cpu",
+    disable_wht: bool = False,
 ) -> np.ndarray:
     """Inverse of `encode_block_torch_stage2`; accepts the same dict
     shape `encode_block_codes` / `encode_block_torch_stage2` emit.
@@ -430,8 +431,16 @@ def decode_block_torch_from_parts(
     q_scaled = q_vals * inv_scale.unsqueeze(1)
 
     # Inverse WHT rotation via Rust (bit-exact).
-    unrotated = _inverse_rotate_rows_via_rust(q_scaled, skel.rotation_seed)
-    residual_rec = unrotated[:, :skel.d_eff]
+    if disable_wht:
+        # Ablation: stage 4b was skipped at encode time, so the
+        # inverse is also a no-op.  Take the leading `d_eff`
+        # coords of `q_scaled` directly as the reconstructed
+        # residual.  The extra wht_len-d_eff padded entries were
+        # quantised to Lloyd-Max centroids but get discarded here.
+        residual_rec = q_scaled[:, :skel.d_eff]
+    else:
+        unrotated = _inverse_rotate_rows_via_rust(q_scaled, skel.rotation_seed)
+        residual_rec = unrotated[:, :skel.d_eff]
 
     # coeff = t * center + residual.
     chosen = skel.centers[cb.seg_id]                              # [n, d_eff]

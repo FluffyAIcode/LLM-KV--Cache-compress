@@ -285,6 +285,7 @@ def encode_and_pack_batched(
     custom_centroids: Optional[torch.Tensor] = None,
     outlier_threshold: Optional[float] = None,
     wht_sign: torch.Tensor,
+    disable_wht: bool = False,
 ) -> torch.Tensor:
     """Encode a batch of blocks and pack each into its slot on GPU.
 
@@ -377,7 +378,16 @@ def encode_and_pack_batched(
         residual_padded = residual
     # Flatten (B, n) → (B*n) for the WHT matmul, then reshape back.
     flat = residual_padded.reshape(B * n, wht_len)
-    rotated_flat = _wht_rotate_rows_gpu(flat, wht_sign)       # [B*n, wht_len]
+    if disable_wht:
+        # Ablation: skip stage 4b rotation entirely.  Must be
+        # matched at decode time by zeroing the inverse-WHT there.
+        # The encoded bytes carry a tombstone (all-zero `wht_sign`)
+        # so the decoder can detect and mirror this choice without
+        # a side-channel flag.  See KakeyaV13PPLConfig.wht_len for
+        # the slot-layout contract that survives regardless.
+        rotated_flat = flat.contiguous()
+    else:
+        rotated_flat = _wht_rotate_rows_gpu(flat, wht_sign)   # [B*n, wht_len]
 
     # --- Stage 4c: per-vec scale = 1 / ||residual|| ---
     res_norm = residual.reshape(B * n, d_eff).norm(dim=1)  # [B*n]
