@@ -600,12 +600,608 @@ fn roundtrip_layer<'py>(
     Ok((decoded_np, report))
 }
 
-/// Module initialiser: registers `roundtrip_layer` under
-/// `kakeyaturbo_py._core`.  The Python shim (`python/kakeyaturbo_py/
-/// __init__.py`) re-exports it at package level.
+// ---------------------------------------------------------------------------
+// Primitive helpers for M4 — expose the handful of deterministic-random
+// artefacts and low-level kernels the Rust codec uses so the PyTorch
+// reference encoder can be byte-identical on the operations that
+// *matter* for downstream attention (decoded tensor equality).
+//
+// These functions are not required for `roundtrip_layer` to work;
+// they are the minimal oracle surface for validating Triton kernels
+// against the Rust numeric contract.
+// ---------------------------------------------------------------------------
+
+/// WHT sign pattern for `(seed, n)`, matching Rust's
+/// `kakeyaturbo::wht::sign_pattern`.
+///
+/// Returns `[+1.0 | -1.0]` of length `n`.  `n` must be a power of two.
+/// Uses Rust's `SmallRng::seed_from_u64(seed as u64).gen::<bool>()`
+/// internally, so the Python side gets the exact pattern the codec
+/// will use — no need to reimplement the xoshiro stream in NumPy.
+#[pyfunction]
+fn wht_sign_pattern<'py>(
+    py: Python<'py>,
+    seed: u32,
+    n: usize,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    // Dimension note: we return shape (1, n) rather than (n,) so the
+    // caller can broadcast against a (batch, n) residual with zero
+    // reshaping friction; flatten on the numpy side if 1-D is wanted.
+    let signs = kakeyaturbo::wht::sign_pattern(seed, n);
+    let arr = numpy::PyArray1::<f32>::from_vec(py, signs);
+    arr.reshape([1usize, n])
+        .map_err(|e| PyRuntimeError::new_err(format!("reshape sign_pattern: {e}")))
+}
+
+/// Rust's unnormalised Walsh-Hadamard transform applied to each row of
+/// `x: [batch, n]`.  `n` must be a power of two.
+///
+/// This is the byte-exact reference for any Triton / CUDA WHT
+/// implementation: `y[b] = wht_inplace_unnormalised(x[b])`.
+#[pyfunction]
+fn wht_rows<'py>(
+    py: Python<'py>,
+    x: PyReadonlyArray2<'py, f32>,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let shape = x.shape().to_vec();
+    let batch = shape[0];
+    let n = shape[1];
+    if n == 0 || (n & (n - 1)) != 0 {
+        return Err(PyValueError::new_err(format!(
+            "n must be a positive power of two, got {n}"
+        )));
+    }
+    let slice = x
+        .as_slice()
+        .map_err(|e| PyValueError::new_err(format!("array must be C-contiguous: {e}")))?;
+    let mut out: Vec<f32> = slice.to_vec();
+    py.detach(|| {
+        for row in out.chunks_mut(n) {
+            kakeyaturbo::wht::wht_inplace(row);
+        }
+    });
+    let flat = numpy::PyArray1::<f32>::from_vec(py, out);
+    flat.reshape([batch, n])
+        .map_err(|e| PyRuntimeError::new_err(format!("reshape wht_rows: {e}")))
+}
+
+/// Rust's `kakeyaturbo::wht::rotate` (y = H·D·x), row-wise.
+#[pyfunction]
+fn rotate_rows<'py>(
+    py: Python<'py>,
+    x: PyReadonlyArray2<'py, f32>,
+    seed: u32,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let shape = x.shape().to_vec();
+    let batch = shape[0];
+    let n = shape[1];
+    if n == 0 || (n & (n - 1)) != 0 {
+        return Err(PyValueError::new_err(format!(
+            "n must be a positive power of two, got {n}"
+        )));
+    }
+    let slice = x
+        .as_slice()
+        .map_err(|e| PyValueError::new_err(format!("array must be C-contiguous: {e}")))?;
+    let input: Vec<f32> = slice.to_vec();
+    let out = py.detach(|| {
+        let mut buf = Vec::with_capacity(batch * n);
+        for row in input.chunks(n) {
+            buf.extend_from_slice(&kakeyaturbo::wht::rotate(row, seed));
+        }
+        buf
+    });
+    let flat = numpy::PyArray1::<f32>::from_vec(py, out);
+    flat.reshape([batch, n])
+        .map_err(|e| PyRuntimeError::new_err(format!("reshape rotate_rows: {e}")))
+}
+
+/// Rust's `kakeyaturbo::wht::inverse_rotate` (x = D·H·y / n), row-wise.
+#[pyfunction]
+fn inverse_rotate_rows<'py>(
+    py: Python<'py>,
+    y: PyReadonlyArray2<'py, f32>,
+    seed: u32,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    let shape = y.shape().to_vec();
+    let batch = shape[0];
+    let n = shape[1];
+    if n == 0 || (n & (n - 1)) != 0 {
+        return Err(PyValueError::new_err(format!(
+            "n must be a positive power of two, got {n}"
+        )));
+    }
+    let slice = y
+        .as_slice()
+        .map_err(|e| PyValueError::new_err(format!("array must be C-contiguous: {e}")))?;
+    let input: Vec<f32> = slice.to_vec();
+    let out = py.detach(|| {
+        let mut buf = Vec::with_capacity(batch * n);
+        for row in input.chunks(n) {
+            buf.extend_from_slice(&kakeyaturbo::wht::inverse_rotate(row, seed));
+        }
+        buf
+    });
+    let flat = numpy::PyArray1::<f32>::from_vec(py, out);
+    flat.reshape([batch, n])
+        .map_err(|e| PyRuntimeError::new_err(format!("reshape inverse_rotate_rows: {e}")))
+}
+
+/// Rust's `kakeyaturbo::quantize::pack_bits`.
+///
+/// `indices`: 1-D uint8, every element in `0..(1 << bits)`.
+/// `bits`: 1..=8.
+/// Returns a 1-D uint8 packed byte stream of length
+/// `ceil(indices.len() * bits / 8)`.
+#[pyfunction]
+fn pack_bits<'py>(
+    py: Python<'py>,
+    indices: numpy::PyReadonlyArray1<'py, u8>,
+    bits: u8,
+) -> PyResult<Bound<'py, numpy::PyArray1<u8>>> {
+    if !(1..=8).contains(&bits) {
+        return Err(PyValueError::new_err(format!(
+            "bits must be 1..=8, got {bits}"
+        )));
+    }
+    let slice = indices.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("indices must be C-contiguous: {e}"))
+    })?;
+    let max_idx = (1u16 << bits) - 1;
+    if let Some(bad) = slice.iter().find(|&&v| u16::from(v) > max_idx) {
+        return Err(PyValueError::new_err(format!(
+            "index {bad} exceeds {bits}-bit range"
+        )));
+    }
+    let input: Vec<u8> = slice.to_vec();
+    let packed = py.detach(|| kakeyaturbo::quantize::pack_bits(&input, bits));
+    Ok(numpy::PyArray1::<u8>::from_vec(py, packed))
+}
+
+/// Rust's `kakeyaturbo::quantize::unpack_bits`.
+///
+/// `bytes`: 1-D uint8 packed stream.
+/// `bits`: 1..=8.
+/// `count`: number of indices to recover (must match how the stream was
+/// produced).
+#[pyfunction]
+fn unpack_bits<'py>(
+    py: Python<'py>,
+    bytes: numpy::PyReadonlyArray1<'py, u8>,
+    bits: u8,
+    count: usize,
+) -> PyResult<Bound<'py, numpy::PyArray1<u8>>> {
+    if !(1..=8).contains(&bits) {
+        return Err(PyValueError::new_err(format!(
+            "bits must be 1..=8, got {bits}"
+        )));
+    }
+    let need = (count * bits as usize + 7) / 8;
+    let slice = bytes.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("bytes must be C-contiguous: {e}"))
+    })?;
+    if slice.len() < need {
+        return Err(PyValueError::new_err(format!(
+            "bytes too short: got {}, need at least {} for count={count} at bits={bits}",
+            slice.len(),
+            need
+        )));
+    }
+    let input: Vec<u8> = slice[..need].to_vec();
+    let out = py.detach(|| kakeyaturbo::quantize::unpack_bits(&input, bits, count));
+    Ok(numpy::PyArray1::<u8>::from_vec(py, out))
+}
+
+/// Return the fixed Gaussian Lloyd-Max centroids for `bits` in 1..=4.
+/// Mirrors `kakeyaturbo::quantize::centroids_gaussian`.
+#[pyfunction]
+fn centroids_gaussian<'py>(
+    py: Python<'py>,
+    bits: u8,
+) -> PyResult<Bound<'py, numpy::PyArray1<f32>>> {
+    if !(1..=4).contains(&bits) {
+        return Err(PyValueError::new_err(format!(
+            "bits must be 1..=4, got {bits}"
+        )));
+    }
+    let slice = kakeyaturbo::quantize::centroids_gaussian(bits).to_vec();
+    Ok(numpy::PyArray1::<f32>::from_vec(py, slice))
+}
+
+// ---------------------------------------------------------------------------
+// encode_block_codes / decode_block_from_parts
+//
+// These expose the structured output of `kakeyaturbo::codec::encode_block`
+// (skeleton + per-vector codes) so the Python-side M4 reference can:
+//   (a) consume the same skeleton Rust fit (byte-identical PCA / K-means)
+//   (b) run stages 2..=5 in Torch/Triton and compare codes / decoded
+//       tensors bit-exactly against Rust.
+//
+// The return format is a flat dict of numpy arrays. Caller reconstructs
+// per-vector views by indexing.
+// ---------------------------------------------------------------------------
+
+/// Drive `kakeyaturbo::codec::encode_block` on a single block and
+/// return its skeleton + codes as numpy arrays.  Phase A.1 scope:
+/// `metric ∈ {mse, inner_product, linf}`, `pca ∈ {exact, randomized}`,
+/// `share_basis` **always False** here (share-basis is a
+/// `encode_layer` concept — use `roundtrip_layer` for that).
+#[pyfunction]
+#[pyo3(signature = (array, **kwargs))]
+fn encode_block_codes<'py>(
+    py: Python<'py>,
+    array: PyReadonlyArray2<'py, f32>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let kw = kwargs.ok_or_else(|| PyValueError::new_err(
+        "missing kwargs (e.g. metric='mse')"))?;
+    let parsed = parse_args(py, array, kw)?;
+    if parsed.num_vecs != parsed.block_size {
+        return Err(PyValueError::new_err(format!(
+            "encode_block_codes expects exactly one block; got num_vecs={} \
+             != block_size={}",
+            parsed.num_vecs, parsed.block_size
+        )));
+    }
+    if parsed.share_basis {
+        return Err(PyValueError::new_err(
+            "share_basis is a layer-level concept; use roundtrip_layer",
+        ));
+    }
+
+    let params = CodecParams {
+        variance_ratio: parsed.variance_ratio,
+        k: parsed.k,
+        bit_width: parsed.bit_width,
+        rotation_seed: parsed.rotation_seed,
+        kmeans_max_iter: parsed.kmeans_max_iter,
+        pca_method: to_pca(parsed.pca),
+        skeleton_dtype: to_skel(parsed.skeleton_dtype),
+        exact_rank_cap: parsed.exact_rank_cap,
+        custom_centroids: parsed.custom_centroids.clone(),
+        outlier_threshold: parsed.outlier_threshold,
+    };
+    let weights = vec![1.0_f32; parsed.block_size];
+
+    let (sk, codes) = py.detach(|| match parsed.metric {
+        MetricKind::Mse => kakeyaturbo::codec::encode_block::<MSE>(
+            &parsed.input, &weights, parsed.dim, &params,
+        ),
+        MetricKind::InnerProduct => kakeyaturbo::codec::encode_block::<InnerProduct>(
+            &parsed.input, &weights, parsed.dim, &params,
+        ),
+        MetricKind::LInf => kakeyaturbo::codec::encode_block::<LInf>(
+            &parsed.input, &weights, parsed.dim, &params,
+        ),
+    });
+
+    // Materialise skeleton tensors.
+    let mean_f32 = sk.pca.mean_f32();
+    let basis_f32 = sk.pca.basis_f32();
+    let d_eff = sk.pca.d_eff;
+    let d = sk.pca.d();
+    let k_centers = sk.kmeans.k;
+    let mut centers_f32 = Vec::with_capacity(k_centers * d_eff);
+    for c in 0..k_centers {
+        centers_f32.extend_from_slice(&sk.kmeans.center(c));
+    }
+
+    let n = codes.len();
+    let wht_len = sk.wht_len;
+    let bit_width = sk.bit_width;
+    let pbytes = (wht_len * (bit_width as usize) + 7) / 8;
+
+    let mut seg_id = Vec::with_capacity(n);
+    let mut t_vals = Vec::with_capacity(n);
+    let mut norm_vals = Vec::with_capacity(n);
+    let mut residual_packed = vec![0u8; n * pbytes];
+    // Outlier layout: two parallel ragged arrays padded to max per-row.
+    let max_outliers = codes.iter().map(|c| c.outliers.len()).max().unwrap_or(0);
+    let mut outlier_idx = vec![0u16; n * max_outliers.max(1)];
+    let mut outlier_val = vec![0.0_f32; n * max_outliers.max(1)];
+    let mut outlier_count = Vec::with_capacity(n);
+    for (i, c) in codes.iter().enumerate() {
+        seg_id.push(c.seg_id);
+        t_vals.push(c.t.to_f32());
+        norm_vals.push(c.norm.to_f32());
+        if c.residual_packed.len() != pbytes {
+            return Err(PyRuntimeError::new_err(format!(
+                "internal: pbytes mismatch {} vs {pbytes}",
+                c.residual_packed.len()
+            )));
+        }
+        residual_packed[i * pbytes..(i + 1) * pbytes]
+            .copy_from_slice(&c.residual_packed);
+        outlier_count.push(c.outliers.len() as u32);
+        if max_outliers > 0 {
+            for (j, &(idx, val)) in c.outliers.iter().enumerate() {
+                outlier_idx[i * max_outliers + j] = idx;
+                outlier_val[i * max_outliers + j] = val.to_f32();
+            }
+        }
+    }
+
+    let out = PyDict::new(py);
+    // Skeleton fields
+    out.set_item(
+        "mean",
+        numpy::PyArray1::<f32>::from_vec(py, mean_f32),
+    )?;
+    out.set_item(
+        "basis",
+        numpy::PyArray1::<f32>::from_vec(py, basis_f32)
+            .reshape([d_eff, d])
+            .map_err(|e| PyRuntimeError::new_err(format!("reshape basis: {e}")))?,
+    )?;
+    out.set_item(
+        "centers",
+        numpy::PyArray1::<f32>::from_vec(py, centers_f32)
+            .reshape([k_centers, d_eff])
+            .map_err(|e| PyRuntimeError::new_err(format!("reshape centers: {e}")))?,
+    )?;
+    out.set_item("d", d)?;
+    out.set_item("d_eff", d_eff)?;
+    out.set_item("k", k_centers)?;
+    out.set_item("rotation_seed", sk.rotation_seed)?;
+    out.set_item("wht_len", wht_len)?;
+    out.set_item("bit_width", bit_width)?;
+
+    // Codes fields
+    out.set_item(
+        "seg_id",
+        numpy::PyArray1::<u32>::from_vec(py, seg_id),
+    )?;
+    out.set_item(
+        "t",
+        numpy::PyArray1::<f32>::from_vec(py, t_vals),
+    )?;
+    out.set_item(
+        "norm",
+        numpy::PyArray1::<f32>::from_vec(py, norm_vals),
+    )?;
+    out.set_item(
+        "residual_packed",
+        numpy::PyArray1::<u8>::from_vec(py, residual_packed)
+            .reshape([n, pbytes])
+            .map_err(|e| PyRuntimeError::new_err(format!("reshape packed: {e}")))?,
+    )?;
+    out.set_item(
+        "outlier_idx",
+        numpy::PyArray1::<u16>::from_vec(py, outlier_idx)
+            .reshape([n, max_outliers.max(1)])
+            .map_err(|e| PyRuntimeError::new_err(format!("reshape out_idx: {e}")))?,
+    )?;
+    out.set_item(
+        "outlier_val",
+        numpy::PyArray1::<f32>::from_vec(py, outlier_val)
+            .reshape([n, max_outliers.max(1)])
+            .map_err(|e| PyRuntimeError::new_err(format!("reshape out_val: {e}")))?,
+    )?;
+    out.set_item(
+        "outlier_count",
+        numpy::PyArray1::<u32>::from_vec(py, outlier_count),
+    )?;
+    out.set_item("max_outliers", max_outliers)?;
+    out.set_item(
+        "metric",
+        match parsed.metric {
+            MetricKind::Mse => "mse",
+            MetricKind::InnerProduct => "inner_product",
+            MetricKind::LInf => "linf",
+        },
+    )?;
+
+    Ok(out)
+}
+
+/// Rebuild `Skeleton` + `Vec<Code>` from the dict `encode_block_codes`
+/// produces, then run `decode_block_with_centroids`.  Byte-identical to
+/// what `roundtrip_layer` would have returned on the same input; useful
+/// for Torch-side "encode only" parity tests that want to check their
+/// codes by seeing if Rust decodes them into the same tensor.
+#[pyfunction]
+#[pyo3(signature = (parts, *, custom_centroids=None))]
+fn decode_block_from_parts<'py>(
+    py: Python<'py>,
+    parts: &Bound<'py, PyDict>,
+    custom_centroids: Option<Vec<f32>>,
+) -> PyResult<Bound<'py, PyArray2<f32>>> {
+    use kakeyaturbo::kmeans::KmeansFit;
+    use kakeyaturbo::pca::PcaFit;
+    use kakeyaturbo::skeleton::Skeleton as RsSkel;
+
+    fn get_required<'py, T>(d: &Bound<'py, PyDict>, key: &str) -> PyResult<T>
+    where
+        T: for<'a> FromPyObject<'a, 'py>,
+        for<'a> <T as FromPyObject<'a, 'py>>::Error: Into<PyErr>,
+    {
+        d.get_item(key)?
+            .ok_or_else(|| PyValueError::new_err(format!("missing key {key:?}")))?
+            .extract::<T>()
+            .map_err(Into::into)
+    }
+
+    let d: usize = get_required::<usize>(parts, "d")?;
+    let d_eff: usize = get_required::<usize>(parts, "d_eff")?;
+    let k_centers: usize = get_required::<usize>(parts, "k")?;
+    let rotation_seed: u32 = get_required::<u32>(parts, "rotation_seed")?;
+    let wht_len: usize = get_required::<usize>(parts, "wht_len")?;
+    let bit_width: u8 = get_required::<u8>(parts, "bit_width")?;
+    let metric: String = get_required::<String>(parts, "metric")?;
+    let metric_kind = MetricKind::parse(&metric)?;
+
+    let mean: Vec<f32> = get_required::<Vec<f32>>(parts, "mean")?;
+    if mean.len() != d {
+        return Err(PyValueError::new_err(format!(
+            "mean length {} != d {}",
+            mean.len(),
+            d
+        )));
+    }
+    let basis: Vec<f32> = {
+        let obj = parts.get_item("basis")?.ok_or_else(|| {
+            PyValueError::new_err("missing key 'basis'")
+        })?;
+        let arr: PyReadonlyArray2<f32> = obj.extract()?;
+        let s = arr.shape();
+        if s.len() != 2 || s[0] != d_eff || s[1] != d {
+            return Err(PyValueError::new_err(format!(
+                "basis shape {:?} != ({d_eff}, {d})",
+                s
+            )));
+        }
+        arr.as_slice()
+            .map_err(|e| PyValueError::new_err(format!("basis not C-contig: {e}")))?
+            .to_vec()
+    };
+    let centers: Vec<f32> = {
+        let obj = parts.get_item("centers")?.ok_or_else(|| {
+            PyValueError::new_err("missing key 'centers'")
+        })?;
+        let arr: PyReadonlyArray2<f32> = obj.extract()?;
+        let s = arr.shape();
+        if s.len() != 2 || s[0] != k_centers || s[1] != d_eff {
+            return Err(PyValueError::new_err(format!(
+                "centers shape {:?} != ({k_centers}, {d_eff})",
+                s
+            )));
+        }
+        arr.as_slice()
+            .map_err(|e| PyValueError::new_err(format!("centers not C-contig: {e}")))?
+            .to_vec()
+    };
+
+    let seg_id_np: numpy::PyReadonlyArray1<u32> =
+        parts.get_item("seg_id")?.ok_or_else(|| {
+            PyValueError::new_err("missing key 'seg_id'")
+        })?.extract()?;
+    let t_np: numpy::PyReadonlyArray1<f32> = parts.get_item("t")?.ok_or_else(
+        || PyValueError::new_err("missing key 't'")
+    )?.extract()?;
+    let norm_np: numpy::PyReadonlyArray1<f32> = parts.get_item("norm")?.ok_or_else(
+        || PyValueError::new_err("missing key 'norm'")
+    )?.extract()?;
+    let packed_np: numpy::PyReadonlyArray2<u8> = parts.get_item("residual_packed")?.ok_or_else(
+        || PyValueError::new_err("missing key 'residual_packed'")
+    )?.extract()?;
+    let outlier_idx_np: numpy::PyReadonlyArray2<u16> = parts.get_item("outlier_idx")?.ok_or_else(
+        || PyValueError::new_err("missing key 'outlier_idx'")
+    )?.extract()?;
+    let outlier_val_np: numpy::PyReadonlyArray2<f32> = parts.get_item("outlier_val")?.ok_or_else(
+        || PyValueError::new_err("missing key 'outlier_val'")
+    )?.extract()?;
+    let outlier_count_np: numpy::PyReadonlyArray1<u32> = parts.get_item("outlier_count")?.ok_or_else(
+        || PyValueError::new_err("missing key 'outlier_count'")
+    )?.extract()?;
+
+    let n = seg_id_np.shape()[0];
+    let pbytes = packed_np.shape()[1];
+    if packed_np.shape()[0] != n || t_np.shape()[0] != n || norm_np.shape()[0] != n {
+        return Err(PyValueError::new_err("code array sizes inconsistent"));
+    }
+    let max_outliers = outlier_idx_np.shape()[1];
+
+    // Reconstruct Skeleton.
+    let pca = PcaFit::from_f32(mean, basis, d_eff, 0.0);
+    let kmeans = KmeansFit::from_f32(centers, k_centers, d_eff);
+    let skeleton = RsSkel {
+        pca,
+        kmeans,
+        rotation_seed,
+        wht_len,
+        bit_width,
+    };
+
+    // Reconstruct Vec<Code>.
+    use half::f16;
+    use kakeyaturbo::codec::Code;
+    let seg_id_slice = seg_id_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("seg_id not contig: {e}"))
+    })?;
+    let t_slice = t_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("t not contig: {e}"))
+    })?;
+    let norm_slice = norm_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("norm not contig: {e}"))
+    })?;
+    let packed_slice = packed_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("packed not contig: {e}"))
+    })?;
+    let oi_slice = outlier_idx_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("outlier_idx not contig: {e}"))
+    })?;
+    let ov_slice = outlier_val_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("outlier_val not contig: {e}"))
+    })?;
+    let oc_slice = outlier_count_np.as_slice().map_err(|e| {
+        PyValueError::new_err(format!("outlier_count not contig: {e}"))
+    })?;
+
+    let mut codes: Vec<Code> = Vec::with_capacity(n);
+    for i in 0..n {
+        let cnt = oc_slice[i] as usize;
+        let mut outliers: Vec<(u16, f16)> = Vec::with_capacity(cnt);
+        for j in 0..cnt {
+            outliers.push((
+                oi_slice[i * max_outliers + j],
+                f16::from_f32(ov_slice[i * max_outliers + j]),
+            ));
+        }
+        codes.push(Code {
+            seg_id: seg_id_slice[i],
+            alpha: f16::from_f32(0.0),
+            t: f16::from_f32(t_slice[i]),
+            norm: f16::from_f32(norm_slice[i]),
+            residual_packed: packed_slice[i * pbytes..(i + 1) * pbytes].to_vec(),
+            outliers,
+        });
+    }
+
+    // Validate custom centroids if given.
+    if let Some(ref c) = custom_centroids {
+        validate_centroids(c, bit_width)?;
+    }
+
+    let decoded: Vec<f32> = py.detach(|| match metric_kind {
+        MetricKind::Mse => kakeyaturbo::codec::decode_block_with_centroids::<MSE>(
+            &skeleton,
+            &codes,
+            custom_centroids.as_deref(),
+        ),
+        MetricKind::InnerProduct => {
+            kakeyaturbo::codec::decode_block_with_centroids::<InnerProduct>(
+                &skeleton,
+                &codes,
+                custom_centroids.as_deref(),
+            )
+        }
+        MetricKind::LInf => kakeyaturbo::codec::decode_block_with_centroids::<LInf>(
+            &skeleton,
+            &codes,
+            custom_centroids.as_deref(),
+        ),
+    });
+
+    let flat = numpy::PyArray1::<f32>::from_vec(py, decoded);
+    flat.reshape([n, d]).map_err(|e| {
+        PyRuntimeError::new_err(format!("reshape decoded: {e}"))
+    })
+}
+
+/// Module initialiser: registers every public function under
+/// `kakeyaturbo_py._core`.  The Python shim re-exports them.
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(roundtrip_layer, m)?)?;
+    m.add_function(wrap_pyfunction!(wht_sign_pattern, m)?)?;
+    m.add_function(wrap_pyfunction!(wht_rows, m)?)?;
+    m.add_function(wrap_pyfunction!(rotate_rows, m)?)?;
+    m.add_function(wrap_pyfunction!(inverse_rotate_rows, m)?)?;
+    m.add_function(wrap_pyfunction!(pack_bits, m)?)?;
+    m.add_function(wrap_pyfunction!(unpack_bits, m)?)?;
+    m.add_function(wrap_pyfunction!(centroids_gaussian, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_block_codes, m)?)?;
+    m.add_function(wrap_pyfunction!(decode_block_from_parts, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

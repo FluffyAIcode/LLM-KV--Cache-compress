@@ -39,6 +39,56 @@ in-forward vLLM harness the call is synchronous; the payoff there is
 the elimination of `subprocess.Popen` + tmpfs I/O per layer per
 forward pass.
 """
-from ._core import roundtrip_layer, __version__
+from ._core import (
+    __version__,
+    roundtrip_layer,
+    # Primitive helpers for M4+ — byte-identical to the Rust reference
+    # implementation, no re-derivation needed on the Python side.
+    wht_sign_pattern,
+    wht_rows,
+    rotate_rows,
+    inverse_rotate_rows,
+    pack_bits,
+    unpack_bits,
+    centroids_gaussian,
+    # Block-level structured encode / decode — exposes Rust's Skeleton +
+    # Vec<Code> as numpy arrays.  The bridge that lets the PyTorch
+    # reference and (eventually) Triton kernels consume Rust-fit
+    # skeletons, so stages 2..=5 can be validated bit-exactly without
+    # dragging skeleton-fit numerical noise into the diff.
+    encode_block_codes,
+    decode_block_from_parts,
+)
 
-__all__ = ["roundtrip_layer", "__version__"]
+__all__ = [
+    "__version__",
+    "roundtrip_layer",
+    "wht_sign_pattern",
+    "wht_rows",
+    "rotate_rows",
+    "inverse_rotate_rows",
+    "pack_bits",
+    "unpack_bits",
+    "centroids_gaussian",
+    "encode_block_codes",
+    "decode_block_from_parts",
+    # PyTorch reference encoder / decoder — lazy-imported to avoid
+    # pulling torch into `import kakeyaturbo_py` in environments that
+    # only need the primitives.
+    "encode_block_torch_stage2",
+    "decode_block_torch_from_parts",
+    "Skeleton",
+    "CodeBatch",
+]
+
+
+def __getattr__(name):
+    if name in {
+        "encode_block_torch_stage2",
+        "decode_block_torch_from_parts",
+        "Skeleton",
+        "CodeBatch",
+    }:
+        from . import reference_torch  # noqa: F401
+        return getattr(reference_torch, name)
+    raise AttributeError(f"module 'kakeyaturbo_py' has no attribute {name!r}")
