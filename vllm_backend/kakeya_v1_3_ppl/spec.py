@@ -20,6 +20,108 @@ from typing import ClassVar
 from .config import KakeyaV13PPLConfig
 
 
+_KAKEYA_SPEC_CLS = None
+
+
+def _get_kakeya_spec_cls():
+    """Construct (once) the FullAttentionSpec subclass with our
+    slot-size override, and register it in vllm's spec→manager
+    dispatch table so the allocator knows how to route it."""
+    global _KAKEYA_SPEC_CLS
+    if _KAKEYA_SPEC_CLS is not None:
+        return _KAKEYA_SPEC_CLS
+
+    from dataclasses import dataclass
+    from vllm.v1.kv_cache_interface import FullAttentionSpec
+    from vllm.v1.core.single_type_kv_cache_manager import (
+        spec_manager_map,
+        FullAttentionManager,
+    )
+
+    from dataclasses import replace as _replace
+
+    @dataclass(frozen=True, kw_only=True)
+    class KakeyaFullAttentionSpec(FullAttentionSpec):
+        """FullAttentionSpec with per-codec-block slot sizing.
+
+        Unlike `TQFullAttentionSpec` (which multiplies
+        tq_slot_size × block_size to get per-block bytes), our slot
+        is already per-block — the whole codec block's skeleton +
+        codes live in one contiguous slot per kv-head, and there's
+        no per-token subdivision we'd want the allocator to know
+        about.  Hence: `real_page_size_bytes = num_kv_heads ×
+        kakeya_slot_budget_bytes` (NO ×block_size factor).
+        """
+
+        kakeya_slot_budget_bytes: int = 0
+
+        @property
+        def real_page_size_bytes(self) -> int:
+            if self.kakeya_slot_budget_bytes > 0:
+                return self.num_kv_heads * self.kakeya_slot_budget_bytes
+            return super().real_page_size_bytes
+
+        @classmethod
+        def merge(cls, specs):
+            """Override to preserve `kakeya_slot_budget_bytes`.
+
+            Base-class `FullAttentionSpec.merge()` constructs the
+            merged spec via `cls(...)` but only passes the fields
+            it knows about — `kakeya_slot_budget_bytes` is dropped,
+            which makes the merged spec fall back to the base-class
+            byte formula and over-allocates by block_size / 1 (≈
+            1.77×) during cache init.  We assert consistency and
+            then re-inject our custom field.
+            """
+            merged = super().merge(specs)
+            budgets = {s.kakeya_slot_budget_bytes for s in specs}
+            assert len(budgets) == 1, (
+                "All Kakeya layers in the same KV cache group must "
+                "share the same kakeya_slot_budget_bytes."
+            )
+            return _replace(merged, kakeya_slot_budget_bytes=budgets.pop())
+
+    # Register in the dispatch table so
+    # `single_type_kv_cache_manager.get_manager_for_kv_cache_spec`
+    # can find us.  Routes to the same `FullAttentionManager` as
+    # `TQFullAttentionSpec` — the manager doesn't care about slot
+    # shape, only block-count bookkeeping.
+    spec_manager_map[KakeyaFullAttentionSpec] = FullAttentionManager
+
+    _KAKEYA_SPEC_CLS = KakeyaFullAttentionSpec
+    return _KAKEYA_SPEC_CLS
+
+
+def make_kakeya_full_attention_spec(
+    block_size: int,
+    num_kv_heads: int,
+    head_size: int,
+    dtype,
+):
+    """Build a `FullAttentionSpec` subclass instance whose
+    `real_page_size_bytes` returns our per-block slot budget
+    (K-slot + V-slot) × num_kv_heads.
+
+    Constructed lazily at registration time because the base
+    `FullAttentionSpec` lives in vllm, which is optional-import.
+    """
+    KakeyaFullAttentionSpec = _get_kakeya_spec_cls()
+
+    spec_geom = KakeyaV13PPLAttentionSpec(
+        block_size=block_size,
+        num_kv_heads=num_kv_heads,
+        head_size=head_size,
+    )
+    return KakeyaFullAttentionSpec(
+        block_size=block_size,
+        num_kv_heads=num_kv_heads,
+        head_size=head_size,
+        head_size_v=head_size,
+        dtype=dtype,
+        kakeya_slot_budget_bytes=spec_geom.slot_budget_bytes,
+    )
+
+
 @dataclass
 class KakeyaV13PPLAttentionSpec:
     """Minimal stand-in for `vllm.v1.kv_cache_interface.FullAttentionSpec`.

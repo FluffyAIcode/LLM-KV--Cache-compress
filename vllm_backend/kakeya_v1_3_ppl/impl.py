@@ -42,6 +42,7 @@ import torch
 
 try:
     from vllm.v1.attention.backend import (
+        AttentionCGSupport,
         AttentionImpl,
         AttentionLayer,
         AttentionMetadata,
@@ -50,6 +51,7 @@ try:
         CommonAttentionMetadata,
     )
     _HAS_VLLM = True
+    _CG_SUPPORT_NEVER = AttentionCGSupport.NEVER
 except ImportError:
     _HAS_VLLM = False
     class AttentionImpl:  # type: ignore[no-redef]
@@ -64,6 +66,7 @@ except ImportError:
         DECODER = "decoder"
     class CommonAttentionMetadata:  # type: ignore[no-redef]
         pass
+    _CG_SUPPORT_NEVER = None
 
 
 from .calibration import CalibrationBundle, load_calibration_bundle
@@ -129,11 +132,18 @@ class KakeyaV13PPLMetadata:
 
 
 class KakeyaV13PPLMetadataBuilder(AttentionMetadataBuilder):
-    """Minimal metadata builder that mirrors what TurboQuant does.
+    """Minimal metadata builder.
 
-    Phase A shim — extends to full vLLM compatibility in Phase B."""
+    Phase B.1 sets `_cudagraph_support = NEVER` because our impl
+    keeps per-block staging in a Python dict + uses CPU-side
+    `.tolist()` in `do_kv_cache_update`, which breaks CUDAGraph
+    capture.  Phase B.2b will move staging to a dense tensor and
+    switch to `UNIFORM_BATCH`, matching TurboQuant's support level.
+    """
 
-    _cudagraph_support: ClassVar[Any] = None
+    # When vllm is installed: _CG_SUPPORT_NEVER is AttentionCGSupport.NEVER
+    # When vllm missing (CPU-only dev): None (tests don't exercise this).
+    _cudagraph_support: ClassVar[Any] = _CG_SUPPORT_NEVER
 
     def __init__(self, kv_cache_spec, layer_names, vllm_config, device):
         if _HAS_VLLM:

@@ -21,9 +21,11 @@ from __future__ import annotations
 from typing import ClassVar
 
 try:
+    import torch as _torch
     from vllm.v1.attention.backend import AttentionBackend, AttentionType, MultipleOf
     from vllm.config.cache import CacheDType  # noqa: F401
     _HAS_VLLM = True
+    _SUPPORTED_MODEL_DTYPES = [_torch.bfloat16, _torch.float16]
 except ImportError:
     _HAS_VLLM = False
     # Minimal stand-in for type-checking / tests.
@@ -34,6 +36,7 @@ except ImportError:
     class MultipleOf:  # type: ignore[no-redef]
         def __init__(self, n: int):
             self.n = n
+    _SUPPORTED_MODEL_DTYPES = []
 
 
 from .config import KAKEYA_V1_3_PPL_NAME, KakeyaV13PPLConfig
@@ -51,12 +54,20 @@ class KakeyaV13PPLAttentionBackend(AttentionBackend):
     accept_output_buffer: bool = True
     forward_includes_kv_cache_update: bool = False
 
-    supported_dtypes: ClassVar[list] = []   # populated at registration
+    supported_dtypes: ClassVar[list] = _SUPPORTED_MODEL_DTYPES
     supported_kv_cache_dtypes: ClassVar[list] = [KAKEYA_V1_3_PPL_NAME]
 
     @staticmethod
     def get_name() -> str:
-        return "KAKEYA_V1_3_PPL"
+        # Return the AttentionBackendEnum member name under which we
+        # registered in `registration.py`.  vLLM round-trips
+        # `AttentionBackendEnum[self.attn_backend.get_name()]` in
+        # `vllm.model_executor.layers.attention.attention:351`, so
+        # this MUST match one of the declared enum members — our
+        # slot is `CUSTOM` (reserved for third-party backends).
+        # The human-readable name "kakeya_v1_3_ppl" is carried by
+        # `kv_cache_dtype` instead.
+        return "CUSTOM"
 
     @staticmethod
     def get_supported_kernel_block_sizes() -> list:
@@ -126,13 +137,48 @@ class KakeyaV13PPLAttentionBackend(AttentionBackend):
         return KakeyaV13PPLMetadataBuilder
 
     @classmethod
-    def supports_compute_capability(cls, compute_cap: int) -> bool:
-        # Triton kernel needs SM80+ (Ampere and later).
-        return compute_cap >= 80
+    def supports_compute_capability(cls, capability) -> bool:
+        """Triton kernels (M4/M5) need SM80+ (Ampere and later).
+
+        vLLM passes a `DeviceCapability` namedtuple with `.major`
+        / `.minor` attributes; older versions of this method
+        accepted an int SM score (e.g. 80 for Ampere, 90 for
+        Hopper).  We accept either for forward compatibility.
+        """
+        if hasattr(capability, "major") and hasattr(capability, "minor"):
+            return capability.major >= 8
+        # Integer fallback — treat as SM score like 80, 89, 90.
+        return int(capability) >= 80
 
     @classmethod
-    def supports_combination(cls, **kwargs) -> bool:
-        return True
+    def supports_combination(
+        cls,
+        head_size,
+        dtype,
+        kv_cache_dtype,
+        block_size,
+        use_mla,
+        has_sink,
+        use_sparse,
+        device_capability,
+        *args,
+        **kwargs,
+    ) -> str | None:
+        """Return None = no objection; str = human-readable reason
+        why this combination isn't supported.
+
+        Our constraints are already enforced individually via
+        `supports_{head_size, block_size, kv_cache_dtype,
+        compute_capability}`; supports_combination is the catch-all
+        for cross-dim constraints we don't have.  `*args` / `**kwargs`
+        accept any extra fields vLLM passes in future versions
+        without forcing a rebuild.
+        """
+        if use_mla:
+            return "KakeyaV13PPLAttentionBackend does not support MLA"
+        if use_sparse:
+            return "KakeyaV13PPLAttentionBackend does not support sparse"
+        return None
 
     @staticmethod
     def is_mla() -> bool:

@@ -33,6 +33,55 @@ _REGISTERED = False
 _ORIGINAL_CACHE_DTYPE_ARGS: tuple | None = None
 
 
+_ORIGINAL_GET_KV_CACHE_SPEC = None
+
+
+def _install_kv_cache_spec_hook() -> None:
+    """Wrap `vllm.model_executor.layers.attention.attention.Attention
+    .get_kv_cache_spec` so our dtype routes to TQFullAttentionSpec.
+
+    We reuse TQ's spec class rather than subclassing it because
+    TQFullAttentionSpec is already registered in vllm's
+    `single_type_kv_cache_manager` dispatch table, its
+    `real_page_size_bytes` property does exactly what we need
+    (`block_size × num_kv_heads × tq_slot_size`), and its `merge()`
+    guard enforces per-layer tq_slot_size consistency — all the
+    cache-manager plumbing for free.
+
+    `tq_slot_size` = our spec's `slot_budget_bytes` (= K-slot +
+    V-slot bytes, per (block, kv-head)).
+    """
+    global _ORIGINAL_GET_KV_CACHE_SPEC
+    if _ORIGINAL_GET_KV_CACHE_SPEC is not None:
+        return  # already installed
+
+    from vllm.model_executor.layers.attention.attention import Attention
+    orig = Attention.get_kv_cache_spec
+    _ORIGINAL_GET_KV_CACHE_SPEC = orig
+
+    def patched(self, vllm_config):
+        if self.kv_cache_dtype == KAKEYA_V1_3_PPL_NAME:
+            from .spec import make_kakeya_full_attention_spec
+            block_size = vllm_config.cache_config.block_size
+            spec = make_kakeya_full_attention_spec(
+                block_size=block_size,
+                num_kv_heads=self.num_kv_heads,
+                head_size=self.head_size,
+                dtype=self.kv_cache_torch_dtype,
+            )
+            import logging
+            logging.getLogger("kakeya_v1_3_ppl").debug(
+                "get_kv_cache_spec: layer=%s → %s, real_page_size_bytes=%d",
+                getattr(self, "layer_name", "?"),
+                type(spec).__name__,
+                spec.real_page_size_bytes,
+            )
+            return spec
+        return orig(self, vllm_config)
+
+    Attention.get_kv_cache_spec = patched
+
+
 def _patch_cache_config_validator(CC, new_literal) -> None:
     """Replace `CC.__pydantic_validator__`'s cache_dtype Literal schema
     with one whose `expected` list matches `typing.get_args(new_literal)`.
@@ -110,6 +159,11 @@ def register_kakeya_backend(
     """
     global _REGISTERED, _ORIGINAL_CACHE_DTYPE_ARGS
     if _REGISTERED:
+        # Ensure the spec hook is installed even on re-entry (it's
+        # idempotent, so cheap) — this guards against any import
+        # ordering where the earlier call happened before vllm's
+        # Attention class was imported.
+        _install_kv_cache_spec_hook()
         return
 
     # --- 1) Extend CacheDType on vllm.config.cache ---
@@ -140,16 +194,37 @@ def register_kakeya_backend(
         # post-validator walk to swap the field's schema.
         _patch_cache_config_validator(cfg.CacheConfig, new_literal)
 
+    # --- 1b) Patch vllm.utils.torch_utils.STR_DTYPE_TO_TORCH_DTYPE ---
+    # vLLM's model runner maps the kv_cache_dtype string to a torch
+    # dtype for cache-tensor allocation.  Quant-cache backends use
+    # torch.uint8 (the raw byte tensor we interpret ourselves via the
+    # backend).  Missing entry → KeyError at engine init.
+    import vllm.utils.torch_utils as tu
+    import torch
+    if KAKEYA_V1_3_PPL_NAME not in tu.STR_DTYPE_TO_TORCH_DTYPE:
+        tu.STR_DTYPE_TO_TORCH_DTYPE[KAKEYA_V1_3_PPL_NAME] = torch.uint8
+
+    # --- 1c) Wrap Attention.get_kv_cache_spec so our dtype routes
+    # through TQFullAttentionSpec (same semantics: variable per-block
+    # slot size, not head_size×dtype).  Without this, vLLM's allocator
+    # sizes the cache as bf16 K+V per token and .view() fails.
+    _install_kv_cache_spec_hook()
+
     # --- 2) Register the backend with AttentionBackendEnum ---
     from vllm.v1.attention.backends.registry import (
         AttentionBackendEnum,
         register_backend,
     )
     backend_enum = getattr(AttentionBackendEnum, backend_enum_name)
-    register_backend(
-        backend_enum,
-        "vllm_backend.kakeya_v1_3_ppl.backend.KakeyaV13PPLAttentionBackend",
+    # Resolve backend class path from our own `__name__` so this works
+    # whether the package is imported as `vllm_backend.kakeya_v1_3_ppl`
+    # (tree layout, sys.path-based) or `kakeya_v1_3_ppl` (installed via
+    # pyproject at `vllm_backend/` being the package root).
+    from . import backend as _backend_module
+    backend_cls_path = (
+        f"{_backend_module.__name__}.KakeyaV13PPLAttentionBackend"
     )
+    register_backend(backend_enum, backend_cls_path)
 
     _REGISTERED = True
 

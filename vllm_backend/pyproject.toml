@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kakeya_v1_3_ppl_vllm_backend"
+version = "0.1.0"
+description = "v1.3 PPL codec as a vLLM attention backend (plugin)"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kakeya_v1_3_ppl*"]
+
+[project.entry-points."vllm.general_plugins"]
+# vLLM loads this automatically in every process that imports vllm
+# (both the parent and engine-core subprocesses).  The plugin
+# function registers our custom AttentionBackendEnum member,
+# patches CacheDType, STR_DTYPE_TO_TORCH_DTYPE, and the
+# get_kv_cache_spec dispatch.
+kakeya_v1_3_ppl = "kakeya_v1_3_ppl.plugin:register_plugin"
