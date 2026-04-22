@@ -126,10 +126,50 @@ but the guardrail ablations are paired against 6-layer).
   The win is mechanical: boundary layers hit bf16, skipping them
   caps the codec-error-amplification path.
 - **The information-theoretic floor is NOT +169 %** — current best
-  is **+96.86 %** at 14-layer skip (38.9 % of layers bf16).
-  Reaching MARGINAL (≤+20 % Δppl) likely still needs codec-budget
-  uplift: `b_K=3→4`, `k=16→32`, `d_eff=64→96`.  Codec-budget sweep
-  is the next planned ablation.
+  is **+61.84 %** at 14-layer skip + `b_K=4, k=64, d_eff=96` (top-1
+  = 79.30 %, above the PR #17 DS-1.5B MARGINAL top-1 of ~74 %).
+  Reaching MARGINAL (≤+20 % Δppl) from here likely needs a
+  structurally different lever (e.g., codec-aware fine-tuning,
+  block_size increase, or Q-recalibration on post-qk-norm data).
+
+## Codec-budget sweep (4 passages each, 14-layer boundary base)
+
+Three codec-budget knobs independently tested, then best combined.
+Same base as above: `--disable-q-precond --disable-centroids
+--disable-outlier --gpu-codec --no-share-basis-v
+--boundary-skip-layers 0..6 29..35`.
+
+| b_K | k_kmeans | d_eff | Δppl       | top-1    | Note |
+|:---:|:--------:|:-----:|-----------:|---------:|:-----|
+| 3   | 16       | 64    | +96.86 %   | 76.56 %  | baseline |
+| 4   | 16       | 64    | +96.49 %   | 77.73 %  | b_K alone: noise-level Δppl, +1 pp top-1 |
+| 3   | 32       | 64    | **+74.10 %** | 75.39 %  | **k alone: −22.8 pp** |
+| 3   | 16       | 96    | +100.04 %  | 74.22 %  | d_eff alone: worse (more basis dims, same Lloyd-Max bits → lower per-dim SNR) |
+| 4   | 32       | 64    | +73.87 %   | 75.78 %  | b_K + k: −0.2 pp vs k alone |
+| 4   | 16       | 96    | +98.61 %   | 73.83 %  | b_K + d_eff: noise-level Δppl |
+| 4   | 32       | 96    | +61.80 %   | 78.12 %  | **all three: −35.1 pp** |
+| 4   | 64       | 96    | **+61.84 %** | **79.30 %** | **best: k=64 holds Δppl, +1.2 pp top-1** |
+| 4   | 64       | 128   | +69.78 %   | 79.69 %  | d_eff=full-rank regresses on Δppl |
+
+Reading: **K-means cluster count `k` is the dominant budget knob**
+(`k=16→32` alone → −22.8 pp Δppl; `k=32→64` → plateau but top-1 still
+gains).  `d_eff` and `b_K` in isolation are either noise-level or
+counter-productive, but together with larger `k` they compound to
+**−35 pp Δppl vs baseline**.  Further pushing `d_eff=96→128`
+regresses — the codec is PCA-saturated beyond d_eff=96 on
+Qwen3-4B's post-qk-norm K.
+
+The best-measured configuration is **b_K=4, k=64, d_eff=96** at
+`--boundary-skip-layers 0..6 29..35`:
+
+  * Δppl = **+61.84 %**
+  * top-1 = **79.30 %**
+  * Verdict REJECT (Δppl bar is ≤+20 % for MARGINAL) but top-1 is
+    above PR #17 DS-1.5B production-cell MARGINAL top-1 = 74.22 %.
+  * Relative to baseline `b_K=3, k=16, d_eff=64`: slot bytes rise
+    by ~1.7 × (larger k-means cluster table + fp16 centroids ×
+    more clusters + larger basis).  Exact slot-size impact can be
+    read off `KakeyaV13PPLConfig.slot_size_bytes` for the config.
 
 ## Report index (JSONs in this directory)
 
@@ -143,6 +183,20 @@ Baselines (historical, pre-ablation):
   (4p): +619%.
 - `qwen3_4b_snapshot_gpu_all_vllm_snapshot.json` — GPU bare codec
   4-layer bdry (4p): +202.75%.
+
+Codec-budget sweep (`budget_sweep/` subfolder, all 4-passage, on
+14-layer boundary base):
+
+- `qwen3_4b_budget_default_vllm_snapshot.json` — b_K=3, k=16, d_eff=64:
+  +96.86 %, 76.56 % (baseline).
+- `qwen3_4b_budget_bK4_vllm_snapshot.json` — b_K=4: +96.49 %, 77.73 %.
+- `qwen3_4b_budget_k32_vllm_snapshot.json` — k=32: **+74.10 %, 75.39 %**.
+- `qwen3_4b_budget_deff96_vllm_snapshot.json` — d_eff=96: +100.04 %, 74.22 %.
+- `qwen3_4b_budget_k32_bK4_vllm_snapshot.json` — k=32+b_K=4: +73.87 %, 75.78 %.
+- `qwen3_4b_budget_deff96_bK4_vllm_snapshot.json` — d_eff=96+b_K=4: +98.61 %, 73.83 %.
+- `qwen3_4b_budget_all3_vllm_snapshot.json` — all 3: +61.80 %, 78.12 %.
+- `qwen3_4b_budget_k64_bK4_deff96_vllm_snapshot.json` — **best: +61.84 %, 79.30 %**.
+- `qwen3_4b_budget_k64_bK4_deff128_vllm_snapshot.json` — d_eff=128 (regresses): +69.78 %, 79.69 %.
 
 Boundary-skip sweep (`bdry_sweep/` subfolder, all 4-passage):
 

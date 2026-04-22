@@ -294,6 +294,7 @@ def gpu_roundtrip(
     variance_ratio: float = 0.95,
     centroids_file: str | None = None,
     outlier_threshold: float | None = None,
+    k_centers: int = 16,
 ) -> tuple[np.ndarray, dict]:
     """Signature-compatible stand-in for `rust_roundtrip` operating
     on the [n, H, D] pre-flatten layout.  Returns (decoded, report)."""
@@ -303,7 +304,7 @@ def gpu_roundtrip(
         block_size=block_size,
         bit_width=bit_width,
         d_eff=rsvd_target_rank,
-        k=16,
+        k=k_centers,
         metric=metric,
         variance_ratio=variance_ratio,
         centroids_file=centroids_file,
@@ -319,7 +320,7 @@ def gpu_roundtrip(
         head_dim=D, d_eff=rsvd_target_rank,
         block_size_codec=block_size,
         variance_ratio=variance_ratio,
-        k_centers=16, bit_width=bit_width,
+        k_centers=k_centers, bit_width=bit_width,
         outlier_budget_frac=0.15 if outlier_threshold is not None else 0.0,
     )
     n_blocks = (n // block_size)
@@ -344,6 +345,7 @@ def codec_layer(
     boundary_skip: set[int], rsvd_target_rank_factor: float = 0.5,
     share_basis_v: bool = True, share_basis_k: bool = False,
     use_gpu_codec: bool = False, disable_share_basis_v: bool = False,
+    k_kmeans_k: int = 16, v_kmeans_k: int = 16,
 ) -> tuple[np.ndarray, dict]:
     """Per-layer codec of a captured K/V tensor.
 
@@ -373,12 +375,14 @@ def codec_layer(
         outlier_thr = v_outlier_threshold
         share = share_basis_v and not disable_share_basis_v
         metric = "mse"
+        kmeans_k = v_kmeans_k
     else:
         bit_width = bit_width_k
         centroids = k_centroids
         outlier_thr = k_outlier_threshold
         share = share_basis_k
         metric = "mse" if use_whiten else "inner_product"
+        kmeans_k = k_kmeans_k
 
     if use_gpu_codec:
         # GPU path operates on [n, H, D] directly — no flatten.
@@ -387,6 +391,13 @@ def codec_layer(
         # V-stream with share_basis=True needs the pooled-across-
         # blocks basis that only Rust currently provides.)
         if share:
+            # Rust CLI bench binary hardcodes --k to the value passed
+            # on the command line; rust_roundtrip currently uses
+            # k=16 unconditionally (kakeyaturbo-bench's --k flag isn't
+            # wired through here).  A non-default kmeans_k on the V
+            # stream therefore only takes effect via the GPU path —
+            # callers who want to sweep V K-means k must disable
+            # share_basis_v.
             dec, rep = rust_roundtrip(
                 arr_enc.reshape(-1, hd).astype(np.float32, copy=False),
                 block_size=block_size, bit_width=bit_width,
@@ -402,6 +413,7 @@ def codec_layer(
                 block_size=block_size, bit_width=bit_width,
                 rsvd_target_rank=rank, metric=metric,
                 centroids_file=centroids, outlier_threshold=outlier_thr,
+                k_centers=kmeans_k,
             )
     else:
         flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
@@ -514,6 +526,20 @@ def main() -> int:
     ap.add_argument("--block-size", type=int, default=512)
     ap.add_argument("--bit-width-k", type=int, default=3)
     ap.add_argument("--bit-width-v", type=int, default=2)
+    ap.add_argument("--rsvd-target-rank-factor", type=float, default=0.5,
+                    help="d_eff = max(2, int(head_dim * factor)).  Default "
+                         "0.5 (= d_eff=64 on head_dim=128).  Raise toward "
+                         "1.0 to trade slot bytes for reconstruction quality.")
+    ap.add_argument("--k-kmeans-k", type=int, default=16,
+                    help="Spherical K-means cluster count for the K stream's "
+                         "stage-3 assignment.  Default 16 matches PR #17.  "
+                         "Larger k gives a finer angular codebook at the "
+                         "cost of `ceil(log2(k))` bits per token per block.")
+    ap.add_argument("--v-kmeans-k", type=int, default=16,
+                    help="Same for V stream; must be compatible with "
+                         "bit_width_v (V residual carries log2(k) bits "
+                         "of seg_id information separately).  Ignored when "
+                         "V falls back to the CPU Rust share_basis path.")
     ap.add_argument("--q-calib", type=str,
         default="reports/v1_3_ppl/vllm_backend/calibration/"
                 "qwen3_4b_sigma_q.safetensors")
@@ -613,8 +639,10 @@ def main() -> int:
                 k_centroids=k_centroids_arg, v_centroids=v_centroids_arg,
                 k_outlier_threshold=outlier_thr_arg,
                 v_outlier_threshold=None, boundary_skip=boundary_skip,
+                rsvd_target_rank_factor=args.rsvd_target_rank_factor,
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
+                k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
             )
             v_hat, v_rep = codec_layer(
                 kv["V"], is_v=True, layer_id=lid, q_precond=qp,
@@ -623,8 +651,10 @@ def main() -> int:
                 k_centroids=k_centroids_arg, v_centroids=v_centroids_arg,
                 k_outlier_threshold=outlier_thr_arg,
                 v_outlier_threshold=None, boundary_skip=boundary_skip,
+                rsvd_target_rank_factor=args.rsvd_target_rank_factor,
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
+                k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
             )
             replacements[lid] = {
                 "K": torch.from_numpy(k_hat).cuda(),
@@ -718,6 +748,8 @@ def main() -> int:
         "n_passages_total": len(passages_ids),
         "block_size": args.block_size,
         "bit_width_k": args.bit_width_k, "bit_width_v": args.bit_width_v,
+        "rsvd_target_rank_factor": args.rsvd_target_rank_factor,
+        "k_kmeans_k": args.k_kmeans_k, "v_kmeans_k": args.v_kmeans_k,
         "outlier_threshold": args.outlier_threshold,
         "boundary_skip_layers": sorted(boundary_skip),
         "q_calib": args.q_calib,
