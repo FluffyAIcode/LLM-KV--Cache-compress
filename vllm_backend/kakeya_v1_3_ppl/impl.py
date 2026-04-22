@@ -233,6 +233,12 @@ class _PerLayerState:
     # block_idx → _BlockStaging.  Dropped on seal.
     staging_per_block: dict[int, _BlockStaging] = field(default_factory=dict)
 
+    # Debug shadow: {block_idx: (k_bf16, v_bf16)}.  Populated on
+    # seal when KAKEYA_DEBUG_BF16_SHADOW=1; consumed in
+    # _decode_sealed to bypass the codec path.  Used to isolate
+    # "codec quality" vs "assembly plumbing" PPL regressions.
+    bf16_shadow: dict[int, tuple[torch.Tensor, torch.Tensor]] = field(default_factory=dict)
+
     # Layer index inside the model (parsed from `layer.layer_name`).
     # None iff we couldn't parse — in which case calibration is disabled.
     layer_idx: int | None = None
@@ -707,6 +713,64 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         state.staging_per_block[block_idx] = st
         return st
 
+    # ---- GPU-encode helpers (M4 Phase C Path D) -----------------------
+
+    def _get_wht_sign(
+        self,
+        rotation_seed: int,
+        wht_len: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        """Cached WHT ±1 sign pattern for this (seed, wht_len, device).
+
+        Rust's `kakeyaturbo::wht::sign_pattern` is deterministic given
+        the rotation_seed; we fetch it once via the pyo3 `_core`
+        helper and keep the resulting CUDA tensor on the impl so
+        repeated seals don't re-derive it.
+        """
+        cache = getattr(self, "_wht_sign_cache", None)
+        if cache is None:
+            cache = {}
+            self._wht_sign_cache = cache
+        key = (int(rotation_seed), int(wht_len), str(device))
+        if key not in cache:
+            from kakeyaturbo_py import _core
+            arr = np.asarray(
+                _core.wht_sign_pattern(int(rotation_seed), int(wht_len))
+            ).reshape(-1).astype(np.float32)
+            cache[key] = torch.from_numpy(arr).to(device)
+        return cache[key]
+
+    def _config_offsets(self, cfg: "KakeyaV13PPLConfig") -> dict:
+        """Extract the byte-layout properties that
+        `gpu_encode.encode_and_pack_batched` needs into a plain dict
+        (so that hot path code doesn't hit property getters inside
+        the seal critical section)."""
+        return {
+            "header_bytes": cfg.header_bytes,
+            "offset_pca_basis": cfg.offset_pca_basis,
+            "pca_basis_bytes": cfg.pca_basis_bytes,
+            "offset_pca_mean": cfg.offset_pca_mean,
+            "pca_mean_bytes": cfg.pca_mean_bytes,
+            "offset_kmeans_centroids": cfg.offset_kmeans_centroids,
+            "kmeans_centroids_bytes": cfg.kmeans_centroids_bytes,
+            "offset_seg_id_block": cfg.offset_seg_id_block,
+            "seg_id_bits_per_vec": cfg.seg_id_bits_per_vec,
+            "seg_id_bytes_per_block": cfg.seg_id_bytes_per_block,
+            "offset_t_block": cfg.offset_t_block,
+            "t_bytes_per_block": cfg.t_bytes_per_block,
+            "offset_norm_block": cfg.offset_norm_block,
+            "norm_bytes_per_block": cfg.norm_bytes_per_block,
+            "offset_residual_block": cfg.offset_residual_block,
+            "residual_bytes_per_block": cfg.residual_bytes_per_block,
+            "offset_outlier_side_buffer": cfg.offset_outlier_side_buffer,
+            "outlier_budget_bytes": cfg.outlier_budget_bytes,
+            "outlier_row_count_bytes": cfg.outlier_row_count_bytes,
+            "outlier_entry_bytes_budget": cfg.outlier_entry_bytes_budget,
+            "block_size_codec": cfg.block_size_codec,
+            "wht_len": cfg.wht_len,
+        }
+
     # ---- Phase B.1: encode-seal + write + read paths ------------------
 
     def _seal_and_write_block(
@@ -730,16 +794,16 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         will later unwhiten.  Σ_q whitening is K-stream only — V
         doesn't have a Q-preconditioning analogue.
         """
-        from kakeyaturbo_py import encode_block_codes, encode_block_triton_stage2
-        # M4 Phase C: batched GPU stage-1 skeleton.  Replaces the
-        # per-head Rust CPU path that used to take 30–80 ms per call
-        # and dominated the seal loop (32 layers × 8 heads ×
-        # 50 ms ≈ 13 s/window).  The GPU path does all kv_heads
-        # concurrently in a single torch.linalg.eigh batch.
-        from kakeyaturbo_py.gpu_skeleton import (
-            fit_skeleton_batched,
-            unbatched_skeleton_to_rust_dict,
-        )
+        # M4 Phase C (Path D): fully GPU-resident encode pipeline.
+        # Replaces the old per-head serial CPU loop
+        #   for h: encode_block_codes(Xh.cpu()) + triton_stage2 + numpy pack
+        # with a single batched RSVD + Triton-match argmin + GPU bit-pack
+        # + scatter into a [H, slot_bytes] uint8 tensor — O(1000x)
+        # faster on H200 and aligned with PLAN.md §"Key design decision"
+        # (randomised PCA, matching kakeyaturbo::pca::fit_weighted_pca_randomized).
+        from kakeyaturbo_py.gpu_skeleton import fit_skeleton_batched
+        from kakeyaturbo_py.gpu_encode import encode_and_pack_batched
+        from kakeyaturbo_py import _core as _kt_core
         n = self.block_size_codec
         assert st.count == n, f"seal called on partial block ({st.count}/{n})"
 
@@ -761,10 +825,14 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         # condition number of L^{-1} can be >5×, blowing PPL.
         #
         # Env toggle: set KAKEYA_DISABLE_SIGMA_Q=1 to bypass.
-        # Default: ON, because measured PPL is actually worse with
-        # it disabled (70k → 14k, vs 14k baseline → 13.6k with Σ_q
-        # on) — despite the semantic mismatch, the rotation helps.
-        disable_sigma_q = os.environ.get("KAKEYA_DISABLE_SIGMA_Q", "0") == "1"
+        # DEFAULT: ON for disable (= OFF for whitening) — the M2 Σ_q
+        # bundle was calibrated on pre-RoPE Q but vLLM's attention
+        # backend sees post-RoPE K; applying pre-RoPE-fitted Σ_q to
+        # post-RoPE K introduces a semantic mismatch that gets
+        # amplified by L⁻¹ in the decode path.  CPU reference
+        # (benchmarks/e2e_ppl_validation_vllm.py) does NOT use Σ_q
+        # whitening at all — it's a separate PLAN.md Option.
+        disable_sigma_q = os.environ.get("KAKEYA_DISABLE_SIGMA_Q", "1") == "1"
         if state.sigma_q_chol is not None and not disable_sigma_q:
             K_fp32 = torch.einsum(
                 "thj,hjk->thk",
@@ -772,10 +840,20 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
                 state.sigma_q_chol,
             ).contiguous()
 
-        # Per-stream Lloyd-Max tables — None falls back to Gaussian default
-        # inside kakeyaturbo_py.
-        k_centroids = state.k_centroids   # np.ndarray or None
-        v_centroids = state.v_centroids
+        # Per-stream Lloyd-Max tables — CPU reference uses Gaussian
+        # default (`_core.centroids_gaussian(b)`); M2 empirical tables
+        # were fit on pre-RoPE data, same mismatch as Σ_q.  Env
+        # toggle: set KAKEYA_USE_M2_CENTROIDS=1 to opt in.
+        use_m2_centroids = os.environ.get("KAKEYA_USE_M2_CENTROIDS", "0") == "1"
+        k_centroids = state.k_centroids if use_m2_centroids else None
+        v_centroids = state.v_centroids if use_m2_centroids else None
+
+        # K-stream outlier threshold: CPU reference bench CLI does not
+        # set --outlier-threshold, so the side-buffer path is inactive
+        # in v1.3 PPL-ref.  Mirror that.  Env toggle:
+        # KAKEYA_OUTLIER_THRESHOLD=<float> to enable.
+        _olt_env = os.environ.get("KAKEYA_OUTLIER_THRESHOLD", "")
+        k_outlier_threshold = float(_olt_env) if _olt_env else None
 
         def _pad_to_d_eff(parts: dict, target_d_eff: int, head_size: int) -> dict:
             """Pad PCA basis / per-vec coeffs / K-means centers / seg_id /
@@ -842,51 +920,82 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         k_skel_batch = _slice_skel(kv_skel_batch, 0, H)
         v_skel_batch = _slice_skel(kv_skel_batch, H, 2 * H)
 
-        for h in range(self.num_kv_heads):
-            Kh = K_fp32[:, h, :].contiguous().cpu().numpy()
-            Vh = V_fp32[:, h, :].contiguous().cpu().numpy()
+        # Build WHT sign patterns once per (seed, wht_len) — cached
+        # on the impl since it's the same across all layers / blocks.
+        #
+        # The K and V streams share the same wht_len (both have
+        # d_eff = k_cfg.d_eff = v_cfg.d_eff), so one sign tensor
+        # suffices.
+        k_sign = self._get_wht_sign(
+            int(k_skel_batch["rotation_seed"]),
+            int(k_skel_batch["wht_len"]),
+            st.k_bf16.device,
+        )
+        v_sign = self._get_wht_sign(
+            int(v_skel_batch["rotation_seed"]),
+            int(v_skel_batch["wht_len"]),
+            st.v_bf16.device,
+        )
 
-            # Slice one kv-head's skeleton out of the batch, reshape
-            # into the dict that encode_block_triton_stage2 expects.
-            # The GPU skeleton already returns exactly `d_eff` rows
-            # (no rank-deficiency gap), so no _pad_to_d_eff needed.
-            k_parts_rust = unbatched_skeleton_to_rust_dict(
-                k_skel_batch, h, bit_width=k_cfg.bit_width,
-                metric="inner_product",
-            )
-            k_parts = encode_block_triton_stage2(
-                Kh, k_parts_rust,
-                custom_centroids=k_centroids,
-                outlier_threshold=2.0,
-                device=str(st.k_bf16.device),
-            )
+        # Config-offset dicts — extract the byte-layout properties
+        # once; gpu_encode.encode_and_pack_batched is pure (doesn't
+        # hold a ref to the config object).
+        k_offsets = self._config_offsets(k_cfg)
+        v_offsets = self._config_offsets(v_cfg)
 
-            v_parts_rust = unbatched_skeleton_to_rust_dict(
-                v_skel_batch, h, bit_width=v_cfg.bit_width,
-                metric="mse",
-            )
-            v_parts = encode_block_triton_stage2(
-                Vh, v_parts_rust,
-                custom_centroids=v_centroids,
-                outlier_threshold=None,
-                device=str(st.v_bf16.device),
-            )
+        # Move custom Lloyd-Max centroid tables to CUDA once.
+        k_centroids_gpu = (
+            torch.as_tensor(k_centroids, device=st.k_bf16.device,
+                            dtype=torch.float32)
+            if k_centroids is not None else None
+        )
+        v_centroids_gpu = (
+            torch.as_tensor(v_centroids, device=st.v_bf16.device,
+                            dtype=torch.float32)
+            if v_centroids is not None else None
+        )
 
-            # Pack into byte slots.
-            k_slot_bytes = self._pack_parts_into_slot(k_parts, k_cfg)
-            v_slot_bytes = self._pack_parts_into_slot(v_parts, v_cfg)
+        # Batched encode + pack for K (all kv_heads at once).
+        # K_fp32 is [n, H, D] → permute to [H, n, D] for the batch axis.
+        K_batch = K_fp32.permute(1, 0, 2).contiguous()   # [H, n, D]
+        V_batch = V_fp32.permute(1, 0, 2).contiguous()
 
-            # Write into kv_cache[block_idx, h, :].  K-slot starts at
-            # byte 0, V-slot at k_cfg.slot_size_bytes.
-            target = kv_cache[block_idx, h]
-            k_end = k_cfg.slot_size_bytes
-            v_end = k_end + v_cfg.slot_size_bytes
-            # Copy from numpy to GPU uint8 tensor.
-            target[0:k_end].copy_(
-                torch.from_numpy(k_slot_bytes).to(target.device)
-            )
-            target[k_end:v_end].copy_(
-                torch.from_numpy(v_slot_bytes).to(target.device)
+        k_slot_tensor = encode_and_pack_batched(      # [H, k_slot_bytes] uint8
+            K_batch, k_skel_batch,
+            bit_width=k_cfg.bit_width,
+            metric="inner_product",
+            slot_size_bytes=k_cfg.slot_size_bytes,
+            config_offsets=k_offsets,
+            custom_centroids=k_centroids_gpu,
+            outlier_threshold=k_outlier_threshold,
+            wht_sign=k_sign,
+        )
+        v_slot_tensor = encode_and_pack_batched(      # [H, v_slot_bytes] uint8
+            V_batch, v_skel_batch,
+            bit_width=v_cfg.bit_width,
+            metric="mse",
+            slot_size_bytes=v_cfg.slot_size_bytes,
+            config_offsets=v_offsets,
+            custom_centroids=v_centroids_gpu,
+            outlier_threshold=None,
+            wht_sign=v_sign,
+        )
+
+        # Concatenate K and V along the byte axis → single [H, total]
+        # memcpy into kv_cache[block_idx, :, :].
+        combined = torch.cat([k_slot_tensor, v_slot_tensor], dim=1)
+        k_end = k_cfg.slot_size_bytes
+        v_end = k_end + v_cfg.slot_size_bytes
+        assert combined.shape[1] == v_end, (
+            f"combined slot {combined.shape[1]} != K+V bytes {v_end}"
+        )
+        kv_cache[block_idx, :, :v_end].copy_(combined)
+
+        # Debug: stash a bf16 shadow so _decode_sealed can bypass
+        # the codec path and verify the rest of the assembly pipe.
+        if os.environ.get("KAKEYA_DEBUG_BF16_SHADOW", "0") == "1":
+            state.bf16_shadow[block_idx] = (
+                st.k_bf16.clone(), st.v_bf16.clone()
             )
 
     def do_kv_cache_update(
@@ -1119,12 +1228,32 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
         cfg = self.k_config if stream == "K" else self.v_config
         slot_off = 0 if stream == "K" else self.k_config.slot_size_bytes
 
-        # Pull calibration from layer state (if available).
+        # Debug bypass: if the bf16 shadow is populated for this
+        # block, skip the codec and return the raw bf16 directly.
+        # Used to isolate "codec quality" vs "assembly plumbing"
+        # when debugging PPL regressions.
+        if os.environ.get("KAKEYA_DEBUG_BF16_SHADOW", "0") == "1":
+            state_dbg: _PerLayerState | None = (
+                getattr(layer, "_kakeya_state", None) if layer is not None else None
+            )
+            if state_dbg is not None and block_idx in state_dbg.bf16_shadow:
+                k_shadow, v_shadow = state_dbg.bf16_shadow[block_idx]
+                sh = k_shadow if stream == "K" else v_shadow
+                return sh.to(device=device, dtype=torch.float32)
+
+        # Pull calibration from layer state (if available).  We must
+        # use the SAME centroid table that _seal_and_write_block used
+        # when encoding this block, or the Lloyd-Max codebook
+        # mismatches and every quantised coordinate decodes wrong —
+        # catastrophic PPL blowup.  The encode-side opt-in flag is
+        # KAKEYA_USE_M2_CENTROIDS (default off matches CPU reference
+        # which uses the Gaussian default).
         state: _PerLayerState | None = (
             getattr(layer, "_kakeya_state", None) if layer is not None else None
         )
+        use_m2_centroids = os.environ.get("KAKEYA_USE_M2_CENTROIDS", "0") == "1"
         custom_centroids = None
-        if state is not None:
+        if state is not None and use_m2_centroids:
             custom_centroids = (
                 state.k_centroids if stream == "K" else state.v_centroids
             )
@@ -1143,7 +1272,9 @@ class KakeyaV13PPLAttentionImpl(AttentionImpl):
 
         # Σ_q un-whitening (K only; V-stream has no whitening).
         # Must match the toggle in `_seal_and_write_block`.
-        disable_sigma_q = os.environ.get("KAKEYA_DISABLE_SIGMA_Q", "0") == "1"
+        # Default: disabled (matches CPU reference; see the paired
+        # comment in _seal_and_write_block).
+        disable_sigma_q = os.environ.get("KAKEYA_DISABLE_SIGMA_Q", "1") == "1"
         if (stream == "K"
             and state is not None
             and state.sigma_q_inv_chol is not None
