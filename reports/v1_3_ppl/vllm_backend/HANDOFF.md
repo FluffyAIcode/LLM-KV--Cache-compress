@@ -348,7 +348,35 @@ agent can recognise them if the user raises them:
   learned offline).  Theoretical scaffolding exists; LLM
   adaptation is new.
 
-  ✅ **Minimal prototype EXECUTED** (this session) via
+  ✅ **FULL BRIDGE IMPLEMENTATIONS EXECUTED** (this session).
+  Three separate realisations of the Dvir → Euclidean bridge were
+  implemented and measured head-to-head on real Qwen3-4B K:
+
+    - **Bridge A (Guth-Katz polynomial partitioning)**:
+      `kakeyaturbo_py/bridge_a_guth_katz.py`.  Degree-2 polynomials
+      on JL-projected features.  Best at 12-20 bits, rel-MSE 0.57-0.59.
+      Fastest encode (3.3ms/M vec).  **NOT a tree, real Guth-Katz.**
+
+    - **Bridge B (D4 nested lattice)**:
+      `kakeyaturbo_py/bridge_b_nested_lattice.py`.  Zamir-Feder with
+      D4 root lattice, Conway-Sloane 1982 closest-point algorithm.
+      At 736 bits rel-MSE 0.049 — 1400× worse than TQ at 1024 bits.
+      **Real Zamir-Feder, structurally confirmed but insufficient.**
+
+    - **Bridge C (Non-Gaussian shaping)**:
+      `kakeyaturbo_py/bridge_c_non_gaussian.py`.  Per-dim empirical
+      Lloyd-Max + data-adapted shaping rectangle.  At 1024 bits
+      rel-MSE 0.00112 — 32× worse than TQ's 0.000035.  **Real
+      non-Gaussian shaping with learned codebook.**
+
+  **Result: NONE of the three bridges beats TurboQuant k8v4 on
+  Qwen3-4B K at matched 1024 bits.**  The measured Phase 1
+  non-Gaussian "headroom" does not translate to a codebook that
+  can beat TQ's per-coord FP8 structure.  See
+  `FINDINGS_GPU.md` section "Three bridges from Dvir to Euclidean
+  quantisation — measured on Qwen3-4B K" for full numbers.
+
+  Legacy minimal prototype from earlier:
   `benchmarks/calibrate_datamatched_lloyd_max.py` — calibrate
   Lloyd-Max centroids on empirical distribution, plug in via
   `--k-centroids`.  **Result: NEGATIVE, paired Δppl +1.32 pp

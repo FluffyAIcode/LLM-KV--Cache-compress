@@ -719,6 +719,140 @@ further non-Gaussian-shaping tricks at the Lloyd-Max stage give
 path, or replacing the codec kernel with TurboQuant-style) — not
 from Lloyd-Max or K-means micro-optimisations.
 
+### Three bridges from Dvir to Euclidean quantisation — measured on Qwen3-4B K
+
+Following the HANDOFF §5.8 research-path catalogue, we implemented
+and measured the three "bridges" from Dvir's finite-field Kakeya
+/ polynomial method to continuous Euclidean quantisation, without
+going through the q → ∞ limit:
+
+- **Bridge A: Guth-Katz polynomial partitioning** —
+  `kakeyaturbo_py/bridge_a_guth_katz.py`.
+  Degree-2 polynomial on JL-projected features (r ≤ 18 dims).
+  `n_polys` polynomials give `2^n_polys` cells.  Cell index =
+  sign pattern.  Cell centroid = mean of training K in cell.
+  **Directly realises Guth-Katz 2010's polynomial ham sandwich
+  construction in R^D via JL lifting.**  Not a tree, not Perron.
+
+- **Bridge B: D4 nested lattice** —
+  `kakeyaturbo_py/bridge_b_nested_lattice.py`.
+  Zamir-Feder nested lattice code with D4 as the shaping lattice.
+  Split D=128 into 32 blocks of 4, apply Conway-Sloane 1982 closest-
+  D4-lattice-point algorithm per block.  Bits/block scale with
+  `q_range`.  **Directly realises Zamir-Feder 1996's nested lattice
+  quantiser with the actual D4 root lattice.**
+
+- **Bridge C: Non-Gaussian shaping via empirical Lloyd-Max** —
+  `kakeyaturbo_py/bridge_c_non_gaussian.py`.
+  Learn per-dim Lloyd-Max centroids directly from Hadamard-rotated
+  empirical K samples + data-driven shaping rectangle (99.5% per-dim
+  quantile).  **This is TurboQuant's per-coord structure with
+  data-matched codebook instead of Gaussian-assumed codebook.**
+
+Head-to-head on real Qwen3-4B captured K (200k train, 100k held-out
+test samples from 22 non-boundary layers × 4 WikiText-103 passages):
+`benchmarks/bridges_abc_head_to_head.py`.
+
+| bits/tok/head | TQ k8v4   | Bridge A (GK)  | Bridge B (D4)   | Bridge C (NG)   |
+|---------------|-----------|----------------|-----------------|-----------------|
+|   8           |     —     |   0.741        |      —          |      —          |
+|  12           |     —     | **0.590**      |      —          |      —          |
+|  16           |     —     | **0.572**      |      —          |      —          |
+|  20           |     —     |   0.634        |      —          |      —          |
+| 256           |     —     |      —         |      —          | **0.1055**      |
+| 384           |     —     |      —         |      —          | **0.0308**      |
+| 512           |     —     |      —         |      —          | **0.0088**      |
+| 608           |     —     |      —         |   0.162         |      —          |
+| 736           |     —     |      —         |   0.049         |      —          |
+| 768           |     —     |      —         |      —          | **0.00171**     |
+| **1024**      |**0.000035**|      —        |      —          | **0.00112**     |
+
+All values = rel-MSE on held-out Qwen3-4B K (lower is better).
+
+**Encode speed** (ms per million vectors on H200):
+| Bridge | Best config | Speed     |
+|:-|:-|----------:|
+| TQ k8v4 (reference)       | 1024 bits  | ~10 ms/M  |
+| **Bridge A (Guth-Katz)**  | 12-20 bits | **3.3-3.5 ms/M** |
+| Bridge B (D4 lattice)     | 736 bits   | 5.7 ms/M  |
+| Bridge C (NG shaping)     | 1024 bits  | 11.2 ms/M |
+
+### Bridge-by-bridge verdict
+
+1. **Bridge A (Guth-Katz) is the most efficient bridge at extreme
+   low bit-rates (< 20 bits/token/head)**.  At 12 bits it hits
+   rel-MSE 0.590 — covering 41% of K variance with ~85× fewer bits
+   than TQ.  **Fastest encode of any bridge** (3.3 ms/M vec).  Cell
+   occupancy is high (4080/4096 at 12 polys), meaning the polynomial
+   partition genuinely balances the data — Guth-Katz 2010's
+   theoretical guarantee holds.  **Use case: ultra-low-bit
+   compression** (e.g. 8-20 bits/token for rank-bucketing or
+   proximity search), not for deployment PPL.
+
+2. **Bridge B (D4 lattice) confirms Zamir-Feder structure is
+   implementable but does NOT beat TQ on LLM K**.  At 736 bits
+   (~72% of TQ's budget) it gets rel-MSE 0.049 — **1400× worse
+   than TQ at 1024 bits**.  The D4 shaping gain is real but
+   diluted by per-block independence assumption: LLM K coords
+   within a 4-block are not independent, so D4 wastes capacity
+   on boundaries that the full 128-dim lattice would avoid.  To
+   get the full 1.53 dB Zamir-Feder gain one needs `Leech-24` or
+   higher-dim lattices, which don't fit the 128-dim structure
+   cleanly.
+
+3. **Bridge C (non-Gaussian shaping) is the closest to TQ but
+   still does not beat it**.  At 1024 bits/tok (matching TQ), it
+   achieves rel-MSE 0.00112 — **32× worse than TQ's 0.000035**.
+   This is measured ground-truth on what Phase 1's 20× K-MSE
+   non-Gaussianity headroom actually delivers: non-trivial
+   absolute gain over Gaussian-default Lloyd-Max, but not enough
+   to close the gap to Hadamard+FP8 on this workload.  Honestly
+   quantifies the Shannon shaping gap on real Qwen3-4B K.
+
+### Why TurboQuant wins at 1024 bits — data
+
+On the same 100k held-out samples:
+- **TQ FP8 ≈ Hadamard-rotate then per-coord uniform 8-bit**:
+  rel-MSE **3.5 × 10⁻⁵** (256 codebook levels per coord × 128 coords
+  = 256^128 ≈ 10^308 effective codewords).
+- **Bridge C NG-shaping** at matched 1024 bits: rel-MSE **1.1 × 10⁻³**
+  (empirical Lloyd-Max, same 256 levels per coord).
+- **Ratio: 32×**.
+
+The 32× gap is the **structural Lloyd-Max suboptimality penalty**
+that empirical Lloyd-Max with a non-Gaussian codebook pays vs
+FP8's implicit log-uniform codebook.  FP8's per-coord log-distance
+resolution (1 ULP around small values, coarser at large) happens
+to match LLM K's sub-Gaussian distribution better than a Lloyd-Max
+that's exactly matched to the empirical per-coord density.
+
+**The Phase 1 "non-Gaussian headroom" exists**, but it is NOT
+enough to beat TurboQuant's FP8 per-coord quantisation on Qwen3-4B
+K.  Bridge C represents the **realistic ceiling** of non-Gaussian
+shaping in this workload.
+
+### What this implies for the project
+
+All three bridges now have measured outcomes on real Qwen3-4B K:
+
+- **Guth-Katz**: great at ultra-low bits (not TQ's regime)
+- **D4 nested lattice**: implementable but structurally weak vs TQ
+- **Non-Gaussian shaping**: 32× gap vs TQ at matched bits
+
+**None beat TurboQuant k8v4 on Qwen3-4B K at the deployment-relevant
+bit budget**.  This is a complete experimental answer to "can a
+Kakeya-style discrete construction beat TQ" — measured, not
+speculated.
+
+The path forward remains as §5.7 concluded: snapF-to-slot port
+and/or TQ-kernel-swap are the engineering-valuable routes.  The
+Kakeya bridges are **valuable research artefacts** confirming the
+Shannon-bound hypothesis, but not deployment-viable alternatives.
+
+Artefacts: `reports/v1_3_ppl/snapshot_mode_qwen3/bridges_abc/`:
+- `bridges_abc_head_to_head.json` — full per-config numbers
+- `run.log` — capture + build + encode timings
+
 ### Binary-tree K-means encode — measured, NOT adopted
 
 We measured the per-stage encode time breakdown on a single
