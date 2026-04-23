@@ -19,16 +19,26 @@ def register_plugin() -> None:
     logger = logging.getLogger("kakeya_v1_3_ppl.plugin")
 
     # ---- Mode A: snapshot-harness patch (pure bf16 path) ----
-    # Used by benchmarks/e2e_ppl_validation_vllm_snapshot_qwen3.py
-    # to install a three-phase hook on Qwen3Attention in EVERY
-    # vLLM process (incl. the engine-core subprocess).  Gate via
+    # Used by benchmarks/*_vllm_snapshot_*.py harnesses to install
+    # three-phase hooks on every supported Attention class in EVERY
+    # vLLM process (incl. the engine-core subprocess).  Gate via the
     # env var so a normal vLLM run (no snapshot harness) is unaffected.
+    #
+    # The env var name is kept as KAKEYA_SNAPSHOT_QWEN3 for historical
+    # compatibility (snapA/snapF harnesses set this), but what it
+    # installs now is ALL available patches:
+    #   * Qwen3Attention  (Qwen3 family)
+    #   * Qwen2Attention  (DeepSeek-R1-Distill-Qwen-1.5B, base Qwen2)
+    #   * Gemma4Attention (Gemma 4 E2B/E4B/26B-A4B/31B)
+    #   * GLMAttention    (GLM-4, ChatGLM)
+    # The patch is idempotent and each model type only activates its
+    # own patch at load time, so installing all is safe.
     if os.environ.get("KAKEYA_SNAPSHOT_QWEN3", "0") == "1":
         try:
             from . import snapshot_hook
-            snapshot_hook.install_qwen3_snapshot_patch()
+            snapshot_hook.install_all_snapshot_patches()
         except Exception as e:
-            logger.exception("Failed to install Qwen3 snapshot patch: %s", e)
+            logger.exception("Failed to install snapshot patches: %s", e)
             raise
         # The snapshot harness doesn't use our custom attention
         # backend; registering it would add unnecessary patches to
