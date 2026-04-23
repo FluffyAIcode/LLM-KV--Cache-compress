@@ -68,6 +68,47 @@ def recode_v14_gpu(
     return cb.roundtrip(X), cb.bits_per_token_per_head
 
 
+def _sylvester_hadamard_normalised(D: int, device) -> torch.Tensor:
+    """Sylvester Hadamard divided by √D (self-inverse at ortho)."""
+    assert (D & (D - 1)) == 0, f"Hadamard requires D=power of 2, got {D}"
+    H = torch.tensor([[1.0]], device=device, dtype=torch.float32)
+    while H.shape[0] < D:
+        H = torch.cat([torch.cat([H, H], 1), torch.cat([H, -H], 1)], dim=0)
+    return H / math.sqrt(D)
+
+
+def recode_tq_gpu(
+    X: torch.Tensor, bits_per_coord: int,
+) -> tuple[torch.Tensor, int]:
+    """TurboQuant (Hadamard + per-vector qmax + scalar uniform quantise),
+    applied independently to each head-vector.  Same algorithm as the
+    multimodel_v14_vs_tq comparison harness — kept identical here so that
+    the two reports are strictly apples-to-apples.
+
+    Returns (reconstructed_tensor, bits_per_token_per_head).
+    """
+    assert X.is_cuda and X.dtype == torch.float32
+    N_tok, H_heads, D = X.shape
+    flat = X.reshape(-1, D)
+    eps = torch.finfo(torch.float32).eps
+
+    norms = flat.norm(dim=1, keepdim=True).clamp(min=eps)
+    norms_f16 = norms.to(torch.float16).to(torch.float32)
+    unit = flat / norms
+
+    Hmat = _sylvester_hadamard_normalised(D, X.device)
+    y = unit @ Hmat
+    qmax = y.abs().max(dim=1, keepdim=True).values.clamp(min=eps)
+    qmax_f16 = qmax.to(torch.float16).to(torch.float32)
+    qs = (1 << (bits_per_coord - 1)) - 1
+    scale = qmax_f16 / float(qs)
+    q = torch.round(y / scale).clamp(-qs, qs) * scale
+    unit_hat = q @ Hmat
+    X_hat = (unit_hat * norms_f16).reshape(N_tok, H_heads, D)
+    bits = D * bits_per_coord + 32
+    return X_hat, bits
+
+
 def compute_rel_mse_gpu(
     X: torch.Tensor, X_hat: torch.Tensor,
 ) -> tuple[float, float]:
@@ -157,6 +198,9 @@ def main() -> int:
     ap.add_argument("--model-name", required=True)
     ap.add_argument("--q-values", type=str, default="10,38,152",
                     help="Comma-separated v1.4 Q_range values to sweep.")
+    ap.add_argument("--tq-b-values", type=str, default="4,6,8",
+                    help="Comma-separated TQ bits_per_coord values to sweep."
+                         "  Each TQ channel compresses both K and V.")
     ap.add_argument("--ctx-len",    type=int, default=2048)
     ap.add_argument("--n-eval",     type=int, default=64)
     ap.add_argument("--n-passages", type=int, default=4)
@@ -169,7 +213,9 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     Q_VALUES = [int(x) for x in args.q_values.split(",") if x.strip()]
-    print(f"[config] Q sweep: {Q_VALUES}", flush=True)
+    TQ_B_VALUES = [int(x) for x in args.tq_b_values.split(",") if x.strip()]
+    print(f"[config] v1.4 Q sweep: {Q_VALUES}", flush=True)
+    print(f"[config] TQ b sweep:   {TQ_B_VALUES}", flush=True)
 
     from vllm import LLM
     from transformers import AutoTokenizer
@@ -256,10 +302,12 @@ def main() -> int:
 
         # bf16 passthrough reference (should be Δppl ≈ 0).  This confirms
         # the replace pipeline isn't perturbing anything by itself.
-        for ch_label, ch_kind, ch_param in (
+        channels = (
             [("bf16_pass", "bf16", 0)]
-            + [(f"v14_Q{Q}_K+V", "v14_kv", Q) for Q in Q_VALUES]
-        ):
+            + [(f"v14_Q{Q}_K+V",  "v14_kv", Q) for Q in Q_VALUES]
+            + [(f"tq_b{b}_K+V",   "tq_kv",  b) for b in TQ_B_VALUES]
+        )
+        for ch_label, ch_kind, ch_param in channels:
             replacements: dict[int, dict[str, torch.Tensor]] = {}
             k_mse_sum = v_mse_sum = k_cos_sum = v_cos_sum = 0.0
             mse_count = 0
@@ -281,6 +329,10 @@ def main() -> int:
                 elif ch_kind == "v14_kv":
                     K_hat, kb = recode_v14_gpu(K_g, q_range=ch_param)
                     V_hat, vb = recode_v14_gpu(V_g, q_range=ch_param)
+                    k_bits, v_bits = kb, vb
+                elif ch_kind == "tq_kv":
+                    K_hat, kb = recode_tq_gpu(K_g, bits_per_coord=ch_param)
+                    V_hat, vb = recode_tq_gpu(V_g, bits_per_coord=ch_param)
                     k_bits, v_bits = kb, vb
                 else:
                     raise RuntimeError(ch_kind)
@@ -444,6 +496,7 @@ def main() -> int:
         "n_eval": args.n_eval,
         "n_passages": len(passages_ids),
         "q_values": Q_VALUES,
+        "tq_b_values": TQ_B_VALUES,
         "per_passage": per_passage,
         "aggregates": agg_rows,
     }
