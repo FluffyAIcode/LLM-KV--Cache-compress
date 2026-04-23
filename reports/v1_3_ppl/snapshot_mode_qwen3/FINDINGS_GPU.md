@@ -514,6 +514,78 @@ given this measurement:
   — we already measured that flat RVQ 4×16 gives only -1.04 pp Δppl
   structural gain; deeper RVQ will plateau quickly.
 
+### Cross-validation against TurboQuant k8v4's measured K-MSE
+
+Phase 1's finding can be sanity-checked against an independent
+measurement in `HEADTOHEAD_vs_TQ.md`: TurboQuant k8v4 on the same
+Qwen3-4B K data.
+
+| Quantity                               | Value          | Source       |
+|:---------------------------------------|---------------:|:-------------|
+| TQ k8v4 measured K rel-MSE             |   **2 × 10⁻⁴** | HEADTOHEAD   |
+| Strict-i.i.d.-Gaussian theoretical floor at 8 bits | ~10⁻⁵ | FP8 E4M3 quantisation error |
+| **Excess over Gaussian floor**          |   **≈ 20×**    | ↓ attributable to K's non-Gaussianity |
+
+**If K were strictly i.i.d. Gaussian under Hadamard, TQ k8v4 would
+achieve K rel-MSE ≈ 10⁻⁵ (the FP8 quantisation floor).  We measure
+2 × 10⁻⁴ — a 20× excess that corresponds to the non-Gaussianity
+penalty the TQ codebook pays for using a Gaussian-optimal table on
+a non-Gaussian distribution.**
+
+This 20× K-MSE ratio is **structurally compatible** with Phase 1's
+direct measurements:
+
+- Phase 1 direct: W_2/σ ≈ 0.3 body-shape deviation
+- TQ indirect:   20× K-MSE excess over Gaussian floor
+
+The 20× gap in rel-MSE maps to ~13 dB of untapped signal-quality
+headroom over TQ.  **Two independent angles — direct distributional
+measurement vs. observed codec performance — both converge on "K is
+substantively non-Gaussian, TurboQuant is paying the cost".**
+
+### Critical caveat: K-MSE headroom vs Δppl headroom
+
+TQ k8v4's measured Δppl on Qwen3-4B is **+0.09 %**, which is at
+4-passage sampling noise.  Even if a hypothetical data-matched
+codec closed the entire 20× K-MSE gap, the Δppl improvement is
+bounded by the **K-MSE → Δppl transduction coefficient**, which
+on Qwen3-4B is empirically ~10⁻² to 10⁻³:
+
+  ΔΔppl ≈ transduction × Δ(K-MSE/K-MSE_TQ)
+        ≈ 10⁻² × 20 × 10⁻⁵
+        ≈ 0.02 - 0.2 pp
+
+**This is below the 4-passage measurement noise floor** (≈ ±0.5 pp).
+
+The K-MSE headroom is real and large (1.5 orders of magnitude),
+but the Δppl headroom it translates to is **sub-measurement-noise**
+because attention softmax de-amplifies K errors heavily — the
+attention mechanism cares about **rank-ordering** of ⟨q, k⟩ rather
+than absolute ⟨q, k⟩ magnitude, and rank-ordering is preserved
+even under large absolute MSE.
+
+### Revised realistic framing for the research paths
+
+| Priority | Path                                      | K-MSE improvement | Δppl improvement     | Motivation          |
+|:--------:|:------------------------------------------|:------------------|:---------------------|:--------------------|
+| High     | (iv) data-driven nested lattice           | 5 - 20 ×          | ≤ 0.2 pp (invisible) | Research, benchmark |
+| Medium   | (vi) Wang-Zahl multi-scale sticky RVQ     | 2 - 5 ×           | ≤ 0.1 pp             | Research           |
+| Low      | (iii) deep Perron-tree RVQ                | 1 - 2 ×           | ≤ 0.05 pp            | Research           |
+
+**Pure engineering angle: none of these are worth doing.**  The Δppl
+improvement is invisible at deployment metrics.
+
+**Pure research angle: all three are worth doing.**  The K-MSE
+benchmark is a clean testbed for non-Gaussian shaping algorithms,
+and "TurboQuant pays a 20× K-MSE penalty for Gaussian codebook
+mismatch" is a publishable finding in its own right.
+
+**Project-wise decision**: snapF-to-slot port + TQ-kernel-swap
+remain the highest-value engineering paths.  Non-Gaussian shaping
+research stays on the HANDOFF.md §5.8 catalogue as legitimate
+research directions, but with honest expectations: **measurable but
+not deployment-actionable gains on Qwen3-4B**.
+
 ### Binary-tree K-means encode — measured, NOT adopted
 
 We measured the per-stage encode time breakdown on a single

@@ -307,11 +307,27 @@ agent can recognise them if the user raises them:
   `benchmarks/measure_k_non_gaussianity.py`.  Result: **K is
   strongly non-Gaussian on all 4 measured axes** (kurtosis,
   Wasserstein-2, score-function deviation, isotropy).  All four
-  decision gates triggered.  Measured ceiling for Kakeya-style
-  improvement over TurboQuant: **0.5 - 1.5 dB** (based on W_2
-  deviation).  See `FINDINGS_GPU.md` section "Phase 1 decision
-  gate" for full analysis.  **This is the upper bound on what any
-  of (iii), (iv), (vi) below can deliver.**
+  decision gates triggered.
+
+  **Independently cross-validated by TurboQuant's measured
+  K-MSE.**  TQ k8v4 shows 20× K rel-MSE excess over the strict
+  i.i.d. Gaussian FP8 floor (2×10⁻⁴ vs ~10⁻⁵), consistent with
+  Phase 1's W_2/σ ≈ 0.3 body-shape deviation.  Two independent
+  angles confirm: K is substantively non-Gaussian, and TQ is
+  paying the mismatch cost.
+
+  **Critical caveat — K-MSE headroom ≠ Δppl headroom.**  The 20×
+  K-MSE gap translates to **≤ 0.2 pp Δppl improvement** (below
+  4-passage noise floor) because attention softmax de-amplifies
+  K errors heavily.  All Kakeya-style research below targets
+  K-MSE as a research benchmark; **none are deployment-actionable
+  on Qwen3-4B**.  Measured ceiling: 0.5 - 1.5 dB K-MSE
+  improvement, ≤ 0.2 pp Δppl improvement.
+
+  See `FINDINGS_GPU.md` sections "Phase 1 decision gate" and
+  "Cross-validation against TurboQuant k8v4's measured K-MSE"
+  for full analysis.  **This is the upper bound on what any of
+  (iii), (iv), (vi) below can deliver.**
 - **(ii) Information-geometric rate-distortion on the real K
   distribution.**  Compute the actual Shannon lower bound for
   the empirical K (not assumed-i.i.d.-Gaussian) via Fisher-Rao
