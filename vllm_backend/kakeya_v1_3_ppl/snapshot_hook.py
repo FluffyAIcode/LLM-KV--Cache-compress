@@ -48,6 +48,12 @@ class HookState:
     phase: str = "off"
     captured: dict[int, dict[str, np.ndarray]] = {}
     replacements: dict[int, dict[str, torch.Tensor]] = {}
+    # When True, captured K/V are kept on GPU as torch.Tensor fp32
+    # instead of numpy round-tripped to CPU.  Used by the compression
+    # sweep harness to keep the ENTIRE capture→recode→replace path
+    # on GPU (no CPU detour).  Default False for backward compatibility
+    # with snapA/snapF harnesses that read numpy.
+    capture_gpu: bool = False
     # Populated by the hook itself so the harness can consult them
     # post-capture without introspecting the model.
     head_size: int = 0
@@ -130,15 +136,22 @@ def install_qwen3_snapshot_patch() -> None:
         hd = self.attn.head_size
 
         if HookState.phase == "capture":
-            k_np = (
-                k.detach().to(torch.float32).cpu().numpy()
-                .reshape(-1, nkv, hd)
-            )
-            v_np = (
-                v.detach().to(torch.float32).cpu().numpy()
-                .reshape(-1, nkv, hd)
-            )
-            HookState.captured[layer_id] = {"K": k_np, "V": v_np}
+            k_det = k.detach().to(torch.float32).reshape(-1, nkv, hd)
+            v_det = v.detach().to(torch.float32).reshape(-1, nkv, hd)
+            if HookState.capture_gpu:
+                # Strict-GPU path: keep the fp32 tensor on device.  The
+                # harness reads it directly without CPU round-trip; the
+                # entire capture → recode → replace loop stays on GPU.
+                HookState.captured[layer_id] = {
+                    "K": k_det.clone(),
+                    "V": v_det.clone(),
+                }
+            else:
+                # Legacy numpy path (snapA/snapF harness compatibility).
+                HookState.captured[layer_id] = {
+                    "K": k_det.cpu().numpy(),
+                    "V": v_det.cpu().numpy(),
+                }
             # Unmodified k / v continue to RoPE + attention.
         elif HookState.phase == "replace":
             repl = HookState.replacements.get(layer_id)
