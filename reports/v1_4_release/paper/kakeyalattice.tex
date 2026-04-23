@@ -59,50 +59,52 @@
 \maketitle
 
 \begin{abstract}
-We introduce \textsc{KakeyaLattice}~v1.4, a Kakeya-inspired
-nested-lattice compression codec for the key--value (KV) cache of
-transformer-based large language models.  The codec instantiates the
-$D_4$ root lattice as the per-block quantiser inside a Zamir--Feder
-nested-lattice construction~\cite{zamir-feder}, wrapped by a
-unit-norm factorisation and a Sylvester--Hadamard rotation so that
-the residual fed to the lattice is isotropic. The $D_4$ lattice
-contributes an unconditional shaping gain of $+0.367\,$dB over scalar
-$\Z^4$ quantisation~\cite{conway-sloane-book}, translating to a
-predicted K-MSE ratio of $G(D_4)/G(\Z^4) \approx 0.919$ at matched
-bit budget; the live-vLLM measured ratio on Qwen3-4B is $0.911$, and
-the multi-model mean across four open-source families is also
-$0.911$.  Theory and experiment agree to within~$1\%$.
+We introduce \textsc{KakeyaLattice}~v1.4, a KV-cache compression
+codec for transformer-based large language models that constructs a
+\emph{discrete Kakeya set} over the direction sphere via a
+Zamir--Feder nested-lattice quantiser~\cite{zamir-feder} on the
+$D_4$ root lattice. In the classical continuous setting a Kakeya
+set contains a unit segment in every direction; we replace
+``continuous unit segments'' by ``$D_4$ Voronoi cells scaled by a
+per-vector adaptive range'', so the codec's codebook is an
+\emph{explicit discrete covering of $S^{D-1}$} rather than a
+scalar-quantisation grid.
 
-We place the construction inside the
-Kakeya--Brascamp--Lieb--Tropp dependency chain. Multilinear
-Kakeya~\cite{guth-endpoint} is equivalent, up to constants, to a
-geometric Brascamp--Lieb
-inequality~\cite{bennett-carbery-christ-tao}; that inequality
-underpins the sharpest matrix-concentration
-bounds~\cite{tropp-matrix-chernoff}; matrix concentration underpins
-the unconditional second-moment optimality of the $D_4$ Voronoi cell
-in~$\R^4$~\cite{conway-sloane-book}. This is the same toolchain whose
-deep end is used by Wang and Zahl~\cite{wang-zahl} to resolve the
-three-dimensional Euclidean Kakeya conjecture.  For
-\textsc{KakeyaLattice} the chain terminates in an
-\emph{unconditional} lattice-density bound, in contrast to the
-conditional Kakeya-maximal-function lower bound used in our prior
-work on low-rank KV compression~\cite{kakeya-v13-paper}.
+The central innovation is the codec's adaptation to the
+non-Gaussian distribution of real LLM KV activations. Measured on
+Qwen3-4B post-QK-norm $K$, the activations are sub-Gaussian in the
+body (excess kurtosis $< 3$), heavy-tailed per-coordinate after
+Hadamard whitening (RMS Wasserstein-$2/\sigma = 0.65$), and
+anisotropic (variance ratio up to $4.71\times$ across coordinates) ---
+a distribution for which the implicit i.i.d.\ Gaussian assumption of
+every scalar quantiser is a poor fit. \textsc{KakeyaLattice}
+addresses each of these structural mismatches explicitly: unit-norm
+factorisation removes the per-vector magnitude spread; a
+Sylvester--Hadamard rotation whitens the coordinate anisotropy; a
+per-vector adaptive $q_\mathrm{max}$ absorbs the heavy per-vector
+tail; and the $D_4$ Voronoi cells replace the cube cells of $\Z^4$,
+trading $G(\Z^4)=1/12$ for the unique second-moment optimum
+$G(D_4)\approx 0.0766$ in $\R^4$~\cite{conway-sloane-book}. Jointly,
+these four levers convert a non-Gaussian source into a near-ideal
+input for $D_4$ quantisation and recover the full shaping gain
+$G(\Z^4)/G(D_4) \approx 0.919$ as per-bit MSE reduction.
 
-On 12 head-to-head pairs (four models $\times$ three matched bit
-points) \textsc{KakeyaLattice} wins universally on K-MSE ($12/12$,
+The effect is measured directly: on 12 head-to-head pairs (four
+open-source models $\times$ three matched bit points)
+\textsc{KakeyaLattice} wins universally on K-MSE ($12/12$,
 $10$--$36\%$ better) and $9/12$ on $\abs{\Delta\mathrm{ppl}}$
 ($4/4$ at the aggressive $\sim\!3.6\times$ compression point with
-$1.8$--$5.3\times$ improvement). At 128k context the codec
-shrinks the combined K+V cache by $2.5$--$2.8\times$ at a balanced
-operating point and by $1.66$--$1.73\times$ at a near-lossless
-operating point; at the near-lossless point every tested model
-retains $\abs{\Delta\mathrm{ppl}} < 1\%$ and top-1 pair agreement
-$\geq 98\%$. All numbers are live-vLLM \cite{vllm}, strict-GPU on
+$1.8$--$5.3\times$ improvement). The predicted K-MSE ratio of
+$0.919$ is recovered to within $\sim\!1\%$ in three independent
+measurement environments. At 128k context the codec shrinks the
+combined K+V cache by $2.5$--$2.8\times$ at a balanced operating
+point and by $1.66$--$1.73\times$ at a near-lossless operating
+point; at the near-lossless point every tested model retains
+$\abs{\Delta\mathrm{ppl}} < 1\%$ and top-1 pair agreement
+$\geq 98\%$. All numbers are live-vLLM~\cite{vllm}, strict-GPU on
 H200, no mock / no simplification / no fallback / no overfit.
 Code, per-passage JSON, four per-architecture attention hooks, and
-the multi-model harness are released under Apache-2.0 at
-\url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress} at tag
+the multi-model harness are released under Apache-2.0 at tag
 \texttt{v1.4}.
 \end{abstract}
 
