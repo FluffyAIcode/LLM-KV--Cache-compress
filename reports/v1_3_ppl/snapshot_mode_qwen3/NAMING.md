@@ -70,60 +70,6 @@ Use snapB when the downstream eval is argmax-based (MMLU-style,
 GSM8K extraction, etc.) and top-1 trumps logprob spread.  Use
 snapA when it's perplexity or LM-eval-harness.
 
-## Sibling: `v1.3-GPU-Qwen-snap-bK64-bdry14-pcaExact` (alias `snapC`)
-
-Same budget as snapA (`bK64`, `bdry14`, `bit_width_k=4`,
-`rsvd_target_rank_factor=0.75`) but swaps the K-stream PCA stage
-from RSVD (HMT 2011 Alg 4.4) to **exact PCA** via
-`torch.linalg.svd` on the centred K matrix.
-
-**Relationship between exact SVD and exact PCA.**  Exact PCA on a
-centred design matrix A ∈ ℝ^{n×d} is defined as the eigendecomp
-of Σ = AᵀA/n.  Thin-SVD of A gives A = UΣV^⊤; the columns of V
-are the eigenvectors of AᵀA, and the PCA eigenvalues are σ_i²/n.
-Since we only need the right singular vectors and V is the
-top-d_eff rows of Vh from `torch.linalg.svd(A, full_matrices=False)`,
-**"exact PCA via SVD" and "exact SVD on centred data" describe
-the same operation** — no approximation either way, just two
-ways of naming it.  The `pca_kind="exact"` code path uses the
-SVD form because it's numerically more stable than forming AᵀA.
-
-**Measured outcome on Qwen3-4B (NOT adopted as an operational
-recipe).**  The earlier prediction that snapC would cut K-MSE
-~44× was wrong; it was based on a synthetic flat-spectrum probe
-that does not represent Qwen3-4B's actual K.  4-passage
-snapshot at the snapA budget (paired):
-
-| Run           | Δppl       | top-1    | K-MSE (mean non-bdry) |
-|:--------------|-----------:|---------:|----------------------:|
-| snapA (RSVD)  | +61.84 %   | 79.30 %  | 0.5030                |
-| snapC (exact) | **+74.20 %** | 79.30 % | **0.5020**           |
-
-PCA stage alone gives near-identical reconstruction error
-between RSVD (0.00572) and exact SVD (0.00564) on real
-Qwen3-4B K — RSVD with `power_iters=2` is already within ~1 %
-of the SVD floor.  See `FINDINGS_GPU.md` section "(h) Exact PCA
-instead of RSVD" for the stage-by-stage K-MSE decomposition that
-locates the dominant error downstream (the spherical K-means
-nearest-centre projection, +0.775 K-MSE on top of the PCA floor).
-
-Canonical parameter set (retained for reproducibility of the
-ablation result; **not** a recommended recipe):
-
-```
---bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
---bit-width-v 2 --v-kmeans-k 16
---boundary-skip-layers 0 1 2 3 4 5 6 29 30 31 32 33 34 35
---gpu-codec --no-share-basis-v
---disable-q-precond --disable-centroids --disable-outlier
---k-pca-kind exact
-```
-
-`v1.3-GPU-snapA` remains the Δppl-optimal operational recipe and
-`v1.3-GPU-snapB` the top-1-optimal one.  `snapC` is a recorded
-negative result.  JSON:
-`reports/v1_3_ppl/snapshot_mode_qwen3/pcaExact/qwen3_4b_snap_pcaExact_vllm_snapshot.json`.
-
 ## Historical aliases (DO NOT use in new docs)
 
 The following legacy names all refer to **`v1.3-GPU-snapA`** and
