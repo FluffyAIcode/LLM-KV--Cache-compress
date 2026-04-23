@@ -224,29 +224,17 @@ larger K — also doesn't win:
 | 1   | 16  | 4   | 64  | +79.84 %   | 76.56 %  | +18.0 pp worse |
 | 2   | 8   | 4   | 64  | +69.24 %   | 78.52 %  | +7.4 pp worse  |
 | 1   | 8   | 4   | 64  | +92.80 %   | 74.22 %  | +31.0 pp worse |
-| 2   | 16  | 4   | 128 | +65.98 %   | **81.64 %** | +4.1 pp Δppl worse, **+2.3 pp top-1 better** |
-| 2   | 8   | 4   | 128 | +67.95 %   | 80.08 %  | +6.1 pp worse  |
 
 Reading:
 * **V is already on the Pareto frontier** at `b_V=2, k_V=16` —
   every shrink costs more Δppl than the K-side uplift can recover.
   `b_V=1` alone costs 18 pp; `b_V=1 + k_V=8` combined costs 31 pp.
-* **`k_K=128` is the top-1 winner**: 81.64 % top-1 (new high for
-  Qwen3-4B snapshot-mode) at the cost of 4.1 pp more Δppl.
-  This is a **deliberate Pareto point**, not a regression — for
-  *decoding-based* downstream evals (argmax / multiple-choice)
-  the top-1 matters more than the logprob spread.
-* **Pareto-incompatible trade**: saving V bytes (shrink)
-  combined with spending them on K (uplift) gives strictly worse
-  results on both axes (+6.1 pp Δppl, −1.56 pp top-1).  V is
-  paying in Δppl more than K is earning.
 
-### Two operational recipes on Qwen3-4B
-
-Depending on downstream task:
+### Operational recipe on Qwen3-4B
 
 **`v1.3-GPU-Qwen-snap-bK64-bdry14`** (spoken: **`v1.3-GPU-snapA`**)
-— Δppl-optimal, for perplexity / LM-eval tasks:
+— the single measured recipe that currently applies to Qwen3-4B
+snapshot-mode:
 ```
 --bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
 --bit-width-v 2 --v-kmeans-k 16
@@ -254,19 +242,13 @@ Depending on downstream task:
 --gpu-codec --no-share-basis-v
 --disable-q-precond --disable-centroids --disable-outlier
 ```
-→ Δppl = **+61.84 %**, top-1 = 79.30 %
-
-**`v1.3-GPU-Qwen-snap-bK128-bdry14`** (spoken: **`v1.3-GPU-snapB`**)
-— top-1-optimal, for argmax / MMLU-style evals.
-Same as snapA but with `--k-kmeans-k 128`.
-→ Δppl = +65.98 %, top-1 = **81.64 %**
+→ Δppl = **+61.84 %**, top-1 = 79.30 %, compression 1.87×
 
 See `NAMING.md` in this directory for the full canonical-name
-schema and the table of legacy aliases (Recipe A / best-K /
-`qwen3_4b_budget_k64_bK4_deff96` / …).
+schema and the table of legacy aliases.
 
-Neither hits the MARGINAL Δppl bar (≤+20 %), but both have top-1
-above the PR #17 DS-1.5B MARGINAL (74.22 %).
+Does not hit the MARGINAL Δppl bar (≤+20 %).  top-1 is above the
+PR #17 DS-1.5B MARGINAL (74.22 %).
 
 ## Report index (JSONs in this directory)
 
@@ -303,8 +285,6 @@ Codec-budget sweep (`budget_sweep/` subfolder, all 4-passage, on
 - `qwen3_4b_budget_bestK_VbV1_vllm_snapshot.json` — V b=1: +79.84 %, 76.56 %.
 - `qwen3_4b_budget_bestK_Vk8_vllm_snapshot.json` — V k=8: +69.24 %, 78.52 %.
 - `qwen3_4b_budget_bestK_Vk8_bV1_vllm_snapshot.json` — V k=8 + b=1: +92.80 %, 74.22 % (worst).
-- `qwen3_4b_budget_kK128_vllm_snapshot.json` — **K k=128** (= `v1.3-GPU-snapB`): +65.98 %, **81.64 %** (top-1 new high).
-- `qwen3_4b_budget_kK128_Vk8_vllm_snapshot.json` — K k=128 + V k=8 (Pareto-incompatible shrink): +67.95 %, 80.08 %.
 
 Boundary-skip sweep (`bdry_sweep/` subfolder, all 4-passage):
 

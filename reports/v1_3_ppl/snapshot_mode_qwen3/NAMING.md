@@ -56,20 +56,6 @@ In conversation, Slack, code comments, and diff summaries use
 is the default context; only spell it out when comparing across
 models or boundary depths.
 
-## Sibling: `v1.3-GPU-Qwen-snap-bK128-bdry14` (alias `snapB`)
-
-Same recipe but `--k-kmeans-k 128`.  This is the top-1-agreement
-optimum on the K budget sweep:
-
-* Δppl (paired) = +65.98 %
-* Δppl (pooled) = +90.41 %
-* top-1 = **81.64 %** (+2.34 pp vs snapA)
-* Compression ratio: 2.00×, blended 1.44×.
-
-Use snapB when the downstream eval is argmax-based (MMLU-style,
-GSM8K extraction, etc.) and top-1 trumps logprob spread.  Use
-snapA when it's perplexity or LM-eval-harness.
-
 ## Historical aliases (DO NOT use in new docs)
 
 The following legacy names all refer to **`v1.3-GPU-snapA`** and
@@ -84,18 +70,12 @@ appear in existing commits / JSONs.  Kept for back-reference only:
 | `qwen3_4b_budget_k64_bK4_deff96_vllm_snapshot.json` | JSON file name under `budget_sweep/` |
 | "Scenario A best"                                   | Paper trail from Scenario A planning docs |
 
-And for **`v1.3-GPU-snapB`**:
-
-| Legacy name                                   | Context |
-|:----------------------------------------------|:--------|
-| `Recipe B`                                    | V-shrink commit |
-| "top-1 optimum" / "top-1-best"                | Conversation |
-| `qwen3_4b_budget_kK128_vllm_snapshot.json`    | JSON file name |
-
 ## Rules going forward
 
 1. New reports, commit messages, and conversation use
-   `v1.3-GPU-snapA` / `snapB` or the full canonical name.
+   `v1.3-GPU-snapA` or the full canonical name.  `snapB` has been
+   retired (removed from documentation and recipe list); the JSON
+   that used to be labelled `snapB` is deleted.
 2. Legacy JSON file names are **not** renamed — `git mv` is
    cheap but it breaks `git blame` and existing URLs in earlier
    commits.  Instead, a new report that references old data
