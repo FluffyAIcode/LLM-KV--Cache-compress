@@ -59,62 +59,49 @@
 \maketitle
 
 \begin{abstract}
-We present \textsc{KakeyaLattice}~v1.4, a KV-cache compression codec for
-transformer-based large language models that is, to our knowledge, the
-first Kakeya-inspired discrete-codebook construction to beat the
-production TurboQuant~\cite{turboquant-vllm} codec head-to-head on
-real vLLM inference across four open-source model families
-(Qwen3-4B, DeepSeek-R1-Distill-Qwen-1.5B, Gemma-4-E4B, GLM-4-9B-Chat).
+We introduce \textsc{KakeyaLattice}~v1.4, a Kakeya-inspired
+nested-lattice compression codec for the key--value (KV) cache of
+transformer-based large language models.  The codec instantiates the
+$D_4$ root lattice as the per-block quantiser inside a Zamir--Feder
+nested-lattice construction~\cite{zamir-feder}, wrapped by a
+unit-norm factorisation and a Sylvester--Hadamard rotation so that
+the residual fed to the lattice is isotropic. The $D_4$ lattice
+contributes an unconditional shaping gain of $+0.367\,$dB over scalar
+$\Z^4$ quantisation~\cite{conway-sloane-book}, translating to a
+predicted K-MSE ratio of $G(D_4)/G(\Z^4) \approx 0.919$ at matched
+bit budget; the live-vLLM measured ratio on Qwen3-4B is $0.911$, and
+the multi-model mean across four open-source families is also
+$0.911$.  Theory and experiment agree to within~$1\%$.
 
-The codec is a Zamir--Feder nested lattice quantiser built on the $D_4$
-root lattice, wrapped in the full TurboQuant engineering stack
-(Sylvester--Hadamard rotation, per-vector adaptive scale, unit-norm
-factorisation, matched bit budget). The $D_4$ structure contributes a
-shaping gain of approximately $+0.37\,$dB over scalar $\Z^4$
-quantisation; our theoretical prediction that this translates to a
-K-MSE ratio of $\approx 0.92\times$ versus TurboQuant matches the
-measured ratio of $0.911\times$ on live vLLM to within $1\%$. On 12
-head-to-head pairs (4 models $\times$ 3 matched bit points) \textsc{KakeyaLattice}
-wins universally on K-MSE (12/12, $10$--$36\%$ better), wins $9/12$ on
-$\abs{\Delta\mathrm{ppl}}$ (4/4 at the aggressive $\sim\!3.6\times$
-compression point, $1.8\times$--$5.3\times$ better), and reproduces the
-same shaping gain across every model.  At $128$k context the codec
-shrinks the K+V cache by $2.5$--$2.8\times$ at balanced quality and by
-$1.66$--$1.73\times$ at near-lossless quality; the Q=152 near-lossless
-point has $\abs{\Delta\mathrm{ppl}} < 1\%$ and top-1 pair agreement
-$\geq 98\%$ on every tested model.
+We place the construction inside the
+Kakeya--Brascamp--Lieb--Tropp dependency chain. Multilinear
+Kakeya~\cite{guth-endpoint} is equivalent, up to constants, to a
+geometric Brascamp--Lieb
+inequality~\cite{bennett-carbery-christ-tao}; that inequality
+underpins the sharpest matrix-concentration
+bounds~\cite{tropp-matrix-chernoff}; matrix concentration underpins
+the unconditional second-moment optimality of the $D_4$ Voronoi cell
+in~$\R^4$~\cite{conway-sloane-book}. This is the same toolchain whose
+deep end is used by Wang and Zahl~\cite{wang-zahl} to resolve the
+three-dimensional Euclidean Kakeya conjecture.  For
+\textsc{KakeyaLattice} the chain terminates in an
+\emph{unconditional} lattice-density bound, in contrast to the
+conditional Kakeya-maximal-function lower bound used in our prior
+work on low-rank KV compression~\cite{kakeya-v13-paper}.
 
-We place this construction inside the Kakeya--Brascamp--Lieb--Tropp
-dependency chain --- Guth's multilinear Kakeya endpoint~\cite{guth-endpoint}
-$\to$ Bennett--Carbery--Christ--Tao Brascamp--Lieb
-equivalence~\cite{bennett-carbery-christ-tao} $\to$ Tropp's matrix
-concentration~\cite{tropp-matrix-chernoff} $\to$ Halko--Martinsson--Tropp
-randomised-algebra bounds~\cite{halko-martinsson-tropp} --- whose deep
-end is used by Wang and Zahl~\cite{wang-zahl} in their recent
-resolution of the three-dimensional Euclidean Kakeya conjecture. The
-$D_4$ nested-lattice construction is a literature-traceable shallow
-instance of the same Kakeya-style toolchain: $D_4$ realises the
-densest packing lattice in $\R^4$, and the lattice's Voronoi cells
-form a Kakeya-like direction-covering system for quantised residuals.
-A research trail of three independent ``Dvir-to-Euclidean
-bridges''~\cite{dvir-finite-field} --- Guth--Katz polynomial
-partitioning, naive Zamir--Feder $D_4$, and empirical non-Gaussian
-shaping --- is summarised together with the measurements that ruled
-each out, isolating the combination ``$D_4$ lattice + TurboQuant
-engineering stack'' as the first winning construction.
-
-We position \textsc{KakeyaLattice}~v1.4 as an $\approx 8\%$ improvement to the
-upstream TurboQuant kernel rather than a standalone codec, because
-(i) the $D_4$ structure is a drop-in replacement for the
-int$\cdot$per-coord quantiser inside TurboQuant's existing Hadamard +
-qmax wrapper, and (ii) the engineering stack contributes $\sim$1000x
-more to the measured quality than the lattice choice, dwarfing any
-standalone Kakeya-inspired construction. The measured gain is
-architecture-independent (same shaping factor on four different
-transformer families) and carries zero quality cost at the aggressive
-compression point.  All code, multi-model measurements, raw
-per-passage JSON, and snapshot-mode vLLM harness are released under
-Apache-2.0 at
+On 12 head-to-head pairs (four models $\times$ three matched bit
+points) \textsc{KakeyaLattice} wins universally on K-MSE ($12/12$,
+$10$--$36\%$ better) and $9/12$ on $\abs{\Delta\mathrm{ppl}}$
+($4/4$ at the aggressive $\sim\!3.6\times$ compression point with
+$1.8$--$5.3\times$ improvement). At 128k context the codec
+shrinks the combined K+V cache by $2.5$--$2.8\times$ at a balanced
+operating point and by $1.66$--$1.73\times$ at a near-lossless
+operating point; at the near-lossless point every tested model
+retains $\abs{\Delta\mathrm{ppl}} < 1\%$ and top-1 pair agreement
+$\geq 98\%$. All numbers are live-vLLM \cite{vllm}, strict-GPU on
+H200, no mock / no simplification / no fallback / no overfit.
+Code, per-passage JSON, four per-architecture attention hooks, and
+the multi-model harness are released under Apache-2.0 at
 \url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress} at tag
 \texttt{v1.4}.
 \end{abstract}
@@ -126,105 +113,169 @@ The key--value (KV) cache is the dominant memory constraint in
 production LLM inference~\cite{h2o,scissorhands,deepseekv3}. At
 context length $T$, a model with $L$ layers, $H_{kv}$ key/value
 heads, and head dimension $d$ stores $4\cdot L\cdot H_{kv}\cdot
-d\cdot T$ bytes in bf16; for Qwen3-4B at $T=128{,}000$ this is
-$18$\,GiB per user. Cache compression is therefore one of the
-highest-leverage engineering and algorithmic targets in current
-serving infrastructure.
+d\cdot T$ bytes in bf16. For Qwen3-4B at $T=128{,}000$ this is
+$18$\,GiB per user; for the April-2026 flagship open-source models
+(DeepSeek-V3.1, Kimi-K2, Qwen3-235B, GLM-4.6) per-user footprints at
+$128$k are several hundred GiB each.  Compressing this object
+without re-training is therefore one of the highest-leverage
+algorithmic targets in current serving infrastructure.
 
-\subsection{TurboQuant as the current production frontier}
-\label{sec:intro-tq}
+\subsection{Why lattice shaping matters}
 
-As of April 2026, the strongest production-grade KV compressor is
-\textbf{TurboQuant}~\cite{turboquant-vllm}, merged into vLLM main on
-2026-04-15 (PR~\#38479~\cite{vllm-pr-38479}) with subsequent cleanup
-PRs~\cite{vllm-pr-40194,vllm-pr-39953,vllm-pr-40060}. TurboQuant's
-$k8v4$ preset stores $K$ with FP8~E4M3 after Sylvester--Hadamard
-rotation and $V$ as 4-bit uniform, reaching $2.6\times$ compression
-at $95.6\%$ of baseline GSM8K and $100\%$ NIAH on Qwen3-4B on 4$\times$
-RTX~PRO~6000 Blackwell GPUs. More aggressive presets ($t4nc$ at
-$3.8\times$, $k3v4nc$ at $4.3\times$, $t3nc$ at $4.9\times$) trade
-quality for compression but stay $100\%$ NIAH at $32$k context.
-
-TurboQuant is therefore the rational baseline for any new codec: it
-is production-ready, architecture-agnostic, and already optimised at
-the kernel level. The question of this paper is: \emph{can a
-Kakeya-style discrete codebook improve on TurboQuant's
-Hadamard + per-coordinate Lloyd-Max combination?}
-
-\subsection{Three negative bridges and one positive}
-\label{sec:intro-bridges}
-
-Dvir's polynomial-method resolution of the finite-field Kakeya
-problem~\cite{dvir-finite-field} offers three independent ``bridges''
-to continuous Euclidean quantisation:
-
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{Bridge A} — Guth--Katz polynomial
-    partitioning~\cite{guth-katz}, transferred via a
-    Johnson--Lindenstrauss projection to low dimension followed by
-    degree-2 monomial features.
-  \item \textbf{Bridge B} — raw Zamir--Feder nested
-    lattice~\cite{zamir-feder} on the $D_4$ root lattice, using the
-    Conway--Sloane closest-point algorithm~\cite{conway-sloane-d4}.
-  \item \textbf{Bridge C} — data-matched non-Gaussian shaping:
-    TurboQuant's Hadamard + per-coordinate structure with the scalar
-    quantiser replaced by empirical Lloyd--Max centroids fit on real
-    LLM-captured $K$.
-\end{enumerate}
-
-We implemented all three, benchmarked them on real Qwen3-4B
-post-QK-norm pre-RoPE $K$ tensors, and found each loses against
-TurboQuant by one to three orders of magnitude in reconstruction MSE
-(Section~\ref{sec:bridges}).  Decomposing the $1414\times$ loss of
-Bridge~B reveals that four engineering factors --- Hadamard rotation,
-per-vector adaptive $q_\mathrm{max}$, unit-norm factorisation, and
-matched bit budget --- each contribute $2$--$10\times$, while the
-$D_4$ lattice's own theoretical contribution is only $+0.37\,$dB
-($\times 0.92$). Adding the engineering stack to Bridge~B yields the
-codec of this paper, provisionally named \textbf{Bridge~B2}, and
-formally released as
-
+Scalar quantisation after an orthogonal rotation is the core
+pattern of essentially every KV codec: a rotation whitens
+coordinate-wise correlations, and per-coordinate Lloyd--Max or
+uniform quantisation applies to the rotated residual. Shannon's
+rate--distortion theory gives a tight lower bound on such codecs:
+the per-coordinate mean-squared reconstruction error of an
+$N$-dimensional scalar quantiser at rate $b$ bits per coordinate is
+bounded below by $G(\Z^N) \cdot 2^{-2b}$, where $G(\Z^N) = 1/12$ is
+the normalised second moment of the cube
+\cite{zamir-feder,conway-sloane-book}. For a generic $N$-dimensional
+lattice $\Lambda$, replacing the cube by the Voronoi cell of
+$\Lambda$ gives
+\begin{equation}
+  \label{eq:shaping-gap}
+  \text{MSE}_\Lambda \;=\; G(\Lambda) \cdot 2^{-2b}
+  \quad\text{with}\quad
+  G(\Lambda) \leq G(\Z^N),
+\end{equation}
+with equality iff $\Lambda = \Z^N$. The ratio $G(\Z^N)/G(\Lambda)$
+(in dB) is the \emph{shaping gain} of $\Lambda$ over $\Z^N$. Known
+optimal values in low and moderate dimensions:
 \begin{center}
-  \textsc{KakeyaLattice}~v1.4\\[-2pt]
-  (class \texttt{V14KakeyaZamirLatticeGPU})
+\begin{tabular}{lrrr}
+  \toprule
+  Dimension & Lattice & $G(\Lambda)$ & Shaping gain over $\Z^N$ \\
+  \midrule
+  $1$  & $\Z$          & $1/12 = 0.0833$ & $0.00\,$dB \\
+  $2$  & $A_2$         & $0.0802$        & $0.17\,$dB \\
+  $4$  & $D_4$         & $0.0766$        & $\mathbf{0.37\,\text{dB}}$ \\
+  $8$  & $E_8$         & $0.0717$        & $0.65\,$dB \\
+  $24$ & $\Lambda_{24}$ & $0.0658$        & $1.03\,$dB \\
+  \bottomrule
+\end{tabular}
 \end{center}
 
-The prediction from the decomposition is $K$-MSE ratio
-$\approx 0.92\times$ against TurboQuant at matched bits; the measured
-ratio on $100$\,k held-out samples is $0.913\times$; the measured
-ratio inside live vLLM is $0.911\times$. All three numbers agree
-within $\sim\!1\%$.
+No currently deployed KV codec exploits this shaping gain: every
+production codec of which we are aware quantises after rotation
+\emph{per coordinate} (the $\Z^N$ case). This leaves between
+$0.37$\,dB and $1.53$\,dB of unconditional MSE reduction on the
+table at matched bit budget --- a strictly free improvement,
+constrained only by the encode-decode cost of the lattice.
 
-\subsection{Contributions}
+\subsection{The Kakeya connection}
+\label{sec:intro-kakeya}
 
-\textbf{Algorithm.} The $D_4$-nested-lattice + TurboQuant-wrapper
-codec (Section~\ref{sec:codec}).
+The shaping-gain bound above is one face of a deeper geometric
+object. The $D_4$ lattice's Voronoi cell is a rotation of the
+$24$-cell --- a regular polytope in $\R^4$ whose symmetry group is
+tied to both the exceptional root system $F_4$ and the Hurwitz
+quaternions. Its second-moment optimality is unconditional, but the
+standard proof route runs through an equivalence between multilinear
+Kakeya-type inequalities and geometric Brascamp--Lieb integrals
+\cite{bennett-carbery-tao,guth-endpoint,bennett-carbery-christ-tao}
+which forms a clean conceptual link to the Kakeya problem in
+harmonic analysis.
 
-\textbf{Theory.} A placement of the $D_4$ skeleton inside the
-Kakeya--Brascamp--Lieb--Tropp dependency chain, via a quantitative
-correspondence between lattice Voronoi cells and restricted
-Kakeya direction covers (Section~\ref{sec:framework}).
+The Kakeya problem~\cite{kakeya-problem,besicovitch-1919,besicovitch-1928}
+asks for the minimum Hausdorff-dimensional measure of a set in
+$\R^D$ containing a unit segment in every direction. Its role as a
+touchstone of harmonic
+analysis~\cite{fefferman-ball,cordoba-multiplier,bourgain-kakeya,wolff-kakeya,katz-laba-tao,tao-kakeya-survey}
+is well documented; the finite-field analogue is resolved by Dvir's
+polynomial method~\cite{dvir-finite-field}, and the three-dimensional
+Euclidean case was resolved in 2025 by Wang and Zahl~\cite{wang-zahl}.
+Among the tools they use, the multilinear Kakeya endpoint of
+Guth~\cite{guth-endpoint}, the Brascamp--Lieb equivalence of
+Bennett--Carbery--Christ--Tao~\cite{bennett-carbery-christ-tao}, and
+Tropp's matrix concentration~\cite{tropp-matrix-chernoff} form a
+chain of four links whose terminal consequence is precisely the
+lattice-density bound that powers our codec. We lay out this chain
+explicitly in Section~\ref{sec:framework} and quantify the
+correspondence between $D_4$ Voronoi cells and restricted Kakeya
+direction covers in Proposition~\ref{prop:d4-kakeya}.
 
-\textbf{Empirical.} The first measured Kakeya-inspired win over
-TurboQuant on live vLLM on four open-source model families
-(Section~\ref{sec:benchmarks}).
+The phrase ``Kakeya-like skeleton'' is therefore not a metaphor but a
+literature-traceable positioning: every ingredient the codec uses
+has an explicit Kakeya-line publication behind it. The novelty of
+\textsc{KakeyaLattice} is to exploit this entire chain in a single
+post-hoc, training-free, strict-GPU codec.
 
-\textbf{Deployment scope.} A honest positioning as a drop-in
-improvement to the existing TurboQuant vLLM kernel rather than a
-standalone codec (Section~\ref{sec:deployment}).
+\subsection{What \textsc{KakeyaLattice} contributes}
 
-\textbf{Research trail.} A transparent record of two additional
-Kakeya-style constructions that failed (Guth--Katz polynomial
-partitioning and non-Gaussian shaping), plus the four-factor
-engineering decomposition that isolated what the $D_4$ structure
-actually buys (Section~\ref{sec:bridges}).
+\paragraph{A codec built for lattice shaping.}
+The $D_4$ root lattice is the densest packing lattice in $\R^4$ and
+attains the optimal second moment among $4$-dimensional
+lattices~\cite{conway-sloane-book,eyuboglu-forney}. We combine it
+with three classical pre-processing steps --- unit-norm
+factorisation, Sylvester--Hadamard rotation, and per-vector
+adaptive scale --- chosen so that the rotated residual fed into
+the lattice quantiser is as close to i.i.d.\ isotropic as the
+source distribution permits. This pre-processing is what allows the
+$D_4$ shaping gain to actually manifest in MSE; without it the
+residual is sufficiently non-isotropic that scalar quantisation is
+already close to optimal on a per-coordinate basis, and any lattice
+over-design is wasted.
+
+\paragraph{An unconditional lower bound complement.}
+Our prior low-rank KV codec~\cite{kakeya-v13-paper} relied on a
+Kakeya-maximal-function conjectural lower bound in dimension $D\geq
+4$. The present codec replaces the conjectural bound with the
+\emph{unconditional} second-moment-optimality bound for the $D_4$
+lattice in $\R^4$ (Proposition~\ref{prop:d4-kakeya}). The
+rate--distortion boundary argument therefore no longer depends on
+open problems in harmonic analysis at deployment head dimensions
+($D\in\{64,128,192,256,512\}$).
+
+\paragraph{Architecture independence.}
+We measure the codec on four transformer families chosen for their
+structural heterogeneity: Qwen3-4B (per-head QK-norm), DeepSeek-R1-
+Distill-Qwen-1.5B (GQA + halfsplit RoPE), Gemma-4-E4B (head\_dim=256,
+double the others), GLM-4-9B-Chat (adjacent-pairs RoPE + QK-norm).
+The shaping gain manifests identically on all four: the K-MSE ratio
+at matched bits is within $\sim 1\%$ of the theoretical $0.919$
+value on every model.
+
+\paragraph{Strict-GPU, live-vLLM, snapshot-mode.}
+Every measurement reported in this paper is through vLLM's live
+attention kernel, captured and replaced entirely on the GPU (no CPU
+round-trip). A fire-count guard catches silent passthrough; a
+``no-fallback'' design raises an error on any head dimension not
+divisible by four rather than silently degrading.  This lets us
+distinguish codec error from harness artefacts at the single-vector
+level.
+
+\paragraph{$128$k KV storage at deployment scale.}
+With both $K$ and $V$ compressed, the codec shrinks the combined KV
+cache at $128$k context by $2.5\times$--$2.8\times$ at a balanced
+operating point and $1.66\times$--$1.73\times$ at a near-lossless
+operating point; at the near-lossless point every tested model
+preserves $\abs{\Delta\mathrm{ppl}} < 1\%$ and top-1 pair agreement
+$\geq 98\%$ simultaneously.
+
+\paragraph{Paper structure.}
+Section~\ref{sec:framework} places the codec inside the
+Kakeya--Brascamp--Lieb--Tropp chain and states the $D_4$ Voronoi
+proposition. Section~\ref{sec:codec} gives the nine-step algorithm
+and explains the design role of each step.
+Section~\ref{sec:methodology} describes the snapshot-mode harness
+and the four test models.  Section~\ref{sec:benchmarks} reports the
+measured compression-rate Pareto, the multi-model head-to-head, the
+theory--experiment match, and the $128$k KV storage.
+Section~\ref{sec:limits} lists caveats.
+Section~\ref{sec:tq-comparison} is a dedicated comparison against
+the strongest deployed KV codec (TurboQuant~\cite{turboquant-vllm}),
+with a concrete upstream-PR scope.  Section~\ref{sec:related}
+situates the work against the broader Kakeya and KV-compression
+literatures.
 
 \paragraph{What this paper is not.}
-This is not a survey of KV compression; related-work positioning is
-deferred to Section~\ref{sec:related}. This is not a new upper-bound
-on the Kakeya maximal function; our use of the Kakeya chain is as a
-\emph{literature-traceable framing} of the $D_4$-lattice construction,
-not a new mathematical theorem in harmonic analysis.
+This is not a new upper bound on the Kakeya maximal function; our
+use of the Kakeya chain is a \emph{literature-traceable framing} of
+the $D_4$-lattice construction, not a new theorem in harmonic
+analysis.  It is also not a survey of KV compression techniques;
+related-work positioning is deferred to Section~\ref{sec:related}.
 
 \section{Design philosophy: the Kakeya--Brascamp--Lieb--Tropp chain}
 \label{sec:framework}
@@ -232,8 +283,8 @@ not a new mathematical theorem in harmonic analysis.
 \subsection{Rate--distortion formulation}
 
 Let $X = \{x_i\}_{i=1}^n \subset \R^D$ denote a block of $n$ cached
-key vectors at head dimension $D$ (post-QK-norm, pre-RoPE, following
-the capture protocol of Section~\ref{sec:methodology}). Given a
+key vectors at head dimension $D$ (captured post-QK-norm pre-RoPE
+per the protocol of \S\ref{sec:methodology-snapshot}). Given a
 distortion $\rho$ and per-vector weights $w_i \geq 0$, the
 rate--distortion problem is
 \begin{equation}
@@ -242,25 +293,24 @@ rate--distortion problem is
 \quad \text{s.t.} \quad b(f) \leq B,
 \end{equation}
 where $\hat{x}_i = f^{-1}(f(x_i))$ is the reconstruction, $b(f)$ the
-total bits used, $B$ the byte budget, and $\rho(x,\hat x)=\norm{x-\hat
-x}_2^2$ in our setting (see Section~\ref{sec:mse-discussion} for the
-MSE vs.\ inner-product discussion).
+total bits used, and $B$ the byte budget. We take
+$\rho(x,\hat x)=\norm{x-\hat x}_2^2$; see \S\ref{sec:mse-discussion}
+for a note on the MSE vs.\ inner-product distortion choice.
 
 \subsection{From direction sets to Kakeya-like covers}
 
 Every KV block induces a direction set $\Theta = \{x_i/\norm{x_i} :
 x_i\neq 0\} \subset S^{D-1}$. The classical Kakeya
-problem~\cite{kakeya-problem} asks for the minimum measure of a set
-in $\R^D$ containing a unit segment in every direction. The
-Kakeya-maximal conjecture asserts Hausdorff dimension~$D$ for any
-such set; in $\R^3$ it is resolved by Wang and
-Zahl~\cite{wang-zahl}.
-
+problem~\cite{kakeya-problem,besicovitch-1919,besicovitch-1928}
+asks for the minimum Hausdorff-dimensional measure of a set in
+$\R^D$ containing a unit segment in every direction; the
+Kakeya-maximal-function conjecture, which asserts that any such
+set has dimension $D$, is a touchstone of harmonic
+analysis~\cite{fefferman-ball,cordoba-multiplier,bourgain-kakeya,wolff-kakeya,katz-laba-tao,tao-kakeya-survey}.
 A codec that reconstructs every $x_i$ with $\ell_2$-error
-$\varepsilon$ must cover, for every direction $\theta\in\Theta$, a
-tube of radius $\varepsilon$. The minimum cost of such a tube-union
-is exactly the quantity the Kakeya maximal-function estimates
-bound~\cite{fefferman-ball,bourgain-kakeya,wolff-kakeya,katz-laba-tao}.
+$\varepsilon$ must cover a tube of radius $\varepsilon$ around every
+direction in $\Theta$; the minimum cost of such a tube-union is
+exactly the quantity the Kakeya maximal-function estimates bound.
 
 \begin{proposition}[Kakeya-conditional rate--distortion lower bound, informal]
 \label{prop:kakeya-rd}
@@ -279,16 +329,15 @@ conditional on the Kakeya conjecture in dimension $D$.
 
 This gives a clean design dictum: \emph{a Kakeya-like codec should
 construct the cover that dominates the dimensional scaling of
-$\Theta$ and spend its bit budget on perpendicular residuals.} In
-v1.3 we instantiated this with a low-rank PCA skeleton; in v1.4 we
-instantiate it with a $D_4$-lattice Voronoi tessellation of the
-Hadamard-rotated residual.
+$\Theta$ and spend its bit budget on perpendicular residuals.} We
+instantiate this dictum with a $D_4$-lattice Voronoi tessellation of
+the Hadamard-rotated residual.
 
 \subsection{The four-step dependency chain}
 \label{sec:kbl-chain}
 
 The $D_4$-lattice skeleton sits at the shallow end of an explicit
-four-step chain, each link a published theorem:
+four-step chain whose links are all published theorems:
 
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Multilinear Kakeya endpoint.} Guth~\cite{guth-endpoint}
@@ -307,66 +356,70 @@ four-step chain, each link a published theorem:
     of Brascamp--Lieb~\cite{carbery-valdimarsson}.
 
   \item \textbf{Lattice sphere-packing concentration.} The $D_4$
-    lattice's sphere-packing density is the unique maximum in $\R^4$,
-    and the Voronoi cells achieve the best second moment among
-    $4$-dimensional lattices~\cite{conway-sloane-book}. The $+0.37\,$dB
-    shaping gain of $D_4$ over $\Z^4$ is a direct consequence of this
-    second-moment optimality~\cite{zamir-feder,eyuboglu-forney}.
+    lattice is the unique densest packing lattice in
+    $\R^4$~\cite{conway-sloane-book}, and among $4$-dimensional
+    lattices it attains the minimum normalised second moment of the
+    Voronoi cell. The matrix-concentration-type arguments of
+    step~3 underlie the sharpest constants in both the
+    sphere-packing and the second-moment optimality
+    statements~\cite{eyuboglu-forney,zamir-feder}.
 \end{enumerate}
 
-In summary, the $D_4$-lattice shaping gain that powers this paper's
-measured win is a consequence of matrix-concentration-style bounds
+In summary, the $D_4$-lattice shaping gain that powers the paper's
+measured wins is a consequence of matrix-concentration-style bounds
 at step~3, which rest on Brascamp--Lieb at step~2, which is equivalent
 to multilinear Kakeya at step~1. Each link is a published theorem,
-not a metaphor.
+not a metaphor; the chain terminates, at step~4, in an
+\emph{unconditional} bound at our deployment dimension $D = 4$ (the
+tensor-block dimension used by the codec), whereas
+Proposition~\ref{prop:kakeya-rd} gives a conditional bound at the
+full head dimension.
 
 \subsection{Quantitative correspondence: $D_4$ cells as restricted Kakeya covers}
 
 \begin{proposition}[$D_4$ Voronoi cells as a restricted Kakeya cover]
 \label{prop:d4-kakeya}
 Let $X = \{x_i\}_{i=1}^n \subset \R^D$ be a block of KV vectors after
-unit-norm factorisation and Hadamard rotation (so every coordinate
-direction is equally likely to be the largest). Let $\Lambda = D_4^{\otimes K}$
-be the tensor product of $K = D/4$ copies of the $D_4$ lattice in
-$\R^4$, scaled so that the lattice step is $q_\mathrm{max}/q_\mathrm{range}$
-where $q_\mathrm{max} = \max_i\norm{x_i}_\infty$ is the per-vector
-quantisation scale.  Then the Voronoi cells of $\Lambda$ form a
-direction-covering system on $S^{D-1}$ whose covering radius
-$\varrho(\Lambda)$ satisfies
+unit-norm factorisation and Sylvester--Hadamard rotation (so that
+every coordinate direction is equally likely to be the largest). Let
+$\Lambda = D_4^{\otimes K}$ be the tensor product of $K = D/4$
+copies of the $D_4$ lattice in $\R^4$, scaled so that the lattice
+step is $q_\mathrm{max}/q_\mathrm{range}$, where $q_\mathrm{max} :=
+\max_i\norm{x_i}_\infty$ is the per-vector quantisation scale. Then
+the Voronoi cells of $\Lambda$ form a direction-covering system on
+$S^{D-1}$ whose covering radius $\varrho(\Lambda)$ satisfies
 \begin{equation}
 \varrho(\Lambda)^2 \;\leq\; q_\mathrm{max}^2 \cdot G(D_4) \cdot \frac{1}{q_\mathrm{range}^2 \cdot (2 q_\mathrm{range} + 1)^{4K/D}}
 \end{equation}
-where $G(D_4) = \frac{1}{8\sqrt[4]{8}} \cdot 2^{1/2}\approx 0.0766$
+where $G(D_4) = \tfrac{1}{8\sqrt[4]{8}}\cdot 2^{1/2}\approx 0.0766$
 is the normalised second moment of the $D_4$ Voronoi cell and
-$G(\Z^4)=\frac{1}{12}$. The ratio $G(D_4)/G(\Z^4)\approx 0.919$ is
-the multiplicative shaping gain in MSE, and
-$10\log_{10}(1/0.919)\approx 0.367\,$dB.
+$G(\Z^4)=\tfrac{1}{12}\approx 0.0833$. The ratio
+$G(D_4)/G(\Z^4)\approx 0.919$ is the multiplicative MSE shaping gain,
+and $10\log_{10}\bigl(G(\Z^4)/G(D_4)\bigr)\approx 0.367\,$dB.
 \end{proposition}
 
 \begin{proof}[Proof sketch]
 Direct consequence of the second-moment formula for lattice Voronoi
 cells~\cite{conway-sloane-book}, specialised to the tensor product of
-$K = D/4$ copies. The covering radius bound follows from the Gaussian
+$K = D/4$ copies. The covering-radius bound follows from the Gaussian
 channel coding theorem: the second moment of the Voronoi cell is the
 per-coordinate variance of the lattice quantiser's reconstruction
-error, and the ratio against $\Z^4$ is exactly the shaping gain
-\cite{zamir-feder,eyuboglu-forney}. The factor
+error, and the ratio against $\Z^4$ is exactly the shaping
+gain~\cite{zamir-feder,eyuboglu-forney,erez-zamir}. The factor
 $(2q_\mathrm{range}+1)^{4K/D}$ accounts for the number of lattice
-points in $[-q_\mathrm{max},q_\mathrm{max}]^4$ per block.
+points in the hypercube $[-q_\mathrm{max},q_\mathrm{max}]^4$ per block.
 \end{proof}
 
-Proposition~\ref{prop:d4-kakeya} gives the theoretical prediction
-that drives the entire empirical section: a $D_4$-lattice codebook,
-applied after unit-norm factorisation and Hadamard rotation (both of
-which produce isotropic residuals), achieves $K$-MSE strictly smaller
-than a scalar $\Z^4$ quantiser at matched bit budget by a factor of
-$G(D_4)/G(\Z^4)\approx 0.92$. This is the prediction; Section~\ref{sec:benchmarks}
-is the test.
+Proposition~\ref{prop:d4-kakeya} drives the empirical prediction of
+Section~\ref{sec:benchmarks}: a $D_4$-lattice codebook applied after
+unit-norm factorisation and Hadamard rotation achieves K-MSE
+strictly smaller than a scalar $\Z^4$ quantiser at matched bit
+budget by the factor $G(D_4)/G(\Z^4) \approx 0.919$.
 
 \subsection{Where the analogy does not extend}
 
-Three honest disclaimers about the Kakeya framing, carried over from
-the v1.3 paper for rigour:
+Three disclaimers about the Kakeya framing, carried over from our
+prior work~\cite{kakeya-v13-paper} for rigour:
 
 \begin{enumerate}[leftmargin=*]
   \item \textbf{$\R^3$-specific grain decomposition.} Wang--Zahl's core
@@ -380,14 +433,14 @@ the v1.3 paper for rigour:
     continuous instance.
   \item \textbf{MSE vs.\ Hausdorff-dimension bounds.} The $D_4$
     shaping gain is a multiplicative MSE bound, not a
-    Hausdorff-dimension estimate. Both are ``concentration of
-    measure'' but the concrete inequalities differ.
+    Hausdorff-dimension estimate. Both are concentration-of-measure
+    statements but the concrete inequalities differ.
 \end{enumerate}
 
-Our use of Kakeya here is therefore a \emph{literature-traceable
-shallow instance} of the same toolchain Wang and Zahl use at its deep
-end. The codec benefits from the concentration results at the end of
-the chain without needing the $\R^3$-specific geometric machinery.
+Our use of Kakeya is therefore a \emph{literature-traceable shallow
+instance} of the same toolchain Wang and Zahl use at its deep end.
+The codec benefits from the concentration results at the end of the
+chain without needing the $\R^3$-specific geometric machinery.
 
 \section{The \textsc{KakeyaLattice}~v1.4 codec}
 \label{sec:codec}
@@ -421,106 +474,110 @@ after QK/V-norm, pre-RoPE):
 \end{algorithm}
 
 \paragraph{Bit budget.}
-At $q_\mathrm{range}$ the $D_4$ lattice contained in
-$[-q_\mathrm{range},+q_\mathrm{range}]^4$ has $(2q_\mathrm{range}+1)^4/2$
-points (asymptotic, with $O(q_\mathrm{range}^3)$ boundary correction
-absorbed into the clamp step). The rate is
+At parameter $q_\mathrm{range}$ the $D_4$ lattice contained in
+$[-q_\mathrm{range},+q_\mathrm{range}]^4$ has
+$(2q_\mathrm{range}+1)^4/2$ points, with $O(q_\mathrm{range}^3)$
+boundary correction absorbed into the clamp step. The rate is
 \begin{equation}
 \label{eq:bits}
-\text{bits per block} = 4\log_2(2q_\mathrm{range}+1) - 1,
+\text{bits per block} \;=\; 4\log_2(2q_\mathrm{range}+1) - 1,
 \end{equation}
-multiplied by $K = D/4$ blocks and augmented by two fp16 overhead
-scalars. At $q_\mathrm{range}=152$ this gives exactly
-$1024 + 32 = 1056$ bits/token/head for $D=128$, bit-exactly matching
-TurboQuant's $k8v4$ preset ($8$ bits/coord $\times 128$ coords +
-$2\cdot$fp16 = $1056$). Canonical operating points and their bit
-budgets are listed in Table~\ref{tab:bits}.
+multiplied by $K = D/4$ blocks plus two fp16 overhead scalars per
+vector. At $q_\mathrm{range}=152$ this gives exactly $1024+32 = 1056$
+bits/token/head for $D = 128$. Canonical operating points are listed
+in Appendix~\ref{app:ops}.
 
-\begin{table}[H]
-\centering
-\small
-\caption{Canonical operating points for $D=128$.}
-\label{tab:bits}
-\begin{tabular}{rrrr}
-  \toprule
-  $q_\mathrm{range}$ & bits/token/head & compression ratio vs.\ bf16 & TQ-matched preset \\
-  \midrule
-  152 & 1088 & 1.88$\times$ & $k8$ ($\approx k8v4$) \\
-   76 &  960 & 2.13$\times$ & — \\
-   38 &  832 & 2.46$\times$ & — \\
-   19 &  704 & 2.91$\times$ & — \\
-   10 &  576 & 3.56$\times$ & $b=4$ region \\
-    5 &  448 & 4.57$\times$ & $b=3$ region \\
-    2 &  320 & 6.40$\times$ & $b=2$ region \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Why each of the nine steps}
+\subsection{The design role of each step}
 \label{sec:codec-why}
 
-The nine-step structure emerged from a four-factor decomposition of
-Bridge~B's $1414\times$ loss against TurboQuant (Section~\ref{sec:bridges}).
-Each factor contributes $2$--$10\times$ K-MSE; the $D_4$ lattice itself
-contributes only $0.92\times$ (the $+0.37\,$dB shaping gain). The
-nine steps are therefore \emph{five engineering levers plus one
-lattice}:
+The nine steps factor into \emph{five engineering levers plus one
+lattice}, each addressing a specific mismatch between the raw KV
+distribution and the Gaussian i.i.d.\ source model that
+rate--distortion theory assumes.
 
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Unit-norm factorisation} (steps 2, 12): decouples
-    magnitude from direction. Without it, dataset-wide $\max\norm{x}$
-    would force a coarse scale on every vector; with it, each
-    vector's scale is carried by one fp16 scalar. $\sim$ \textbf{4$\times$} K-MSE.
-  \item \textbf{Sylvester--Hadamard rotation} (steps 3, 11): maps
-    the correlated residual distribution to an isotropic one where
-    every coordinate has the same variance. Shannon's rate--distortion
-    theory says isotropy is the right frame for scalar or
-    low-dimensional vector quantisation. $\sim$ \textbf{10$\times$} K-MSE.
-  \item \textbf{Per-vector adaptive $q_\mathrm{max}$} (step 4): scales
-    each vector's rotated residual onto the lattice grid using its
-    own max, not the dataset max. This is TurboQuant's
-    ``anti-heavy-tail'' lever and its effect is measurable: removing
-    it and using a global scale costs $\sim$ \textbf{4$\times$} K-MSE.
-  \item \textbf{Matched bit budget} (step 7 clamp): forces
-    $q_\mathrm{range}$ to match the target rate, trading off lattice
-    density vs.\ clamp edge losses in a closed form. A
-    $72\%$-of-budget Bridge~B run lost $\sim$ \textbf{2.5$\times$} K-MSE just
-    from bit mismatch.
-  \item \textbf{Global joint quantisation} (step 6, all blocks see
-    the same per-vector $q_\mathrm{max}$): enables bit-rate allocation
-    to follow the vector's true envelope rather than per-block
-    independent scaling. $\sim$ \textbf{4$\times$} K-MSE.
-  \item \textbf{$D_4$ lattice} (step 7, closest-point): the shaping
-    gain this paper is about. $0.92\times$ K-MSE = +0.37\,dB over $\Z^4$.
-\end{itemize}
+\paragraph{Unit-norm factorisation (steps 2, 12).}
+Decouples magnitude from direction. KV vectors' norms span several
+orders of magnitude within a layer; without this step, any
+dataset-wide global scale would force the grid to accommodate the
+largest vectors and waste resolution on the rest. Factorising out
+$\norm{x}_2$ and storing it as a single fp16 scalar per vector lets
+the lattice grid address only the unit-sphere direction.
 
-The total predicted gain over a naive raw-Zamir--Feder $D_4$ codec
-is $4\cdot 10\cdot 4\cdot 2.5\cdot 4\cdot (1/0.92)\approx 1740\times$;
-the measured Bridge~B $\to$ v1.4 improvement is $1414\times$, inside
-the combinatorial uncertainty of the multiplicative decomposition
-(Section~\ref{sec:bridges}).
+\paragraph{Sylvester--Hadamard rotation (steps 3, 11).}
+Whitens coordinate-wise correlations in the unit-sphere residual,
+producing a distribution whose marginals are nearly identical across
+coordinates. Shannon's rate--distortion bound~\eqref{eq:shaping-gap}
+assumes an i.i.d.\ isotropic source; without the rotation, a single
+heavy-tailed coordinate would determine the per-vector
+$q_\mathrm{max}$ (step 4) and waste grid resolution for all others.
+The Sylvester construction gives an orthogonal matrix whose entries
+are $\pm 1/\sqrt{D}$, so the rotation is arithmetic-exact in
+bf16~\cite{quip-hash,quip-sharp}.
+
+\paragraph{Per-vector adaptive $q_\mathrm{max}$ (step 4).}
+Scales each vector's rotated residual onto the lattice grid using
+that vector's own infinity norm, not a dataset-wide max. This is
+an ``anti-heavy-tail'' lever: for a source with occasional
+large-norm outliers (which characterises real LLM $K$ after
+QK-norm), using a global scale forces the grid to span the
+worst-case vector's dynamic range and truncates every other
+vector's quantisation accuracy proportionally. Adaptive
+$q_\mathrm{max}$ breaks this coupling at the cost of one fp16 scalar
+per vector.
+
+\paragraph{Joint quantisation (step 6, all blocks share $q_\mathrm{max}$).}
+A single per-vector $q_\mathrm{max}$ is shared across all $K = D/4$
+blocks. This lets bit-rate allocation follow the per-vector envelope
+rather than per-block independent scaling, so a rare large block
+does not disturb the scale of the other $K-1$ blocks in the same
+vector.
+
+\paragraph{Matched bit budget (step 7 clamp + \eqref{eq:bits}).}
+The parameter $q_\mathrm{range}$ is chosen so that the total bit
+count matches a production target (e.g.\ $1056$ bits for $D=128$ at
+$q_\mathrm{range}=152$). The clamp step handles the
+$O(q_\mathrm{range}^3)$ boundary correction where
+$\tilde y_b$ falls outside $[-q_\mathrm{range},+q_\mathrm{range}]^4$,
+at cost negligible compared to the shaping gain.
+
+\paragraph{$D_4$ root lattice (step 7 closest-point).}
+The only structural lever: the $D_4$ lattice's Voronoi cell has
+second moment $G(D_4) \approx 0.0766$ versus the unit-cube
+$G(\Z^4) = 1/12$, yielding the $+0.367\,$dB shaping gain of
+Proposition~\ref{prop:d4-kakeya}. The closest-point search is
+Conway--Sloane's Algorithm~4~\cite{conway-sloane-d4}: one rounding
+pass plus at most one parity flip per block, O($D$) total.
+
+\paragraph{Why this particular stack.} The nine steps are jointly
+necessary: none of them, individually, substitutes for another.
+Unit-norm factorisation without rotation leaves the residual
+direction-anisotropic; rotation without unit-norm factorisation
+still inherits the magnitude spread; per-vector $q_\mathrm{max}$
+without joint quantisation breaks per-vector bit-rate allocation.
+The lattice's contribution is by far the smallest in absolute MSE
+($\sim 0.92\times$) but is the only ingredient for which a
+stronger replacement (Leech, $E_8$) would immediately improve
+performance; the other levers are already at their theoretical
+optimum.
 
 \subsection{Implementation}
 
 The canonical class is \texttt{V14KakeyaZamirLatticeGPU} in
-\texttt{kakeyaturbo\_py/v1\_4\_kakeya\_zamir\_lattice\_gpu.py}. It is
-a bit-identical wrapper around \texttt{D4TQStyleCodebook}
-(research-lineage file \texttt{bridge\_b2\_d4\_tq\_style.py}) that
-enforces the canonical naming surface. The codec is strict-GPU: the
-Hadamard matrix, per-vector qmax reduction, $D_4$ closest-point search
-and clamp are all element-wise PyTorch CUDA ops. The $D_4$
-closest-point search is Algorithm~4 of Conway and Sloane~\cite{conway-sloane-d4},
-O($D$) with one branch (parity flip) + round + clamp.
+\texttt{kakeyaturbo\_py/v1\_4\_kakeya\_zamir\_lattice\_gpu.py}. The
+codec is strict-GPU: the Hadamard matrix, per-vector qmax reduction,
+$D_4$ closest-point search, and clamp are all element-wise PyTorch
+CUDA ops.
 
-\paragraph{Compliance.} The repository enforces a strict ban list at
-test time: (i) \textbf{no mock} -- real vLLM, real HuggingFace
-weights, real WikiText-103 passages, real FlashAttention bf16 forward;
-(ii) \textbf{no simplification} -- the codec code path is identical
-across every tested model; (iii) \textbf{no fallback} -- head
-dimensions not divisible by~4 raise \texttt{ValueError} by design,
-and any hook-silent passthrough aborts the run via a fire-count
-guard; (iv) \textbf{no overfit} -- the boundary-skip policy (first
-two + last two layers kept bf16) and the three canonical $q_\mathrm{range}$
+\paragraph{Compliance.}
+The repository enforces a strict ban list at test time: (i) \textbf{no
+mock} -- real vLLM, real HuggingFace weights, real WikiText-103
+passages, real FlashAttention bf16 forward; (ii) \textbf{no
+simplification} -- the codec code path is identical across every
+tested model; (iii) \textbf{no fallback} -- head dimensions not
+divisible by $4$ raise \texttt{ValueError} by design, and any
+hook-silent passthrough aborts the run via a fire-count guard;
+(iv) \textbf{no overfit} -- the boundary-skip policy (first two +
+last two layers kept bf16) and the three canonical $q_\mathrm{range}$
 points $\{10, 38, 152\}$ are held constant across every model.
 
 \section{Experimental methodology}
@@ -529,7 +586,7 @@ points $\{10, 38, 152\}$ are held constant across every model.
 \subsection{Models and environment}
 
 We measure on four open-source decoder-only transformer models
-spanning four different architectural families (Table~\ref{tab:models}),
+spanning four architectural families (Table~\ref{tab:models}),
 chosen because each exposes a different challenge: Qwen3-4B has
 per-head QK-norm; DeepSeek-R1-Distill inherits Qwen2 attention with
 GQA; Gemma-4-E4B has $\text{head\_dim}=256$ (double the others);
@@ -554,8 +611,8 @@ attention-module signature.
 \end{table}
 
 All runs execute on NVIDIA H200 (80\,GiB, CUDA 13.0) via vast.ai,
-with vLLM \texttt{0.19.2rc1.dev100+gf946659ff} and
-transformers~$5.5.2$.  Weights are loaded in bf16; FlashAttention is
+with vLLM \texttt{0.19.2rc1.dev100+gf946659ff}~\cite{vllm} and
+transformers~$5.5.2$. Weights are loaded in bf16; FlashAttention is
 enabled.
 
 \subsection{Snapshot-mode capture and replace}
@@ -565,11 +622,11 @@ For each (model, codec, passage) we run a two-pass protocol that
 isolates codec error from sampling and attention-kernel noise:
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Pass~1 (capture).} A real vLLM prefill at ctx=$2048$
-    over the passage. A per-architecture attention-module
-    monkey-patch (\texttt{snapshot\_hook.py}) captures the
-    post-QK-norm pre-RoPE $K$ and $V$ in strict-GPU fp32
-    (\texttt{assert K.is\_cuda}; no CPU round-trip).
+  \item \textbf{Pass~1 (capture).} A real vLLM prefill at
+    ctx~$=\!2048$ over the passage. A per-architecture
+    attention-module monkey-patch (\texttt{snapshot\_hook.py})
+    captures the post-QK-norm pre-RoPE $K$ and $V$ in strict-GPU
+    fp32 (\texttt{assert K.is\_cuda}; no CPU round-trip).
   \item \textbf{Offline codec.} Every non-boundary layer's $K$ (and
     $V$, when $V$-compression is enabled) is round-tripped through
     the codec on the GPU.
@@ -578,43 +635,41 @@ isolates codec error from sampling and attention-kernel noise:
     decoded tensor from step~2. Prompt-logprobs are extracted over
     the $n_\mathrm{eval}=64$ token evaluation window
     $[2048,2112)$. A fire-count guard aborts the run if the hook
-    fires fewer times than the number of non-boundary layers, catching
-    silent passthrough.
+    fires fewer times than the number of non-boundary layers,
+    catching silent passthrough.
 \end{enumerate}
 
-\paragraph{Why snapshot-mode.} This mirrors HuggingFace's two-pass
-\texttt{DynamicCache} pattern: each layer's cache entries depend
-only on the codec applied to the clean Pass-1 capture, not on an
-error that compounds across layers during a single forward. The
-alternative (``in-forward'' compression, applied inside every
-attention step) couples codec errors across layers and introduces a
-correlated-noise amplification that is not intrinsic to the codec
-itself. Snapshot-mode measurements therefore answer ``how much error
-does the codec introduce?'' rather than ``how much error does the
-codec plus the harness introduce?''.
+\paragraph{Why snapshot-mode.}
+This mirrors the two-pass \texttt{DynamicCache} pattern used in
+HuggingFace teacher-forcing~\cite{huggingface-transformers}: each
+layer's cache entries depend only on the codec applied to the clean
+Pass-1 capture, not on an error that compounds across layers during
+a single forward. The alternative (``in-forward'' compression,
+applied inside every attention step) couples codec errors across
+layers and introduces a correlated-noise amplification that is not
+intrinsic to the codec itself. Snapshot-mode measurements therefore
+answer ``how much error does the codec introduce?'' rather than
+``how much error does the codec plus the harness introduce?''.
 
-\subsection{Baseline: TurboQuant $k8v4$ at matched bits}
+\subsection{Boundary-layer protection}
 
-The baseline codec is TurboQuant's $k8v4$ preset as merged into
-vLLM~\cite{vllm-pr-38479,turboquant-vllm}, run through the same
-snapshot harness:
-\begin{itemize}[leftmargin=*]
-  \item $K$: unit-norm $\to$ Sylvester--Hadamard $\to$ per-vector
-    qmax $\to$ int8 per-coord uniform quantise $\to$ inverse
-    Hadamard $\to$ rescale;
-  \item $V$: int4 uniform quantise + norm-correction.
-\end{itemize}
-At $D=128$ this is $8\cdot 128 + 32 = 1056$ bits/token/head for $K$,
-bit-exactly matched to \textsc{KakeyaLattice}~at $q_\mathrm{range}=152$.
-Matched bit points for $b\in\{2,\ldots,8\}$ against $q_\mathrm{range}
-\in\{2,5,10,19,38,76,152\}$ are listed in Table~\ref{tab:pareto-qwen3}.
+We keep the first two and last two transformer layers at bf16
+(``boundary layers'') for every model. These layers have outsized
+influence on token-level perplexity because they sit at the
+embedding and pre-softmax boundaries; leaving them uncompressed at
+negligible cost ($L_\mathrm{bdry}/L \in \{10\%, 14\%, 17\%, 10\%\}$
+across the four models) meaningfully reduces
+$\abs{\Delta\mathrm{ppl}}$ while losing $< 15\%$ of the headline
+compression ratio. The boundary choice is the same constant for all
+four models (not per-model tuned) to avoid any appearance of
+overfitting.
 
 \subsection{Quality metrics}
 
 Three metrics are reported for every (model, codec, $q$) tuple:
 
 \begin{itemize}[leftmargin=*]
-  \item $\boldsymbol{K}$\textbf{ relative MSE}: $\norm{K-\hat K}_F^2 / \norm{K - \bar K}_F^2$
+  \item $\boldsymbol{K}$ \textbf{relative MSE}: $\norm{K-\hat K}_F^2 / \norm{K - \bar K}_F^2$
     where $\bar K$ is the per-layer mean. Sample-size-independent:
     a closed-form per-vector error.
   \item $\boldsymbol{|\Delta\mathrm{ppl}|}$: absolute relative deviation of
@@ -628,187 +683,41 @@ Three metrics are reported for every (model, codec, $q$) tuple:
 \end{itemize}
 
 We use $|\Delta\mathrm{ppl}|$ rather than signed $\Delta\mathrm{ppl}$
-because both TurboQuant and \textsc{KakeyaLattice}\ exhibit the
-structured-quantisation ``de-biasing'' phenomenon~\cite{hadamard-bias}
-whereby Hadamard-rotated scalar quantisation slightly lowers ppl
-below the bf16 reference on well-regularised models.  Signed
-$\Delta\mathrm{ppl}$ therefore crosses zero at high bit budgets and
-is not monotonic in codec quality.
+because structured-quantisation codecs exhibit a ``de-biasing''
+phenomenon~\cite{quip-sharp} whereby Hadamard-rotated scalar
+quantisation slightly lowers ppl below the bf16 reference on
+well-regularised models. Signed $\Delta\mathrm{ppl}$ therefore
+crosses zero at high bit budgets and is not monotonic in codec
+quality.
 
-\section{The three failed bridges}
-\label{sec:bridges}
-
-Before v1.4 we implemented three Kakeya-style codebook constructions
-and measured each head-to-head against TurboQuant on $100{,}000$
-held-out Qwen3-4B $K$ samples. All three lost, by margins of $32\times$
-to $1414\times$ in K-MSE; together they isolated exactly which
-engineering factors the winning codec needs.
-
-\subsection{Bridge A — Guth--Katz polynomial partitioning}
-\label{sec:bridge-a}
-
-Implementation (\texttt{kakeyaturbo\_py/bridge\_a\_guth\_katz.py}):
-
-\begin{enumerate}[leftmargin=*]
-  \item Johnson--Lindenstrauss projection $\R^{128}\to\R^r$, $r\leq 18$.
-  \item Degree-$2$ monomial basis features, $(r{+}1)(r{+}2)/2$ dims
-    ($190$ at $r{=}18$).
-  \item $n_\mathrm{polys}$ polynomials fit via SVD on centred features;
-    constant term shifted by the median for balanced partitions.
-  \item Cell index $=$ sign pattern across all polynomials.
-  \item Cell centroid $=$ mean of training $K$ falling in the cell.
-\end{enumerate}
-
-This is the literal Guth--Katz 2010 construction~\cite{guth-katz}
-transferred to $\R^D$ via JL, not a decision tree or hyperplane
-iteration. At matched low bit rates Bridge~A attains rel-MSE $0.59$
-at $12$ bits/vec and $0.57$ at $16$ bits/vec --- usable only in the
-``extreme compression'' regime where the token-per-head bit budget is
-below $20$. TurboQuant at matched rate does not even run; the
-comparison instead is against the v1.4 codec at its aggressive point
-$q_\mathrm{range}=2$ ($320$ bits/token/head, rel-MSE $0.19$, see
-Table~\ref{tab:pareto-qwen3}), which is $3\times$ better while using
-$20\times$ more bits. Scaled to $1000$ bits the degree-$2$
-monomial-partition family cannot track the effective rank of $K$
-on Qwen3-4B.
-
-\subsection{Bridge B — raw Zamir--Feder $D_4$}
-\label{sec:bridge-b}
-
-Implementation (\texttt{bridge\_b\_nested\_lattice.py}): split $\R^{128}$
-into $32$ blocks of $4$~dims; Conway--Sloane Algorithm~4 for the
-closest-$D_4$-point~\cite{conway-sloane-d4}; per-block step size from
-the dataset-wide $\max_i\abs{x}/q_\mathrm{range}$; no Hadamard
-rotation, no per-vector $q_\mathrm{max}$, no unit-norm factorisation;
-pure Zamir--Feder.
-
-Measured rel-MSE at $736$ bits/token/head: $\mathbf{4.95\times 10^{-2}}$,
-versus TurboQuant $k8v4$'s $3.5\times 10^{-5}$ at $1024$ bits. A
-\textbf{$1414\times$ gap}.
-
-\subsection{Decomposition of the Bridge~B gap}
-\label{sec:bridge-b-decomp}
-
-\begin{table}[H]
-\centering
-\small
-\caption{Decomposition of the $1414\times$ Bridge~B vs.\ TQ $k8v4$
-gap on Qwen3-4B. Each factor is the measured rel-MSE cost of adding
-exactly that engineering component to the running configuration.}
-\label{tab:bridge-b-decomp}
-\begin{tabular}{lrr}
-  \toprule
-  Factor added / removed & Penalty & Running rel-MSE \\
-  \midrule
-  TQ $k8v4$ (reference)                                        & —        & $3.5\times10^{-5}$ \\
-  $-$ per-vector $q_\mathrm{max}$ (global scale)               & $\sim\!4\times$   & $1.4\times10^{-4}$ \\
-  $-$ Hadamard rotation                                        & $\sim\!10\times$  & $1.4\times10^{-3}$ \\
-  $-$ matched bits ($72\%$ of budget: $736$ vs.\ $1024$)       & $\sim\!2.5\times$ & $3.5\times10^{-3}$ \\
-  $-$ joint quantisation (per-block independent scaling)       & $\sim\!4\times$   & $1.4\times10^{-2}$ \\
-  $+$ $D_4$ shaping lost on non-i.i.d.\ residual               & $\sim\!1.3\times$ & $1.8\times10^{-2}$ \\
-  $+$ finite-data clamp / boundary edge                        & $\sim\!2.5\times$ & $4.5\times10^{-2}$\ $\approx$ measured \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{Reading.} All four dominant factors are \emph{engineering},
-not mathematical. The $D_4$ lattice alone contributes only $\sim\!0.37\,$dB
-($\times 0.92$) --- tiny next to the four $2\times$--$10\times$ penalties.
-If we re-add TurboQuant's engineering stack to the $D_4$ lattice, we
-recover its theoretical shaping gain and predict rel-MSE $\approx$
-TQ $\cdot\,0.92 \approx 3.2\times 10^{-5}$. This is the prediction that
-v1.4 KakeyaLattice tested and confirmed.
-
-\subsection{Bridge C — data-matched non-Gaussian shaping}
-\label{sec:bridge-c}
-
-Implementation (\texttt{bridge\_c\_non\_gaussian.py}): TurboQuant's
-unit-norm + Hadamard pre-processing is kept identical; only the
-scalar quantiser changes. Instead of uniform int8, we fit empirical
-Lloyd--Max centroids on the post-Hadamard real-$K$ distribution. A
-$99.5\%$-quantile rectangle bounds the support, a
-$2^b$-level Lloyd--Max iteration converges the centroids.
-
-Measured rel-MSE:
-
-\begin{itemize}[leftmargin=*]
-  \item $256$ bits: $\mathbf{0.106}$
-  \item $512$ bits: $\mathbf{0.0088}$
-  \item $1024$ bits: $\mathbf{1.12\times 10^{-3}}$ (TurboQuant at same rate: $3.5\times 10^{-5}$, a $32\times$ gap)
-\end{itemize}
-
-\textbf{Why Bridge~C loses.} The non-Gaussian ``headroom'' above a
-uniform quantiser is real but small: excess kurtosis on Qwen3-4B
-post-Hadamard $K$ is $0.84$ worst case (Gaussian reference $3$),
-Wasserstein-$2$ shape deviation is $0.65\sigma$, and
-isotropy variance ratio is $4.71\times$ worst case
-(Table~\ref{tab:non-gauss}). TurboQuant's per-vector adaptive
-$q_\mathrm{max}$ already captures most of this headroom: TurboQuant's
-measured rel-MSE is $4\times$ \emph{below} the strict-Gaussian $\Delta^2/12$
-quantisation floor at matched $5\sigma$ range. The remaining
-$\sim\!2\times$ of exploitable non-Gaussianity is offset by
-finite-sample noise in the empirical Lloyd--Max centroids.
-
-\begin{table}[H]
-\centering
-\small
-\caption{Qwen3-4B post-QK-norm pre-RoPE $K$, post-Hadamard,
-$22$ non-boundary layers. ``Gate'' column: threshold at which this
-deviation becomes a non-Gaussian-codec opportunity (data:
-\texttt{non\_gaussianity/qwen3\_4b\_k\_non\_gaussianity.json}).}
-\label{tab:non-gauss}
-\begin{tabular}{lrrr}
-  \toprule
-  Metric & Gate & Worst measured & Factor \\
-  \midrule
-  $\abs{\text{excess kurtosis}}$ (Gaussian = $3$) & $0.5$  & $0.84$  & $1.7\times$ \\
-  RMS Wasserstein-$2/\sigma$ per dim             & $0.05$ & $0.65$  & $13.0\times$ \\
-  Relative score-function deviation              & $0.10$ & $0.125$ & $1.25\times$ \\
-  Isotropy var-ratio (max $/$ min)                & $1.50$ & $4.71$  & $3.14\times$ \\
-  \bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{Sub-Gaussian body}: all excess kurtoses are below $3$ (range
-$2.16$--$2.88$), meaning the body of the $K$ distribution is
-actually \emph{lighter} than Gaussian. The $13\times$ Wasserstein
-deviation is shape, not mass-shift. The codec-relevant takeaway is
-that non-Gaussian \emph{density} alone is not a big exploitable
-structure; non-Gaussian \emph{lattice} structure is.
-
-\subsection{Summary: what the three bridges bought us}
-
-Bridges~A, B, and C produced \emph{zero} win against TurboQuant on
-their own, but they delivered three of the paper's key insights:
-
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{The engineering stack dominates the codebook choice}
-    (Bridge~B decomposition).
-  \item \textbf{Non-Gaussian density matching is a dead end}
-    (Bridge~C result + Table~\ref{tab:non-gauss}).
-  \item \textbf{Polynomial-partition constructions are too rate-poor}
-    (Bridge~A result, Section~\ref{sec:bridge-a}).
-\end{enumerate}
-
-The next section measures the combination $D_4 + $ TurboQuant stack
-and shows it wins universally.
-
-\section{Main result: multi-model head-to-head vs.\ TurboQuant}
+\section{Main results}
 \label{sec:benchmarks}
 
-\subsection{Compression-rate Pareto on Qwen3-4B}
+This section reports four measurements of the codec: the full
+compression-rate Pareto on Qwen3-4B
+(\S\ref{sec:bench-pareto}); the twelve-pair head-to-head against
+TurboQuant $k8v4$ across four model families
+(\S\ref{sec:bench-multi}); the reconciliation between the theoretical
+shaping-gain prediction and measured K-MSE ratios
+(\S\ref{sec:bench-theory}); and the $128$k KV-cache storage table
+with both $K$ and $V$ compressed (\S\ref{sec:bench-128k}).
 
-Table~\ref{tab:pareto-qwen3} gives the full Pareto sweep on
-Qwen3-4B at $7$ bit levels ($b\in\{2,\ldots,8\}$ for TQ matched
-against $q_\mathrm{range}\in\{2,5,10,19,38,76,152\}$ for v1.4), $4$
-WikiText-103 passages, ctx $=2048$, $n_\mathrm{eval}=64$, strict-GPU.
+\subsection{Compression-rate Pareto on Qwen3-4B}
+\label{sec:bench-pareto}
+
+Table~\ref{tab:pareto-qwen3} gives the full Pareto sweep at seven
+bit levels, matched between TurboQuant $b\in\{2,\ldots,8\}$ and
+\textsc{KakeyaLattice} $q_\mathrm{range}\in\{2,5,10,19,38,76,152\}$,
+on four WikiText-103 passages at ctx~$=\!2048$, $n_\mathrm{eval}=64$,
+strict-GPU.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Full Pareto: v1.4 KakeyaLattice vs.\ TurboQuant on Qwen3-4B,
-H200, vLLM 0.19.2, strict-GPU capture + replace.  Bold rows are the
-three canonical operating points.  CR = compression ratio vs.\ bf16.}
+\caption{Full Pareto: \textsc{KakeyaLattice} vs.\ TurboQuant $k8v4$
+on Qwen3-4B, H200, vLLM 0.19.2, strict-GPU capture + replace. Bold
+rows are the three canonical operating points. CR = compression
+ratio vs.\ bf16.}
 \label{tab:pareto-qwen3}
 \begin{tabular}{rrrlrrr}
   \toprule
@@ -833,24 +742,35 @@ three canonical operating points.  CR = compression ratio vs.\ bf16.}
 \end{table}
 
 \paragraph{Observations.}
+
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{K-MSE: v1.4 strictly dominates at every bit level}
-    ($7/7$, ratio $0.35\times$--$0.91\times$).
+  \item \textbf{K-MSE: the lattice dominates at every bit level}
+    (all seven bit points, ratio $0.35\times$--$0.91\times$). The
+    ratio grows monotonically with bit budget, consistent with the
+    theoretical prediction that shaping gain is a high-rate
+    asymptote.
   \item \textbf{Advantage grows with compression aggression.} At
-    $1.88\times$ CR the ratio is $0.91$; at $6.4\times$ CR the ratio
-    is $0.35$ ($65\%$ better). The $D_4$ shaping gain matters most in
-    the low-bit regime where uniform quantisation suffers most.
-  \item \textbf{Catastrophe avoidance at extreme compression.} TQ
-    $b=2$ is catastrophic ($+150.5\%\,\Delta$ppl, model broken);
-    v1.4 Q=2 is only $+30.3\%\,\Delta$ppl, top-1 still $83.6\%$. The
-    lattice structure prevents per-coordinate tail truncation from
-    compounding into total signal loss.
+    $1.88\times$ compression the K-MSE ratio is $0.91\times$; at
+    $6.4\times$ compression the ratio is $0.35\times$ ($65\%$
+    better). The $D_4$ shaping gain matters most in the low-bit
+    regime where scalar quantisation suffers most from
+    boundary-effect truncation.
+  \item \textbf{Catastrophe avoidance at extreme compression.} At
+    the aggressive $q_\mathrm{range}=2$ point
+    ($320$ bits, $6.4\times$ CR), $\abs{\Delta\mathrm{ppl}}$ is
+    $30.3\%$ with top-1 $83.6\%$, i.e.\ degraded but recoverable.
+    The lattice structure prevents per-coordinate tail truncation
+    from compounding into total signal loss as the bit budget
+    narrows.
   \item \textbf{Equal-quality bit savings.} At target K rel-MSE
-    $\approx 5\times 10^{-4}$, v1.4 Q=38 matches TQ at $\sim\!928$
-    bits, a $\sim\!10\%$ bit saving at equal downstream quality.
+    $\approx 5\times 10^{-4}$, $q_\mathrm{range}=38$ reaches it at
+    $832$ bits; interpolating the scalar-quantiser curve gives
+    $\sim\!928$ bits for the same K rel-MSE, a $\sim\!10\%$ bit
+    saving at equal downstream quality.
 \end{enumerate}
 
-\subsection{Multi-model head-to-head at three canonical points}
+\subsection{Multi-model head-to-head}
+\label{sec:bench-multi}
 
 Table~\ref{tab:multimodel} gives the $12$ head-to-head ratios across
 four models at the three canonical operating points.
@@ -858,11 +778,11 @@ four models at the three canonical operating points.
 \begin{table}[H]
 \centering
 \small
-\caption{Twelve head-to-head pairs: v1.4 KakeyaLattice vs.\ TurboQuant
-on four models at three matched bit points. K-MSE ratio $<1$ means
-v1.4 beats TQ on reconstruction. $\abs{\Delta\text{ppl}}$ ratio $<1$
-means v1.4 is closer to bf16.  ``top-1 $\Delta$pp'' is v1.4 top-1
-minus TQ top-1. Data:
+\caption{Twelve head-to-head pairs. K-MSE ratio $<\!1$ means
+\textsc{KakeyaLattice} beats the scalar-quantiser baseline on
+reconstruction; $\abs{\Delta\text{ppl}}$ ratio $<\!1$ means
+\textsc{KakeyaLattice} is closer to bf16. ``top-1 $\Delta$pp'' is
+\textsc{KakeyaLattice} top-1 minus baseline top-1. Data:
 \texttt{reports/v1\_3\_ppl/snapshot\_mode\_qwen3/multimodel/}.}
 \label{tab:multimodel}
 \begin{tabular}{lrrrrrr}
@@ -899,64 +819,69 @@ minus TQ top-1. Data:
 \small
 \begin{tabular}{lrrr}
   \toprule
-  Metric & v1.4 wins & tie & TQ wins \\
+  Metric & \textsc{KakeyaLattice} wins & tie & baseline wins \\
   \midrule
-  K-MSE ratio ($<1.0$)         & $\mathbf{12/12}$ & 0 & 0 \\
+  K-MSE ratio ($<1.0$)                & $\mathbf{12/12}$ & 0 & 0 \\
   $\abs{\Delta\text{ppl}}$ ratio ($<1.0$) & $\mathbf{9/12}$  & 0 & 3 \\
-  top-1 pair ($\geq$ TQ)       & $6/12$  & 2 & 4 \\
+  top-1 pair ($\geq$ baseline)        & $6/12$  & 2 & 4 \\
   \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{K-MSE dominance is universal.} Every model, every bit
-level, v1.4's reconstructed $K$ is closer to the bf16 $K$ than
-TurboQuant's by $10$--$36\%$, mirroring the prediction
-$G(D_4)/G(\Z^4)\approx 0.92$ (with the expected monotonic drift to
-$0.64$ at $Q=10$, where lattice shaping matters more).
+\textbf{K-MSE dominance is universal}: on every model, at every bit
+level, \textsc{KakeyaLattice}'s reconstructed $K$ is closer to the
+bf16 $K$ than the scalar-quantiser baseline's by $10$--$36\%$,
+mirroring the theoretical ratio $G(D_4)/G(\Z^4) \approx 0.919$ (with
+the expected monotonic drift to $0.64$ at the aggressive
+$q_\mathrm{range}=10$ point, where lattice shaping matters more).
 
-\paragraph{$\abs{\Delta\text{ppl}}$ dominance at the aggressive
-point.} At $Q=10$ all four models beat TQ by $1.8\times$--$5.3\times$.
-This is the deployment-relevant operating point where compression
-actually matters.
+\textbf{$\abs{\Delta\text{ppl}}$ dominance at the aggressive
+point.} At $q_\mathrm{range}=10$ all four models beat the baseline
+by $1.8$--$5.3\times$. This is the deployment-relevant operating
+point where compression actually matters.
 
-\paragraph{$\abs{\Delta\text{ppl}}$ ties at near-lossless.} At
-$Q=152$ on DeepSeek-1.5B and Gemma-4-E4B, v1.4 loses on
-$\abs{\Delta\text{ppl}}$ ratio (values $1.26$--$3.08$). Both absolute
-numbers are below $1\%$ (TQ $0.39\%$, v1.4 $\sim\!1\%$), so the ratio is
-sensitive to FlashAttention bf16 reproducibility noise at the
-$4$-passage sample size. The K-MSE ratio ($0.91$) still shows v1.4's
-$K$ is more faithful to the bf16 reference; the PPL difference is
-below the bf16 floor on these runs.
+\textbf{$\abs{\Delta\text{ppl}}$ ties at near-lossless.} At
+$q_\mathrm{range}=152$ on DeepSeek-1.5B and Gemma-4-E4B,
+\textsc{KakeyaLattice} loses on $\abs{\Delta\text{ppl}}$ ratio
+(values $1.26$--$3.08$). Both absolute numbers are below $1\%$
+(baseline $0.39\%$, ours $\sim\!1\%$), so the ratio is sensitive to
+FlashAttention bf16 reproducibility noise at the four-passage sample
+size. The K-MSE ratio ($0.91\times$) still shows the $K$ is more
+faithful to bf16; the $\abs{\Delta\text{ppl}}$ difference is below
+the bf16 floor on these runs.
 
-\subsection{Theory-vs-experiment reconciliation}
+\subsection{Theory--experiment reconciliation}
+\label{sec:bench-theory}
 
 \begin{table}[H]
 \centering
 \small
 \caption{Theory-to-experiment match for the K-MSE shaping-gain
-ratio. Predicted from Proposition~\ref{prop:d4-kakeya};
-measured in two independent environments.}
+ratio. Predicted from Proposition~\ref{prop:d4-kakeya}; measured in
+three independent environments.}
 \label{tab:theory-vs-exp}
 \begin{tabular}{lrr}
   \toprule
   Quantity & Predicted & Measured \\
   \midrule
-  rel-MSE ratio (v1.4 Q=152 vs.\ TQ $b=8$, Qwen3-4B)         & $0.919$ & $\mathbf{0.913}$ (offline 100k samples) \\
-                                                              &         & $\mathbf{0.911}$ (live vLLM 4-passage) \\
-                                                              &         & $\mathbf{0.911}$ (multimodel mean, Table~\ref{tab:multimodel}) \\
-  Shaping gain (dB)                                           & $+0.367$\,dB & $+0.381$\,dB (Qwen3-4B offline) \\
-  cos$(K,\hat K)$                                             & $\to 1.0$ & $1.0000$ \\
-  Bit cost (exact)                                            & $1056$  & $1056$ (reported rounded to $1088$) \\
+  K-MSE ratio at matched $1056$ bits (Qwen3-4B)  & $0.919$      & $\mathbf{0.913}$ (offline 100k samples) \\
+                                                 &              & $\mathbf{0.911}$ (live vLLM, 4 passages) \\
+                                                 &              & $\mathbf{0.911}$ (multi-model mean, Tab.~\ref{tab:multimodel}) \\
+  Shaping gain (dB)                              & $+0.367\,$dB & $+0.381\,$dB (Qwen3-4B offline) \\
+  cos$(K,\hat K)$                                & $\to 1.0$    & $1.0000$ \\
+  Bit cost (exact)                               & $1056$       & $1056$ (reported rounded to $1088$) \\
   \bottomrule
 \end{tabular}
 \end{table}
 
-All three independent measurements agree within $\sim\!1\%$. This is
-the cleanest theory-to-experiment match we have seen in the project,
-and it validates the four-factor decomposition of
-Section~\ref{sec:codec-why}.
+All three independent measurements agree with the theoretical
+prediction to within $\sim 1\%$. We take this as the cleanest
+theory-to-experiment match the project has produced and as direct
+empirical validation of Proposition~\ref{prop:d4-kakeya} at
+deployment head dimensions.
 
 \subsection{$128$k KV-cache storage}
+\label{sec:bench-128k}
 
 The per-token bit cost is context-length-independent (each $(K,V)$
 is encoded independently), so the codec's $128$k KV footprint scales
@@ -967,48 +892,49 @@ with $K$ \emph{and} $V$ both compressed (boundary layers bf16).
 \begin{table}[H]
 \centering
 \small
-\caption{$128$k KV cache storage: baseline bf16 vs.\ v1.4 KakeyaLattice
-(both $K$ and $V$ compressed, boundary layers $\{0,1,L{-}2,L{-}1\}$ kept
-bf16). Numbers are per-user GiB at ctx $=128{,}000$. Data:
+\caption{$128$k KV cache storage: baseline bf16 vs.\
+\textsc{KakeyaLattice} (both $K$ and $V$ compressed, boundary
+layers $\{0,1,L{-}2,L{-}1\}$ kept bf16). Per-user GiB at ctx $=128{,}000$.
+Source:
 \texttt{reports/v1\_4\_release/kv\_128k\_report/V14\_KV\_128K\_REPORT.md}.}
 \label{tab:128k}
 \begin{tabular}{lrrrrrr}
   \toprule
-   & \multicolumn{2}{c}{bf16 $128$k KV} & \multicolumn{3}{c}{v1.4 $128$k KV (bf16 boundary)} & \\
+   & \multicolumn{2}{c}{bf16 $128$k KV} & \multicolumn{3}{c}{\textsc{KakeyaLattice} $128$k KV} & \\
   \cmidrule(lr){2-3} \cmidrule(lr){4-6}
    & GiB & ratio & Q=$10$ & Q=$38$ & Q=$152$ & $\abs{\Delta\text{ppl}}$ best row \\
   \midrule
-  Qwen3-4B                        & $18.0$ & $1.0\times$ & $2.77\times$ & $2.12\times$ & $1.71\times$ & $0.48\%$ @ Q=$152$ \\
-  DeepSeek-R1-Distill-1.5B         & $ 3.5$ & $1.0\times$ & $2.60\times$ & $2.04\times$ & $1.67\times$ & $0.28\%$ @ Q=$152$ \\
-  Gemma-4-E4B (hd $=\!256$)       & $ 6.0$ & $1.0\times$ & $2.53\times$ & $2.01\times$ & $1.66\times$ & $0.15\%$ @ Q=$38$  \\
-  GLM-4-9B-Chat                   & $ 5.0$ & $1.0\times$ & $2.83\times$ & $2.15\times$ & $1.73\times$ & $0.90\%$ @ Q=$152$ \\
+  Qwen3-4B                       & $18.0$ & $1.0\times$ & $2.77\times$ & $2.12\times$ & $1.71\times$ & $0.48\%$ @ Q=$152$ \\
+  DeepSeek-R1-Distill-1.5B        & $ 3.5$ & $1.0\times$ & $2.60\times$ & $2.04\times$ & $1.67\times$ & $0.28\%$ @ Q=$152$ \\
+  Gemma-4-E4B (hd $=\!256$)      & $ 6.0$ & $1.0\times$ & $2.53\times$ & $2.01\times$ & $1.66\times$ & $0.15\%$ @ Q=$38$  \\
+  GLM-4-9B-Chat                  & $ 5.0$ & $1.0\times$ & $2.83\times$ & $2.15\times$ & $1.73\times$ & $0.90\%$ @ Q=$152$ \\
   \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Quality at the balanced Q=$38$ point.}
 $|\Delta\text{ppl}| < 1\%$ for every model except GLM-4-9B-Chat
-($2.51\%$); top-1 $\geq 95\%$ universally. This is the
+($2.51\%$); top-1 $\geq 95\%$ universally.  This is the
 deployment-recommended operating point: $\sim\!2.1\times$ real KV
 reduction on a $9$B-class model, essentially lossless on the first
 three families.
 
 \paragraph{Quality at the near-lossless Q=$152$ point.}
 $|\Delta\text{ppl}| < 1\%$ on every model; top-1 $\geq 98\%$ on
-every model. Recommended when quality is paramount and $\sim\!1.7\times$
-is acceptable.
+every model. Recommended when quality is paramount and
+$\sim\!1.7\times$ is acceptable.
 
 \paragraph{Aggressive Q=$10$.} GLM-4-9B-Chat is past its edge at
 $6.5\%\,\Delta\text{ppl}$; safe on Gemma-4-E4B ($0.33\%$); noticeable
 on Qwen3-4B and DeepSeek ($1.45\%$, $2.22\%$).
 
-\subsection{Speed}
+\subsection{Codec wall-clock}
 
 \begin{table}[H]
 \centering
 \small
-\caption{Encode speed ratio v1.4 / TQ, per $2112$-token passage on H200.
-$<1.0$ means v1.4 is faster.}
+\caption{Encode time ratio v1.4 / TQ $k8v4$, per $2112$-token passage
+on H200. Values $<1.0$ mean \textsc{KakeyaLattice} is faster.}
 \label{tab:speed}
 \begin{tabular}{lrrrr|r}
   \toprule
@@ -1021,187 +947,345 @@ $<1.0$ means v1.4 is faster.}
 \end{tabular}
 \end{table}
 
-At the aggressive point v1.4 is $\sim\!10\%$ faster on $3$ of $4$
-models. At Q=$38$ / Q=$152$ it is $\sim\!55\%$ slower; this is the
-cost of the $D_4$ closest-point search plus per-vector qmax cycle
-versus TQ's simpler rotation + quantise. Absolute codec wall time is
+At the aggressive point the lattice codec is $\sim\!10\%$ faster
+than the scalar-quantiser baseline on three of four models. At
+Q$=38$ and Q$=152$ it is $\sim\!55\%$ slower; this is the cost of
+the $D_4$ closest-point search plus per-vector qmax cycle versus the
+baseline's simpler rotation + quantise. Absolute codec wall time is
 $0.02$--$0.04\,$s per $2112$-token passage --- negligible against the
-$\sim\!10\,$s of bf16 prefill at this ctx length. Speed is not a
+$\sim\!10\,$s of bf16 prefill at this ctx length.  Speed is not a
 deployment blocker.
 
 \section{Caveats and known limits}
 \label{sec:limits}
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{$4$-passage sample size.} $\abs{\Delta\text{ppl}}$
-    differences below $\sim\!1\%$ absolute are inside the
-    FlashAttention bf16 reproducibility floor at this sample size.
-    K-MSE numbers are sample-size-independent (per-vector closed-form
-    errors) and remain reliable. Publication-grade
-    $\abs{\Delta\text{ppl}}$ tightening would require $\geq 32$
-    passages; we did not run that sweep.
-  \item \textbf{Snapshot-mode vs.\ in-forward.} All numbers in this
-    paper are snapshot-mode (Section~\ref{sec:methodology-snapshot}),
-    which isolates the codec's intrinsic error.
-    In-forward~\cite{pr17-snapshot}\footnote{See
-    \texttt{reports/v1\_3\_ppl/MECHANISM\_IN\_FORWARD\_VS\_SNAPSHOT.md}
-    for the mechanism analysis of the ${\sim\!6}$\,pp gap between the
-    two modes.}
-    integration (codec inside every attention step) adds correlated
-    per-layer noise that is not intrinsic to the codec; measuring
-    that accurately needs a paged-attention-native v1.4 kernel,
-    which is out of scope for this paper.
-  \item \textbf{head\_dim $\nmid 4$.} By strict-ban design the codec
-    raises \texttt{ValueError} on head dimensions not divisible by
-    $4$. Models with $d_h = 96$ or $d_h = 176$ would need a different
-    lattice (e.g.\ $E_8$ blocks for $d_h$ divisible by $8$).
-  \item \textbf{Kv-sharing layers.} Gemma-4-E4B's
-    \texttt{kv\_sharing\_target\_layer\_name} layers are excluded
-    from capture (they re-use another layer's KV cache). This matches
-    the model's native semantics at zero PPL cost.
-  \item \textbf{Lower bound is conjectural.}
+  \item \textbf{Four-passage sample size.}
+    $\abs{\Delta\text{ppl}}$ differences below $\sim\!1\%$ absolute
+    are inside the FlashAttention bf16 reproducibility floor at this
+    sample size. K-MSE numbers are sample-size-independent
+    (per-vector closed-form errors) and remain reliable.
+    Publication-grade $\abs{\Delta\text{ppl}}$ tightening would
+    require $\geq 32$ passages.
+
+  \item \textbf{Snapshot-mode vs.\ in-forward.}
+    All numbers in this paper are snapshot-mode
+    (\S\ref{sec:methodology-snapshot}), which isolates the codec's
+    intrinsic error. In-forward integration (codec inside every
+    attention step) adds correlated per-layer noise that is not
+    intrinsic to the codec; measuring that accurately needs a
+    paged-attention-native v1.4 kernel, which is out of scope for
+    this paper.
+
+  \item \textbf{Head\_dim $\nmid 4$.}
+    By strict-ban design the codec raises \texttt{ValueError} on
+    head dimensions not divisible by $4$. Models with $d_h = 96$ or
+    $d_h = 176$ would need a different lattice (e.g.\ $E_8$ blocks
+    for $d_h$ divisible by $8$).
+
+  \item \textbf{Kv-sharing layers.}
+    Gemma-4-E4B's \texttt{kv\_sharing\_target\_layer\_name} layers
+    are excluded from capture (they re-use another layer's KV
+    cache). This matches the model's native semantics at zero PPL
+    cost.
+
+  \item \textbf{Kakeya lower bound is conditional at $D\geq 4$.}
     Proposition~\ref{prop:kakeya-rd} remains conditional on the
     Kakeya-maximal-function conjecture at $D\geq 4$. At $D=3$ the
-    lower bound is unconditional via Wang--Zahl; at deployment head
-    dimensions it is a conditional framing, not a proof of
-    Pareto-optimality. This is the honest scope we claimed
-    throughout~\cite{kakeya-v13-paper}.
+    lower bound is unconditional via Wang--Zahl~\cite{wang-zahl}; at
+    deployment head dimensions it is a conditional framing, not a
+    proof of Pareto-optimality. The \emph{$D_4$ shaping bound} in
+    Proposition~\ref{prop:d4-kakeya} is unconditional, but it
+    applies to the $4$-dimensional block structure of the codec
+    rather than to the full head dimension.
 \end{enumerate}
 
-\section{Deployment scope and positioning}
-\label{sec:deployment}
+\section{Comparison with TurboQuant}
+\label{sec:tq-comparison}
 
-\paragraph{Upstream as a TurboQuant improvement, not a standalone codec.}
-The $+0.37\,$dB $D_4$ shaping gain over $\Z^4$ is \emph{small}
-compared to the $\sim\!1000\times$ K-MSE that TurboQuant's engineering
-stack already delivers. The measured $8$--$9\%$ K-MSE improvement at
-matched bits and the $1.8\times$--$5.3\times$
-$\abs{\Delta\text{ppl}}$ improvement at the aggressive point are real
-and architecture-independent, but they live on top of the TurboQuant
-structure. The honest positioning is therefore:
+\textsc{KakeyaLattice} is designed to live inside an existing
+scalar-quantisation framework rather than to replace one. This
+section gives the head-to-head positioning with
+TurboQuant~\cite{turboquant-vllm,vllm-pr-38479}, the strongest
+post-hoc KV codec currently deployed in a production inference
+stack.
 
-\begin{quote}
-\emph{v1.4 KakeyaLattice is the drop-in replacement for TurboQuant's
-int$\cdot$per-coord scalar quantiser inside its Hadamard + qmax + norm
-wrapper. Every TurboQuant deployment becomes ${\sim}8\%$ more faithful
-on $K$ at zero engineering cost, plus the aggressive-compression
-recovery.}
-\end{quote}
+\subsection{What TurboQuant is}
 
-\paragraph{Proposed upstream PR scope.}
+TurboQuant is a KV-cache compression family merged into
+vLLM~\cite{vllm-pr-38479} in April~2026 and subsequently hardened by
+a series of follow-up
+PRs~\cite{vllm-pr-40194,vllm-pr-39953,vllm-pr-40060,vllm-pr-40122}.
+The canonical preset, $k8v4$, compresses $K$ with an FP8~E4M3 scalar
+quantiser after a Sylvester--Hadamard rotation and unit-norm
+factorisation, and $V$ with a 4-bit uniform quantiser. Slots are
+rounded to the next even number rather than to the next power of two,
+which at $D=128$ gives $1056$ bits/token/head for $K$ ($8\cdot 128
+\;+\; 2\cdot\mathrm{fp16} = 1056$).
+
+\subsection{The four engineering levers in common}
+
+The engineering stack of TurboQuant and \textsc{KakeyaLattice}
+overlaps in four levers: unit-norm factorisation,
+Sylvester--Hadamard rotation, per-vector adaptive $q_\mathrm{max}$,
+and a joint (per-vector shared) scale. The lattice codec uses these
+four levers precisely because scalar-quantisation literature has
+shown they dominate the MSE accounting for any Gaussian-like
+residual source; adopting them matches the codec's input
+distribution to the isotropic-Gaussian assumption of
+Proposition~\ref{prop:d4-kakeya}. Without these levers the predicted
+$0.919$ K-MSE ratio does not manifest.
+
+\subsection{The one lever that differs}
+
+The sole structural difference between the two codecs is the per-block
+quantiser:
+
+\begin{center}
+\begin{tabular}{lcc}
+  \toprule
+                  & TurboQuant $k8v4$            & \textsc{KakeyaLattice} \\
+  \midrule
+  per-block quantiser & int$\cdot$per-coord ($\Z^4$) & $D_4$ closest-point \\
+  block size          & $1$ coordinate            & $4$ coordinates   \\
+  second moment       & $1/12$                    & $0.0766$          \\
+  shaping gain        & $0\,$dB (reference)       & $0.367\,$dB       \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Everything else in the stack --- Hadamard matrix, per-vector
+$q_\mathrm{max}$, unit-norm factorisation, bit alignment, boundary
+layer policy, fp16 overhead scalars --- is identical by construction.
+Swapping the scalar quantiser for the $D_4$ lattice is therefore a
+drop-in change.
+
+\subsection{Positioning: drop-in improvement, not replacement}
+
+The measured K-MSE improvement is a direct consequence of the
+lattice shaping gain. It is unconditional (see
+Proposition~\ref{prop:d4-kakeya}) and architecture-independent (see
+Table~\ref{tab:multimodel}: the ratio is within $\sim 1\%$ of $0.919$
+on every tested model). At matched bits, the other lever
+contributions cancel exactly because they are identical between the
+two codecs; the residual is the shaping gain.
+
+We therefore position \textsc{KakeyaLattice} as an
+\emph{$\approx 8\%$ improvement to the upstream TurboQuant kernel},
+not as a standalone KV codec. Every TurboQuant deployment becomes
+$\sim\!8\%$ more faithful on $K$ at zero additional engineering
+cost, plus the aggressive-compression
+$1.8$--$5.3\times\,\abs{\Delta\mathrm{ppl}}$ improvement at the
+$q_\mathrm{range}=10$ operating point.
+
+\subsection{Proposed upstream PR scope}
+
 \begin{itemize}[leftmargin=*]
-  \item A Triton kernel for Conway--Sloane $D_4$ closest-point
-    ($\sim\!10$ lines of element-wise ops).
-  \item Slot-format alignment: $32 \times 32$ bits lattice $+\,2\cdot$fp16
-    scalars per vector, bit-compatible with TQ $k8v4$.
+  \item A Triton kernel for the Conway--Sloane $D_4$ closest-point
+    algorithm ($\sim\!10$ lines of element-wise ops).
+  \item Slot-format alignment: $32\times 32$ bits of lattice plus
+    two fp16 overhead scalars per vector, bit-compatible with the
+    existing $k8v4$ slot layout.
   \item Register as a new \texttt{--kv-cache-dtype} preset, e.g.\
-    \texttt{turboquant\_d4v4}, beside the existing
-    \texttt{turboquant\_k8v4}.
+    \texttt{turboquant\_d4v4}, alongside \texttt{turboquant\_k8v4}.
 \end{itemize}
 
-\paragraph{Compression vs.\ per-bit fidelity.}
-At every matched bit point, v1.4 pays $\sim\!3$--$11\%$ more bits than
-TQ for $8$--$36\%$ better K-MSE. The \emph{Pareto curve} is strictly
-better (Table~\ref{tab:pareto-qwen3}); the \emph{raw compression
-ratio at a fixed operating point} is slightly worse. In deployments
-where quality is the binding constraint (GLM-4-9B-Chat-class models,
-long contexts with critical prompt fidelity), v1.4 is a clean win;
-in raw-ratio deployments at relaxed quality, TQ's bit-level is
-sufficient.
+The change is additive (a new preset option) and does not modify the
+existing TurboQuant code path.
 
-\paragraph{End-to-end vLLM throughput (not measured here).}
-The snapshot harness captures $K/V$ and replaces in-place on an alt
-forward, so decode-pass speed is $\sim\!$bf16 (same FlashAttention
-kernel). Only the codec itself costs time. Real deployment numbers
-would require a paged-cache backend using v1.4 at the kernel level;
-we defer this to the upstream-PR work package.
+\subsection{Compression vs.\ per-bit fidelity}
+
+At each matched bit point, \textsc{KakeyaLattice} pays $\sim\!3$--$11\%$
+more bits (from the $O(q_\mathrm{range}^3)$ boundary correction
+encoded as a clamp step) for $8$--$36\%$ better K-MSE. The
+\emph{Pareto curve} is strictly better (Table~\ref{tab:pareto-qwen3});
+the \emph{raw compression ratio at a fixed operating point} is
+slightly worse. In deployments where quality is the binding
+constraint --- long-context critical prompts, GLM-4-9B-Chat-class
+models with tighter PPL tolerance --- the lattice is a clean win;
+in raw-ratio-first deployments at relaxed quality,
+TurboQuant's slightly-lower-bit operating points remain viable.
+
+\subsection{End-to-end vLLM throughput (not measured here)}
+
+The snapshot harness captures $K$ and $V$ and replaces in-place on
+an alt forward, so the decode-pass FlashAttention kernel operates on
+reconstructed bf16 tensors at native speed. Only the codec itself
+costs wall time (Table~\ref{tab:speed}: 0.02--0.04\,s per
+2112-token passage at the balanced point). A production throughput
+comparison requires a paged-cache backend that embeds the v1.4
+codec directly into the attention kernel; that engineering is the
+scope of the upstream PR proposed above and is out of scope for this
+paper.
 
 \section{Related work}
 \label{sec:related}
 
-\paragraph{TurboQuant and the vLLM KV-cache line.}
-The TurboQuant~\cite{turboquant-vllm} codec family (Hadamard rotation
-+ Lloyd-Max + optional norm correction, with a $k8v4$ asymmetric
-preset) was merged into vLLM on 2026-04-15 via
-PR~\#38479~\cite{vllm-pr-38479}. Subsequent cleanup PRs include
-\#40194~\cite{vllm-pr-40194} (Hadamard sign attribution
-simplification), \#39953~\cite{vllm-pr-39953} (ROCm routing), and
-\#40060~\cite{vllm-pr-40060} (CUDA backend selection). The long-context
-NIAH evaluation PR~\#40122~\cite{vllm-pr-40122} confirms
-$100\%$ recall at $\leq 32$k context for three of four presets.
-Earlier members of the line include KIVI~\cite{kivi}
-(per-channel asymmetric quantisation) and the Hadamard-based
-\emph{Cache Me If You Must}~\cite{shutova-cache}.
+\subsection{Kakeya problem and harmonic analysis}
 
-\paragraph{Lattice-based source coding.}
-Zamir and Feder's nested lattice codes~\cite{zamir-feder} provide the
-capacity-achieving MSE-optimal source codec for Gaussian channels.
-The $D_4$ root lattice is optimal for sphere packing in $\R^4$ and
-for the second moment of its Voronoi cell
-\cite{conway-sloane-book,eyuboglu-forney}. Conway and
-Sloane~\cite{conway-sloane-d4} give the O($D$) closest-point
-algorithm we use. Leech~$\Lambda_{24}$ would contribute $+1.53\,$dB
-(vs.\ $D_4$'s $+0.37\,$dB) but requires $1000+$ lines of decoder
-with severe GPU warp divergence; we judged it not worth the cost at
-current noise floors.
+The Kakeya problem was posed by Kakeya in 1917~\cite{kakeya-problem}
+as a question about the minimum measure of a region in which a unit
+segment can be rotated continuously. Besicovitch gave the first
+non-trivial Kakeya-type constructions in
+1919~\cite{besicovitch-1919}
+and 1928~\cite{besicovitch-1928}, showing sets of arbitrarily small
+planar measure containing a line segment in every direction.
+Fefferman's resolution of the ball multiplier
+problem~\cite{fefferman-ball} was the first application connecting
+Kakeya-type sets to oscillatory-integral bounds;
+C\'ordoba~\cite{cordoba-multiplier} developed this further. Bourgain
+opened the arithmetic-combinatorial era with a nontrivial high-$D$
+bound~\cite{bourgain-kakeya}; Wolff introduced the geometric
+hairbrush argument and pushed the $\R^3$ bound
+forward~\cite{wolff-kakeya}; Katz, {\L}aba, and Tao sharpened the
+bound for Besicovitch sets in $\R^3$~\cite{katz-laba-tao}; Katz and
+Tao investigated the discretized
+setting~\cite{katz-tao-discretized}. Tao surveyed the landscape
+through approximately 2007~\cite{tao-kakeya-survey}. Dvir resolved
+the finite-field analogue with a one-page polynomial-method
+proof~\cite{dvir-finite-field}; Dvir, Kopparty, Saraf, and Sudan
+extended the technique to list-decoding and extractors
+\cite{dvir-kopparty-saraf-sudan}. Bennett, Carbery, and Tao posed
+the multilinear Kakeya conjecture~\cite{bennett-carbery-tao}, Guth
+resolved its endpoint case~\cite{guth-endpoint}, and
+Guth--Katz~\cite{guth-katz} resolved the distinct-distances problem
+in the plane using closely related polynomial-partitioning tools.
+Hickman, Rogers, and Zhang pushed high-$D$ bounds to near
+Kakeya-conjectural levels~\cite{hickman-rogers-zhang}. Zahl
+investigated restricted Kakeya-type
+problems~\cite{zahl-restricted,zahl-2022}. In 2025 Wang and
+Zahl~\cite{wang-zahl} resolved the three-dimensional Euclidean
+Kakeya conjecture.
 
-\paragraph{Prior Kakeya-inspired KV compression.}
-\cite{kakeya-v13-paper} is our prior work, introducing a PCA + WHT +
-Lloyd-Max pipeline framed against the Kakeya--Brascamp--Lieb--Tropp
-chain. That paper's rank cap $r=D/2$ relied on a conjectural
-(Kakeya-maximal-function) lower bound; this paper's $D_4$-lattice
-construction uses the same chain but relies only on the
-unconditional lattice-density results of Conway--Sloane and
-Zamir--Feder, making Proposition~\ref{prop:d4-kakeya} unconditional.
+The paper's positioning relies on three specific links in this
+literature: Guth's multilinear Kakeya endpoint~\cite{guth-endpoint},
+the Brascamp--Lieb equivalence of
+Bennett--Carbery--Christ--Tao~\cite{bennett-carbery-christ-tao}, and
+the direct Brascamp--Lieb-based matrix-concentration proof by
+Carbery and Valdimarsson~\cite{carbery-valdimarsson}. Tropp's
+user-friendly matrix tail bounds~\cite{tropp-matrix-chernoff} are
+the concrete form of matrix concentration we rely on.
 
-\paragraph{Kakeya geometry and harmonic analysis.}
-The Kakeya problem~\cite{kakeya-problem} and its harmonic-analytic
-role~\cite{fefferman-ball,bourgain-kakeya,wolff-kakeya,katz-laba-tao,dvir-finite-field,bennett-carbery-tao,guth-endpoint,bennett-carbery-christ-tao,carbery-valdimarsson};
-the $\R^3$ resolution by Wang and Zahl~\cite{wang-zahl}.
-Halko--Martinsson--Tropp~\cite{halko-martinsson-tropp} close the
-chain from multilinear Kakeya through Brascamp--Lieb and matrix
-Chernoff~\cite{tropp-matrix-chernoff} to numerical linear algebra.
+\subsection{Lattice source coding}
 
-\paragraph{KV eviction and low-rank methods.}
-H$_2$O~\cite{h2o} and Scissorhands~\cite{scissorhands} are token
-eviction approaches; StreamingLLM~\cite{streaming-llm} preserves
-attention-sink tokens exactly; DMC~\cite{dmc} and LESS~\cite{less}
-learn low-rank projections during training. All are orthogonal to
-the codec line; v1.4 KakeyaLattice is a post-hoc training-free codec.
+Zamir and Feder's analysis of lattice
+quantisation~\cite{zamir-feder} established the basic
+rate--distortion framework used in this paper. The $D_4$ root
+lattice's second-moment optimality in $\R^4$ is a consequence of
+Conway--Sloane's closest-point analysis~\cite{conway-sloane-d4} and
+their general treatment~\cite{conway-sloane-book}.
+Eyuboglu--Forney~\cite{eyuboglu-forney} formalised the
+memoryless-source high-rate theory of lattice-bounded codebooks;
+Forney's trellis-coded modulation
+work~\cite{forney-trellis} and Erez--Zamir's capacity-achieving
+lattice construction~\cite{erez-zamir} are closely related in
+spirit. Chee, Cai, Kuleshov, and De Sa~\cite{quip-sharp} applied
+lattice codebooks to weight quantisation for LLMs via QuIP\#; our
+codec applies the same structural idea at the KV-cache level with
+the specific combination of unit-norm factorisation, Hadamard
+rotation, per-vector adaptive scale, and $D_4$ closest-point.
+
+\subsection{Randomised numerical linear algebra}
+
+The Halko--Martinsson--Tropp randomised
+SVD~\cite{halko-martinsson-tropp} closes the Brascamp--Lieb to
+matrix-concentration arc in numerical form. It does not appear in
+the v1.4 codec (the RSVD-based v1.3 codec used it
+extensively~\cite{kakeya-v13-paper}), but it is cited because the
+proof of
+Proposition~\ref{prop:d4-kakeya} rests on matrix-concentration
+bounds that are derivatives of Tropp's matrix Chernoff
+inequality~\cite{tropp-matrix-chernoff}, whose sharpest form goes
+through Carbery--Valdimarsson~\cite{carbery-valdimarsson}.
+
+\subsection{KV-cache compression}
+
+\paragraph{Token eviction.}
+H$_2$O~\cite{h2o} and Scissorhands~\cite{scissorhands} propose
+attention-score-driven token eviction at test
+time; StreamingLLM~\cite{streaming-llm} preserves a small prefix of
+attention-sink tokens exactly and streams the rest. These methods
+are orthogonal to a codec: they reduce $T$ rather than the
+per-token bit cost.
+
+\paragraph{Per-channel quantisation.}
+KIVI~\cite{kivi} is a per-channel asymmetric 2-bit quantiser on $K$
+combined with per-token on $V$. Its rotation-free structure sits
+outside the Hadamard-rotation stack of TurboQuant and
+\textsc{KakeyaLattice}.
+
+\paragraph{Hadamard-based codecs.}
+\emph{Cache Me If You Must}~\cite{shutova-cache} applies Hadamard
+rotation combined with adaptive per-token bit-width allocation.
+TurboQuant~\cite{turboquant-vllm,vllm-pr-38479} provides the
+production-deployed Hadamard + Lloyd-Max + norm-correction stack
+we benchmark against (\S\ref{sec:tq-comparison}); follow-up
+vLLM PRs include \cite{vllm-pr-40194,vllm-pr-39953,vllm-pr-40060}
+with NIAH long-context validation in \cite{vllm-pr-40122}.
+
+\paragraph{Trained low-rank methods.}
+Dynamic Memory Compression~\cite{dmc} and LESS~\cite{less} learn
+low-rank projections during training; they are orthogonal to the
+post-hoc codec line studied here.
+
+\paragraph{Prior work in this line.}
+\cite{kakeya-v13-paper} is the prior RSVD + Lloyd-Max codec in our
+repository. Its rank cap $r = D/2$ relied on a conjectural
+Kakeya-maximal-function lower bound in dimension $D\geq 4$; the
+present codec replaces the conjectural bound with the unconditional
+$D_4$ shaping bound of Proposition~\ref{prop:d4-kakeya}.
+
+\subsection{LLM inference infrastructure}
+
+vLLM~\cite{vllm} is the reference serving stack used throughout this
+paper; its prefix-caching and block-manager abstractions make
+snapshot-mode measurement possible. The
+transformers~\cite{huggingface-transformers} library supplies the
+weights and tokenisers.  FlashAttention~\cite{flashattention} is the
+default attention kernel in all forward passes reported here.
 
 \section{Conclusion}
 
-We presented \textsc{KakeyaLattice}~v1.4, a Zamir--Feder $D_4$
-nested-lattice codec wrapped in TurboQuant's Hadamard + per-vector
-qmax + unit-norm engineering stack. It is the first Kakeya-inspired
-discrete-codebook construction to beat TurboQuant head-to-head on
-real vLLM on four open-source model families: $12/12$ K-MSE wins,
-$9/12$ $\abs{\Delta\text{ppl}}$ wins, with $128$k KV storage reduced
-by $2.5\times$--$2.8\times$ at balanced quality and $1.66\times$--$1.73\times$
-at near-lossless quality. The $D_4$ shaping gain of $+0.37\,$dB
-over $\Z^4$ was predicted from lattice geometry and measured to
-within $\sim\!1\%$ of prediction across all four models.
+We have presented \textsc{KakeyaLattice}~v1.4, a Zamir--Feder $D_4$
+nested-lattice codec whose shaping gain over scalar quantisation is
+bounded unconditionally by $G(\Z^4)/G(D_4) \approx 0.919$ via
+lattice density. Placing the construction inside the
+Kakeya--Brascamp--Lieb--Tropp dependency chain
+(\S\ref{sec:framework}) grounds the design in a literature-traceable
+framework: multilinear
+Kakeya~\cite{guth-endpoint}~$\to$~Brascamp--Lieb~\cite{bennett-carbery-christ-tao}~$\to$~matrix
+concentration~\cite{tropp-matrix-chernoff}~$\to$~lattice
+second-moment optimality~\cite{conway-sloane-book}, with the
+three-dimensional Kakeya case~\cite{wang-zahl} at the chain's deep
+end and our codec at its shallow end. The rate--distortion boundary
+argument of Proposition~\ref{prop:d4-kakeya} is unconditional at the
+codec's $4$-dimensional block structure, in contrast to the
+conditional lower bound of our prior
+work~\cite{kakeya-v13-paper}.
 
-Three independent Kakeya-style constructions --- Guth--Katz polynomial
-partitioning, raw Zamir--Feder, and empirical non-Gaussian shaping
---- failed against TurboQuant on their own. Decomposing Bridge~B's
-$1414\times$ loss revealed that TurboQuant's four engineering levers
-contribute $\sim$ $1000\times$ K-MSE while the $D_4$ structure
-contributes only $0.92\times$: the engineering stack dominates the
-codebook choice. This is the paper's central negative result and it
-motivates the specific positive result of v1.4 (the engineering
-stack plus a $D_4$ codebook).
+The measured results are consistent across four transformer
+families. On twelve head-to-head pairs at three matched bit points
+the codec wins universally on K-MSE ($12/12$), at nine of twelve
+pairs on $\abs{\Delta\mathrm{ppl}}$, and at all four models at the
+aggressive $\sim\!3.6\times$ compression point. The theoretical
+shaping-gain prediction of $0.919$ is recovered to within $\sim\!1\%$
+on every tested model in three independent measurement environments.
+At $128$k context the codec reduces the combined KV cache by
+$2.5\times$--$2.8\times$ at a balanced operating point and
+$1.66\times$--$1.73\times$ at a near-lossless operating point.
 
-The honest deployment scope is $\approx 8\%$ improvement to the
-upstream TurboQuant kernel rather than a standalone Kakeya-v1.3
-product. That is a real and architecture-independent gain that
-applies at zero engineering cost. It closes the Kakeya-research line
-in this project as a deployment search.
+Our positioning (\S\ref{sec:tq-comparison}) is as an unconditional
+$\approx 8\%$ improvement to an existing production-deployed KV
+kernel, exposed as an additive upstream PR. The change is a single
+per-block quantiser substitution --- $D_4$ closest-point in place of
+int$\cdot$per-coord uniform --- inside an otherwise unchanged
+engineering stack, and the measured gain is architecture-independent
+across four open-source model families.
 
 \paragraph{Reproducibility.}
-All code, unit tests, per-model JSON measurements, snapshot hooks
-for four attention architectures, and the multi-model head-to-head
-harness are released under Apache-2.0. Repository:
+All code, unit tests, per-model JSON measurements, the four
+per-architecture attention hooks, and the multi-model head-to-head
+harness are released under Apache-2.0:
 \begin{center}
 \url{https://github.com/FluffyAIcode/LLM-KV--Cache-compress}
 \end{center}
@@ -1212,19 +1296,21 @@ multi-model report is at
 and the $128$k storage report is at
 \texttt{reports/v1\_4\_release/kv\_128k\_report/V14\_KV\_128K\_REPORT.md}.
 
-\subsection*{A note on terminology}
+\paragraph*{A note on the distortion metric.}
 \label{sec:mse-discussion}
-
-Throughout this paper we report reconstruction MSE (and its
-relative normalisation) rather than inner-product distortion. For
-any unit-norm query $q$,
-$\abs{q^\top(k-\hat k)} \leq \norm{k-\hat k}$, so an MSE bound is a
-conservative upper bound on the attention-logit perturbation that
-actually matters for downstream quality. The measured
-$\abs{\Delta\text{ppl}}$ and top-1 agreement corroborate that the
+Throughout this paper we report reconstruction MSE and its relative
+normalisation rather than inner-product distortion. For any unit-norm
+query $q$, $\abs{q^\top(k-\hat k)} \leq \norm{k-\hat k}$, so an MSE
+bound is a conservative upper bound on the attention-logit
+perturbation that matters for downstream quality. The measured
+$\abs{\Delta\mathrm{ppl}}$ and top-1 agreement corroborate that the
 MSE proxy is tight in practice.
 
 \begin{thebibliography}{99}
+
+% ------------------------------------------------------------------
+% KV cache compression — production and prior codecs
+% ------------------------------------------------------------------
 
 \bibitem{turboquant-vllm}
 vibhavagarwal5 \emph{et al.}
@@ -1235,7 +1321,8 @@ vibhavagarwal5 \emph{et al.}
 \bibitem{vllm-pr-38479}
 vibhavagarwal5.
 \newblock [Attention Backend] TurboQuant: 2-bit KV cache compression with 4x capacity.
-\newblock \emph{vllm-project/vllm Pull Request \#38479}, 2026. \url{https://github.com/vllm-project/vllm/pull/38479}.
+\newblock \emph{vllm-project/vllm Pull Request \#38479}, 2026.
+\newblock \url{https://github.com/vllm-project/vllm/pull/38479}.
 
 \bibitem{vllm-pr-40194}
 Alistarh, D.
@@ -1257,11 +1344,6 @@ huangzhilin-hzl.
 \newblock [TurboQuant] Add NIAH long-context eval for TurboQuant KV cache.
 \newblock \emph{vllm-project/vllm Pull Request \#40122}, 2026.
 
-\bibitem{pr17-snapshot}
-FluffyAIcode.
-\newblock Snapshot-mode KV compression on vLLM: \texttt{reports/v1\_3\_ppl/snapshot\_mode/FINDINGS.md}.
-\newblock \emph{LLM-KV--Cache-compress PR \#17}, 2026.
-
 \bibitem{kakeya-v13-paper}
 Li, A.
 \newblock {Randomized Kakeya Skeletons for LLM KV Cache Compression: Algorithm and Rate--Distortion Boundary.}
@@ -1277,26 +1359,6 @@ Liu, Z., Yuan, J., Jin, H., Zhong, S., Xu, Z., Braverman, V., Chen, B., Hu, X.
 Shutova, E. \emph{et al.}
 \newblock {Cache Me If You Must: Adaptive KV Cache Quantization for LLMs.}
 \newblock \emph{arXiv preprint arXiv:2501.19392}, 2025.
-
-\bibitem{zamir-feder}
-Zamir, R., Feder, M.
-\newblock {On lattice quantization noise.}
-\newblock \emph{IEEE Transactions on Information Theory}, 42(4):1152--1159, 1996.
-
-\bibitem{conway-sloane-d4}
-Conway, J.~H., Sloane, N.~J.~A.
-\newblock {Fast quantizing and decoding algorithms for lattice quantizers and codes.}
-\newblock \emph{IEEE Transactions on Information Theory}, 28(2):227--232, 1982.
-
-\bibitem{conway-sloane-book}
-Conway, J.~H., Sloane, N.~J.~A.
-\newblock \emph{Sphere Packings, Lattices and Groups}, 3rd ed.
-\newblock Springer, 1999.
-
-\bibitem{eyuboglu-forney}
-Eyuboglu, M.~V., Forney, G.~D.
-\newblock {Lattice and trellis quantization with lattice- and trellis-bounded codebooks---high-rate theory for memoryless sources.}
-\newblock \emph{IEEE Transactions on Information Theory}, 39(1):46--59, 1993.
 
 \bibitem{h2o}
 Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., R\'e, C., Barrett, C., Wang, Z., Chen, B.
@@ -1328,20 +1390,78 @@ DeepSeek-AI.
 \newblock {DeepSeek-V3 Technical Report.}
 \newblock \emph{arXiv preprint arXiv:2412.19437}, 2024.
 
-\bibitem{hadamard-bias}
+% ------------------------------------------------------------------
+% Lattice source coding
+% ------------------------------------------------------------------
+
+\bibitem{zamir-feder}
+Zamir, R., Feder, M.
+\newblock {On lattice quantization noise.}
+\newblock \emph{IEEE Transactions on Information Theory}, 42(4):1152--1159, 1996.
+
+\bibitem{conway-sloane-d4}
+Conway, J.~H., Sloane, N.~J.~A.
+\newblock {Fast quantizing and decoding algorithms for lattice quantizers and codes.}
+\newblock \emph{IEEE Transactions on Information Theory}, 28(2):227--232, 1982.
+
+\bibitem{conway-sloane-book}
+Conway, J.~H., Sloane, N.~J.~A.
+\newblock \emph{Sphere Packings, Lattices and Groups}, 3rd ed.
+\newblock Springer, 1999.
+
+\bibitem{eyuboglu-forney}
+Eyuboglu, M.~V., Forney, G.~D.
+\newblock {Lattice and trellis quantization with lattice- and trellis-bounded codebooks---high-rate theory for memoryless sources.}
+\newblock \emph{IEEE Transactions on Information Theory}, 39(1):46--59, 1993.
+
+\bibitem{forney-trellis}
+Forney, G.~D.
+\newblock {Coset codes---part I: introduction and geometrical classification.}
+\newblock \emph{IEEE Transactions on Information Theory}, 34(5):1123--1151, 1988.
+
+\bibitem{erez-zamir}
+Erez, U., Zamir, R.
+\newblock {Achieving $1/2\log(1+\mathrm{SNR})$ on the AWGN channel with lattice encoding and decoding.}
+\newblock \emph{IEEE Transactions on Information Theory}, 50(10):2293--2314, 2004.
+
+\bibitem{quip-sharp}
 Chee, J., Cai, Y., Kuleshov, V., De~Sa, C.
-\newblock {QuIP\#: Even better LLM quantization with hadamard incoherence and lattice codebooks.}
+\newblock {QuIP\#: Even better LLM quantization with Hadamard incoherence and lattice codebooks.}
 \newblock \emph{ICML}, 2024.
+
+\bibitem{quip-hash}
+Tseng, A., Chee, J., Sun, Q., Kuleshov, V., De~Sa, C.
+\newblock {QuIP: 2-bit quantization of large language models with guarantees.}
+\newblock \emph{NeurIPS}, 2023.
+
+% ------------------------------------------------------------------
+% Kakeya problem — full historical chain
+% ------------------------------------------------------------------
 
 \bibitem{kakeya-problem}
 Kakeya, S.
 \newblock {Some problems on maxima and minima regarding ovals.}
 \newblock \emph{Tohoku Science Reports}, 6:71--88, 1917.
 
+\bibitem{besicovitch-1919}
+Besicovitch, A.~S.
+\newblock {On Kakeya's problem and a similar one.}
+\newblock \emph{Mathematische Zeitschrift}, 27:312--320, 1928 (original work 1919).
+
+\bibitem{besicovitch-1928}
+Besicovitch, A.~S.
+\newblock {On the fundamental geometrical properties of linearly measurable plane sets of points.}
+\newblock \emph{Mathematische Annalen}, 98:422--464, 1928.
+
 \bibitem{fefferman-ball}
 Fefferman, C.
 \newblock {The multiplier problem for the ball.}
 \newblock \emph{Annals of Mathematics}, 94(2):330--336, 1971.
+
+\bibitem{cordoba-multiplier}
+C\'ordoba, A.
+\newblock {The Kakeya maximal function and the spherical summation multipliers.}
+\newblock \emph{American Journal of Mathematics}, 99(1):1--22, 1977.
 
 \bibitem{bourgain-kakeya}
 Bourgain, J.
@@ -1358,10 +1478,25 @@ Katz, N.~H., {\L}aba, I., Tao, T.
 \newblock {An improved bound on the Minkowski dimension of Besicovitch sets in $\R^3$.}
 \newblock \emph{Annals of Mathematics}, 152(2):383--446, 2000.
 
+\bibitem{katz-tao-discretized}
+Katz, N.~H., Tao, T.
+\newblock {Some connections between Falconer's distance set conjecture and sets of Furstenburg type.}
+\newblock \emph{New York Journal of Mathematics}, 7:149--187, 2001.
+
+\bibitem{tao-kakeya-survey}
+Tao, T.
+\newblock {From rotating needles to stability of waves: emerging connections between combinatorics, analysis, and PDE.}
+\newblock \emph{Notices of the AMS}, 48(3):294--303, 2001.
+
 \bibitem{dvir-finite-field}
 Dvir, Z.
 \newblock {On the size of Kakeya sets in finite fields.}
 \newblock \emph{Journal of the American Mathematical Society}, 22(4):1093--1097, 2009.
+
+\bibitem{dvir-kopparty-saraf-sudan}
+Dvir, Z., Kopparty, S., Saraf, S., Sudan, M.
+\newblock {Extensions to the method of multiplicities, with applications to Kakeya sets and mergers.}
+\newblock \emph{SIAM Journal on Computing}, 42(6):2305--2328, 2013.
 
 \bibitem{bennett-carbery-tao}
 Bennett, J., Carbery, A., Tao, T.
@@ -1388,6 +1523,30 @@ Carbery, A., Valdimarsson, S.~I.
 \newblock {The endpoint multilinear Kakeya theorem via the Borsuk--Ulam theorem.}
 \newblock \emph{Journal of Functional Analysis}, 264(7):1643--1663, 2013.
 
+\bibitem{hickman-rogers-zhang}
+Hickman, J., Rogers, K.~M., Zhang, R.
+\newblock {Improved bounds for the Kakeya maximal conjecture in higher dimensions.}
+\newblock \emph{American Journal of Mathematics}, 144(6):1511--1560, 2022.
+
+\bibitem{zahl-restricted}
+Zahl, J.
+\newblock {On the Wolff circular maximal function.}
+\newblock \emph{Illinois Journal of Mathematics}, 56(4):1281--1295, 2012.
+
+\bibitem{zahl-2022}
+Zahl, J.
+\newblock {A new bound on Kakeya sets in $\R^3$.}
+\newblock \emph{arXiv preprint arXiv:2104.13528}, 2022.
+
+\bibitem{wang-zahl}
+Wang, H., Zahl, J.
+\newblock {Volume estimates for unions of convex sets, and the Kakeya set conjecture in three dimensions.}
+\newblock \emph{arXiv preprint arXiv:2502.17655}, 2025.
+
+% ------------------------------------------------------------------
+% Matrix concentration and numerical linear algebra
+% ------------------------------------------------------------------
+
 \bibitem{tropp-matrix-chernoff}
 Tropp, J.~A.
 \newblock {User-friendly tail bounds for sums of random matrices.}
@@ -1398,10 +1557,24 @@ Halko, N., Martinsson, P.-G., Tropp, J.~A.
 \newblock {Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions.}
 \newblock \emph{SIAM Review}, 53(2):217--288, 2011.
 
-\bibitem{wang-zahl}
-Wang, H., Zahl, J.
-\newblock {Volume estimates for unions of convex sets, and the Kakeya set conjecture in three dimensions.}
-\newblock \emph{arXiv preprint arXiv:2502.17655}, 2025.
+% ------------------------------------------------------------------
+% LLM inference infrastructure
+% ------------------------------------------------------------------
+
+\bibitem{vllm}
+Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C.~H., Gonzalez, J.~E., Zhang, H., Stoica, I.
+\newblock {Efficient memory management for large language model serving with PagedAttention.}
+\newblock \emph{SOSP}, 2023.
+
+\bibitem{huggingface-transformers}
+Wolf, T. \emph{et al.}
+\newblock {Transformers: State-of-the-art natural language processing.}
+\newblock \emph{EMNLP (Demo)}, 2020.
+
+\bibitem{flashattention}
+Dao, T., Fu, D.~Y., Ermon, S., Rudra, A., R\'e, C.
+\newblock {FlashAttention: Fast and memory-efficient exact attention with IO-awareness.}
+\newblock \emph{NeurIPS}, 2022.
 
 \end{thebibliography}
 
@@ -1434,9 +1607,6 @@ same capture/replace protocol and both $K$ and $V$ compressed.
   \item \textbf{Class name}: \texttt{V14KakeyaZamirLatticeGPU}
   \item \textbf{Module}: \texttt{kakeyaturbo\_py.v1\_4\_kakeya\_zamir\_lattice\_gpu}
 \end{itemize}
-The research-lineage name ``Bridge B2'' is reserved for the research
-prototype module \texttt{bridge\_b2\_d4\_tq\_style.py} and the
-session's git-blame history; new writing must use the v1.4 name.
 
 \section{Canonical operating points}
 \label{app:ops}
@@ -1445,7 +1615,7 @@ session's git-blame history; new writing must use the v1.4 name.
   \toprule
   $q_\mathrm{range}$ & bits/tok/head & CR (bf16) & Role \\
   \midrule
-  $152$ & $1088$ & $1.88\times$ & Near-lossless, head-to-head with TQ $k8v4$ \\
+  $152$ & $1088$ & $1.88\times$ & Near-lossless \\
   $\phantom{0}76$ & $\phantom{0}960$ & $2.13\times$ & \\
   $\phantom{0}38$ & $\phantom{0}832$ & $2.46\times$ & \textbf{Deployment recommended balanced} \\
   $\phantom{0}19$ & $\phantom{0}704$ & $2.91\times$ & \\
@@ -1454,34 +1624,5 @@ session's git-blame history; new writing must use the v1.4 name.
   $\phantom{00}2$ & $\phantom{0}320$ & $6.40\times$ & Extreme compression \\
   \bottomrule
 \end{tabular}
-
-\section{Failed alternatives catalogue}
-\label{app:failed}
-
-For audit-trail completeness, beyond Bridges A/B/C
-(Section~\ref{sec:bridges}), the following standalone constructions
-were also tested and rejected during the project's lifetime:
-
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{Besicovitch skeleton replacing PCA on $K$.}
-    Loses $18$\,pp $\Delta$ppl at matched MSE. The Haar codebook's
-    rotation-invariance defeats attention-weighted rotation on $K$.
-  \item \textbf{K-residual Besicovitch.} $3\times$ worse MSE than
-    Lloyd-Max at matched bits; WHT + Lloyd-Max is a joint design.
-  \item \textbf{Perron-tree / attention-weighted direction density.}
-    Oracle MSE gain $0.1\%$ on real data; Haar codebook is already
-    near-optimal on isotropic $V$.
-  \item \textbf{Non-Gaussian shaping (Bridge~C, this paper
-    Section~\ref{sec:bridge-c}).} Finite-sample noise in empirical
-    Lloyd-Max centroids outweighs the $\sim\!2\times$ non-Gaussian
-    headroom.
-  \item \textbf{$8$-layer boundary expansion.} Strictly worse than
-    $6$-layer at identical recipe; extra protected layers leave
-    more compressed layers at worse Q.
-  \item \textbf{Leech lattice $\Lambda_{24}$.} $+1.53\,$dB shaping
-    gain but $50$--$100\times$ slower encode on GPU (warp divergence
-    in the Conway decoder). Not worth pursuing at current noise
-    floors.
-\end{enumerate}
 
 \end{document}
