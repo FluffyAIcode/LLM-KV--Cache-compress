@@ -1,0 +1,16 @@
+Warning: Permanently added '[208.64.254.72]:19253' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+[Q= 10]  bit-identical batch-vs-1-at-a-time: False   max_abs_diff: 1.720e-02
+[Q= 10]  single-token (1 × 8 × 128) encode+decode:  289.03 us   batch-1024 amortised:   0.30 us/tok   slowdown: 967.1×
+[Q= 10]  rel-MSE (sanity):     8.770e-03
+
+[Q= 38]  bit-identical batch-vs-1-at-a-time: False   max_abs_diff: 5.206e-03
+[Q= 38]  single-token (1 × 8 × 128) encode+decode:  292.55 us   batch-1024 amortised:   0.27 us/tok   slowdown: 1086.0×
+[Q= 38]  rel-MSE (sanity):     6.074e-04
+
+[Q=152]  bit-identical batch-vs-1-at-a-time: False   max_abs_diff: 5.173e-03
+[Q=152]  single-token (1 × 8 × 128) encode+decode:  325.13 us   batch-1024 amortised:   0.27 us/tok   slowdown: 1189.2×
+[Q=152]  rel-MSE (sanity):     3.798e-05
+

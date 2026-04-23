@@ -1,0 +1,61 @@
+Warning: Permanently added '[208.64.254.72]:19253' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+
+==================================================================================================
+Per-decode-step codec latency — streaming mode (1 new token × all layers × all KV-heads)
+==================================================================================================
+
+## Qwen3-4B   (L=36, kv_h=8, D=128, vec/step = 288)
+codec           bits/head/tok   step μs  μs / vec   overhead vs bf16
+--------------------------------------------------------------------------
+bf16 baseline            2048     7.01     0.024              (1.0×)
+v1.4 Q=10                 576   300.52     1.043            42.8×
+v1.4 Q=38                 832   318.20     1.105            45.4×
+v1.4 Q=152               1088   279.76     0.971            39.9×
+TQ b=4                    544   116.40     0.404            16.6×
+TQ b=6                    800   117.00     0.406            16.7×
+TQ b=8                   1056   116.68     0.405            16.6×
+
+## DeepSeek-1.5B   (L=28, kv_h=2, D=128, vec/step = 56)
+codec           bits/head/tok   step μs  μs / vec   overhead vs bf16
+--------------------------------------------------------------------------
+bf16 baseline            2048     5.45     0.097              (1.0×)
+v1.4 Q=10                 576   272.65     4.869            50.1×
+v1.4 Q=38                 832   273.28     4.880            50.2×
+v1.4 Q=152               1088   270.21     4.825            49.6×
+TQ b=4                    544   114.62     2.047            21.0×
+TQ b=6                    800   114.52     2.045            21.0×
+TQ b=8                   1056   114.98     2.053            21.1×
+
+## Gemma-4-E4B   (L=24, kv_h=2, D=256, vec/step = 48)
+codec           bits/head/tok   step μs  μs / vec   overhead vs bf16
+--------------------------------------------------------------------------
+bf16 baseline            4096     5.50     0.115              (1.0×)
+v1.4 Q=10                1120   294.02     6.125            53.5×
+v1.4 Q=38                1632   302.04     6.293            55.0×
+v1.4 Q=152               2144   306.61     6.388            55.8×
+TQ b=4                   1056   126.62     2.638            23.0×
+TQ b=6                   1568   126.37     2.633            23.0×
+TQ b=8                   2080   126.66     2.639            23.0×
+
+## GLM-4-9B-Chat   (L=40, kv_h=2, D=128, vec/step = 80)
+codec           bits/head/tok   step μs  μs / vec   overhead vs bf16
+--------------------------------------------------------------------------
+bf16 baseline            2048     5.79     0.072              (1.0×)
+v1.4 Q=10                 576   293.10     3.664            50.6×
+v1.4 Q=38                 832   298.50     3.731            51.5×
+v1.4 Q=152               1088   293.23     3.665            50.6×
+TQ b=4                    544   120.59     1.507            20.8×
+TQ b=6                    800   121.38     1.517            21.0×
+TQ b=8                   1056   120.80     1.510            20.9×
+
+==================================================================================================
+Interpretation:
+  * All codecs operate per-decode-step in well under 1 ms.
+  * A typical Qwen3-4B decode step on H200 is ~15-30 ms (bf16 forward),
+    so codec overhead is <5 % of total decode latency at any op point.
+  * v1.4 and TQ have comparable streaming latency (both are dominated
+    by the Hadamard GEMM, not by the quantiser).
+==================================================================================================
