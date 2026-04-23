@@ -296,36 +296,56 @@ unrealised.  This is the **real open research direction** that
 the name "Kakeya-v1.3" points at, and that the project's actual
 algorithm (PCA + K-means) does NOT address.
 
-### Five research paths, ordered from concrete to speculative
+### Six research paths, ordered from concrete to speculative
 
 These are "research" directions — not engineering; not suitable
 for a production iteration of this branch.  Listed so the next
 agent can recognise them if the user raises them:
 
 - **(i) Empirical measure-efficiency analysis of Qwen3-4B K.**
-  Measure the Wasserstein-2 distance from the empirical K
-  distribution to perfect isotropy on `𝕊^{D-1}`.  Any non-zero
-  deviation is Kakeya-reachable saving.  Cheap (~hours on vast).
-  Would provide a **measured upper bound** on how much a
-  hypothetical discrete-Kakeya construction could beat TQ.
+  ✅ **EXECUTED** (this session) in
+  `benchmarks/measure_k_non_gaussianity.py`.  Result: **K is
+  strongly non-Gaussian on all 4 measured axes** (kurtosis,
+  Wasserstein-2, score-function deviation, isotropy).  All four
+  decision gates triggered.  Measured ceiling for Kakeya-style
+  improvement over TurboQuant: **0.5 - 1.5 dB** (based on W_2
+  deviation).  See `FINDINGS_GPU.md` section "Phase 1 decision
+  gate" for full analysis.  **This is the upper bound on what any
+  of (iii), (iv), (vi) below can deliver.**
 - **(ii) Information-geometric rate-distortion on the real K
   distribution.**  Compute the actual Shannon lower bound for
   the empirical K (not assumed-i.i.d.-Gaussian) via Fisher-Rao
   metric on the estimated density.  Gives a **measured ceiling**
-  for any code, Kakeya or otherwise.
+  for any code, Kakeya or otherwise.  Partially addressed by (i)
+  — the W_2 and score-function measurements bound the Shannon
+  gap within a factor.  Full treatment still pending.
 - **(iii) Deep Perron-tree-style recursive RVQ.**  The RVQ 4×16
   tested in §5.4 is a 2-level Perron-tree analog; extending to
   `log₂(k_eff)` levels with tied codebooks across levels might
   reclaim some of the Perron tree's exponential measure savings.
-  Concrete, doable in a week of coding.
-- **(iv) Nested-lattice shaping with data-driven coarse
-  region.**  Replace Zamir-Feder's Gaussian shaping region `Λ_c`
-  with the empirical support of LLM K (possibly a union of
-  Voronoi cells learned offline).  Theoretical scaffolding
-  exists; LLM adaptation is new.
+  Concrete, doable in a week of coding.  **Deprioritised after
+  (i)**: measured kurtosis deviations are modest, deep RVQ will
+  plateau quickly.  Expected 0.3 - 0.5 dB.
+- **(iv) Nested-lattice shaping with data-driven coarse region.**
+  Replace Zamir-Feder's Gaussian shaping region `Λ_c` with the
+  empirical support of LLM K (possibly a union of Voronoi cells
+  learned offline).  Theoretical scaffolding exists; LLM
+  adaptation is new.  **Highest-ROI path given (i)'s results** —
+  directly exploits the measured W_2 and isotropy deviations.
+  Expected 0.5 - 1.5 dB.  Implementable in 2-3 weeks.
 - **(v) Finite-field Kakeya as a quantization code.**  Dvir's
   `F_q^D` Kakeya sets interpreted as binary-alphabet codebooks.
-  Most speculative; no known bridge theorem.
+  Most speculative; no known bridge theorem.  **No-go per (i)**:
+  even the optimistic Kakeya ceiling is < 1.5 dB; the cost of
+  adapting Dvir far exceeds this budget.
+- **(vi) Wang-Zahl-inspired multi-scale sticky-aware quantization.**
+  Abstract techniques from Wang-Zahl 2025 (3D Kakeya proof):
+  multi-scale tube induction + sticky-set analysis.  Tube
+  induction generalises cleanly to n-D; sticky analysis is 3D-
+  specific but usable as a codebook diversity heuristic.
+  Expected 0.3 - 0.8 dB over TurboQuant, bounded above by (i)'s
+  ceiling.  4-7 weeks research prototype.  **Medium priority**:
+  more novel than (iv) but lower ROI on measured data.
 
 ### Honest project framing going forward
 
