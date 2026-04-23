@@ -1,0 +1,49 @@
+Warning: Permanently added '[208.64.254.72]:19253' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+
+========== Q=10 ==========
+  [A] same input → same output across 10 calls: True
+  [B] bit-identical single-vs-batch: False
+  [B] max abs diff vs batch size:
+      b=1 vs b=2        0.000e+00
+      b=1 vs b=4        1.788e-07
+      b=1 vs b=8        1.788e-07
+      b=1 vs b=32       2.533e-07
+      b=1 vs b=N        2.533e-07
+  [C] rel-MSE batch-mode  = 8.7702e-03
+  [C] rel-MSE stream-mode = 8.7702e-03
+  [C] abs relative gap    = 0.000%
+  [C] mean-abs(batch - stream) = 2.729e-06
+  [C] fraction of coords that differ: 81.44% (1707940 / 2097152)
+
+========== Q=38 ==========
+  [A] same input → same output across 10 calls: True
+  [B] bit-identical single-vs-batch: False
+  [B] max abs diff vs batch size:
+      b=1 vs b=2        0.000e+00
+      b=1 vs b=4        1.490e-07
+      b=1 vs b=8        1.490e-07
+      b=1 vs b=32       2.980e-07
+      b=1 vs b=N        2.980e-07
+  [C] rel-MSE batch-mode  = 6.0742e-04
+  [C] rel-MSE stream-mode = 6.0742e-04
+  [C] abs relative gap    = 0.000%
+  [C] mean-abs(batch - stream) = 8.208e-07
+  [C] fraction of coords that differ: 83.62% (1753607 / 2097152)
+
+========== Q=152 ==========
+  [A] same input → same output across 10 calls: True
+  [B] bit-identical single-vs-batch: False
+  [B] max abs diff vs batch size:
+      b=1 vs b=2        0.000e+00
+      b=1 vs b=4        1.490e-07
+      b=1 vs b=8        1.490e-07
+      b=1 vs b=32       2.980e-07
+      b=1 vs b=N        2.980e-07
+  [C] rel-MSE batch-mode  = 3.7980e-05
+  [C] rel-MSE stream-mode = 3.7979e-05
+  [C] abs relative gap    = 0.000%
+  [C] mean-abs(batch - stream) = 9.698e-07
+  [C] fraction of coords that differ: 84.22% (1766309 / 2097152)
