@@ -192,6 +192,174 @@ entiation is NOT in the codec kernel but in the **deployment layer**
 — snapshot-mode post-prefill compression + boundary-layer skipping.
 These are reusable with any inner codec, including TurboQuant's.
 
+**Nuance added in 5.8 below**: "TQ implements Kakeya-style
+uniformization" is only HALF the story.  TQ implements the
+`rotate-to-Gaussianize` half (Besicovitch's distribution-
+uniformization property).  It does NOT implement the
+`measure-saving` half (Besicovitch's set-is-arbitrarily-small
+property).  Read 5.8 before concluding that TQ is the final
+word on the Kakeya direction — it isn't.
+
+### 5.8 The two halves of Besicovitch uniformization — one implemented, one open
+
+**User-supplied correction to my earlier claim** that "Hadamard-
+Lloyd-Max is the discrete realisation of Besicovitch".  That
+claim was wrong; Hadamard and Besicovitch encode two orthogonal
+properties, and conflating them obscures a real open problem.
+
+Besicovitch's theorem has **two distinct mathematical contents**:
+
+| Property                | Precise statement                                   | What discretises to  |
+|:------------------------|:----------------------------------------------------|:---------------------|
+| **Uniformization**      | Haar-random rotation of any vector gives coordinates ≈ `𝒩(0, 1/D)` (CLT on the sphere)             | Hadamard rotation + Lloyd-Max — **implemented** |
+| **Measure efficiency**  | Sets containing unit segments in every direction can have arbitrarily small Lebesgue measure (Perron tree shatter + translate + overlap) | Structured codebooks with exponentially FEWER codewords than uniform covers at the same angular coverage — **NOT implemented** |
+
+Hadamard-Lloyd-Max tackles property 1 only.  Its codebook is
+`(2^R)^D = 2^{RD}` codewords — the full product code, uniformly
+dense on `𝕊^{D-1}`.  This is **not** Besicovitch's "remarkably
+small set"; it is the opposite — a full-density covering chosen
+for information-theoretic optimality per Shannon's rate-
+distortion bound on Gaussian sources.
+
+**Property 2 would correspond, in quantization language, to a
+codebook with `N_Kak ≪ 2^{RD}` codewords that still covers every
+direction to the same angular tolerance ε.**  Achieving this
+would beat TQ on compression ratio (same distortion at lower
+rate, or lower distortion at same rate).  Nobody has constructed
+it for LLM workloads; the field has made only partial progress
+over 30 years.
+
+### Where the partial progress has landed
+
+1. **Zamir-Feder nested lattice codes (1996–2004)** — closed
+   the Gaussian-source rate-distortion gap to **1.53 dB** above
+   Shannon.  Nested lattice structure is the closest known analog
+   to Perron tree's shatter-translate-overlap in quantization
+   land.  This is the ceiling TurboQuant is actually operating
+   at.
+
+2. **Dvir's finite-field Kakeya (2008)** — settled the Kakeya
+   conjecture on `F_q^n` via polynomial method.  Elegant, optimal,
+   but lives in `F_q` and gives only an existence proof — no
+   algorithmic construction that transports to `ℝ^D` at finite
+   bits.
+
+3. **Product Quantization / Additive Quantization / Residual
+   VQ** — heuristic attempts at exploiting structure similar to
+   Perron tree's overlap.  All measured on LLM K within this
+   project: structural Δppl gain ≤ 1.04 pp vs flat (see RVQ 4×16
+   ablation vs k2=1 in §4/§5.4).  **None exceed Shannon's 1.53 dB
+   shaping ceiling.**
+
+### Why "stalled" — five concrete obstacles
+
+1. **Perron tree is intrinsically 2-dimensional.**  Kahane 1969
+   / Davies 1971 extended to `ℝ^n`, but construction complexity
+   is `O(exp(n))`.  At D=128, computationally infeasible.
+2. **Besicovitch guarantees segment containment, not nearest-
+   neighbor proximity.**  The shift from "set contains a unit
+   segment at every direction" to "every input has a codeword
+   within ε" is a DIFFERENT functional.  Bridging theorem
+   (measure-saving ⟹ bit-saving at fixed distortion) has not
+   been rigorously established for continuous metric spaces.
+3. **Finite-field Kakeya cannot transport to `ℝ^D`.**  Taking
+   `q → ∞` loses algorithmic constructivity.  Dvir's proof is
+   existential, not procedural.
+4. **Shannon source-coding lower bound dominates on i.i.d.
+   Gaussian.**  For strictly i.i.d. Gaussian sources, the 1.53 dB
+   gap is the hard ceiling regardless of geometry.  Kakeya
+   savings beyond this ceiling require **non-Gaussian** or
+   **correlated** source structure.
+5. **Quantization metric (inner product preservation for
+   attention) ≠ Kakeya metric (directional coverage).**  The two
+   align approximately on `𝕊^{D-1}` but are not isometric.  A
+   Kakeya-optimal spherical code is not automatically an
+   attention-optimal code.
+
+### Where the open problem matters for LLMs specifically
+
+The 1.53 dB Shannon ceiling is **tight for strictly i.i.d.
+Gaussian sources**.  LLM K, while near-isotropic, is **not
+strictly i.i.d. Gaussian** — it has:
+
+- Weak cross-dimension correlations (residual token semantics
+  that qk-norm doesn't fully neutralise)
+- Weak deviation from perfect spherical uniformity (top-96 PCA
+  captures 97 %, not 100 %)
+- Possible distributional structure at long contexts (>32 K
+  tokens) that short-sample Shannon analysis doesn't capture
+
+For each of these, **Kakeya-style constructions could
+theoretically give > 1.53 dB savings** — but nobody has written
+a construction that extracts them, so the potential is
+unrealised.  This is the **real open research direction** that
+the name "Kakeya-v1.3" points at, and that the project's actual
+algorithm (PCA + K-means) does NOT address.
+
+### Five research paths, ordered from concrete to speculative
+
+These are "research" directions — not engineering; not suitable
+for a production iteration of this branch.  Listed so the next
+agent can recognise them if the user raises them:
+
+- **(i) Empirical measure-efficiency analysis of Qwen3-4B K.**
+  Measure the Wasserstein-2 distance from the empirical K
+  distribution to perfect isotropy on `𝕊^{D-1}`.  Any non-zero
+  deviation is Kakeya-reachable saving.  Cheap (~hours on vast).
+  Would provide a **measured upper bound** on how much a
+  hypothetical discrete-Kakeya construction could beat TQ.
+- **(ii) Information-geometric rate-distortion on the real K
+  distribution.**  Compute the actual Shannon lower bound for
+  the empirical K (not assumed-i.i.d.-Gaussian) via Fisher-Rao
+  metric on the estimated density.  Gives a **measured ceiling**
+  for any code, Kakeya or otherwise.
+- **(iii) Deep Perron-tree-style recursive RVQ.**  The RVQ 4×16
+  tested in §5.4 is a 2-level Perron-tree analog; extending to
+  `log₂(k_eff)` levels with tied codebooks across levels might
+  reclaim some of the Perron tree's exponential measure savings.
+  Concrete, doable in a week of coding.
+- **(iv) Nested-lattice shaping with data-driven coarse
+  region.**  Replace Zamir-Feder's Gaussian shaping region `Λ_c`
+  with the empirical support of LLM K (possibly a union of
+  Voronoi cells learned offline).  Theoretical scaffolding
+  exists; LLM adaptation is new.
+- **(v) Finite-field Kakeya as a quantization code.**  Dvir's
+  `F_q^D` Kakeya sets interpreted as binary-alphabet codebooks.
+  Most speculative; no known bridge theorem.
+
+### Honest project framing going forward
+
+**Project name and reality.**  "Kakeya-v1.3" is named after the
+measure-theoretic object but implements neither half of what
+Besicovitch provides:
+
+- The **uniformization** half is already TurboQuant's job, and
+  Kakeya-v1.3's PCA + K-means actively FIGHTS it (by looking for
+  anisotropy that doesn't exist in Qwen3-4B post-qk-norm K).
+- The **measure-saving** half is open research across the field;
+  Kakeya-v1.3 does not address it either.
+
+Kakeya-v1.3's **actual** contribution is in the deployment layer
+(snapshot-mode + boundary-layer skip), which is decoupled from
+the Kakeya mathematics entirely.
+
+**What the next agent should and should not do.**  Do NOT claim
+"TurboQuant fully implements Besicovitch uniformization" — it
+implements half.  Do NOT claim "Kakeya-v1.3 implements Besicovitch
+— just badly" — it implements a different algorithm under a
+borrowed name.  Do NOT propose "add Riemannian / Hadamard Kakeya
+construction on top of TQ" as a productionisation path — those
+are open research problems, not engineering tasks.
+
+The project's honest next step, absent new research, is the
+one we've converged on independently through multiple angles:
+**port snapF's absorbed-scale decode path + the RVQ centroid
+shrinkage to the vLLM slot format, and/or replace the codec
+kernel with TurboQuant's Hadamard + Lloyd-Max** — keeping the
+deployment-layer distinction (snapshot + boundary skip) as the
+project's sole differentiator until a real Kakeya-discrete
+construction is invented by someone.
+
 ## 6. Open / pending decisions
 
 The user has NOT committed to any of these.  List for context only:
