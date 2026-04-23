@@ -25,8 +25,9 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use kakeyaturbo::{
-    decode_block, decode_layer, encode_block, encode_layer, CodecParams, Code, Distortion,
-    InnerProduct, LInf, LayerEncoding, MSE,
+    decode_block_with_centroids, decode_layer_with_centroids, encode_block, encode_layer,
+    CodecParams, Code, Distortion,
+    InnerProduct, LInf, LayerEncoding, PcaMethod, SkeletonDtype, MSE,
 };
 
 const MAGIC: u32 = 0x4B4B_5456;
@@ -44,6 +45,31 @@ struct Args {
     rotation_seed: u32,
     verify: bool,
     share_basis: bool,
+    /// One of "exact" or "randomized".
+    pca_method: String,
+    /// One of "fp16" or "fp32" — skeleton (PCA mean+basis, K-means centres) storage precision.
+    skeleton_dtype: String,
+    /// If set, hard-cap d_eff at this value in the exact PCA path
+    /// (None = unlimited, controlled by variance_ratio only).
+    exact_rank_cap: Option<usize>,
+    /// Randomized-SVD knobs. Ignored when pca_method == "exact".
+    rsvd_target_rank: Option<usize>,
+    rsvd_oversample: usize,
+    rsvd_power_iters: u32,
+    /// If set, dump the decoded (round-tripped) KV tensor to this path in
+    /// KKTV format so downstream Python drivers can measure end-to-end
+    /// downstream quality (next-token KL, PPL) against the original.
+    dump_decoded: Option<PathBuf>,
+    /// If set, path to a .f32 binary file containing the calibrated
+    /// Lloyd-Max centroid table (exactly `1 << bit_width` f32 values,
+    /// little-endian, sorted).  When present, replaces the codec's
+    /// unit-variance-Gaussian defaults on both encode and decode.
+    centroids_file: Option<PathBuf>,
+    /// If set, outlier compensation threshold T.  Coordinates with
+    /// |scaled_residual| > T are stored exact (as u16 index + f16 value)
+    /// and override Lloyd-Max dequantization at decode.  Typical T=2.0
+    /// gives ~1-5 % outlier rate on Gaussian-like residuals.
+    outlier_threshold: Option<f32>,
 }
 
 fn print_help() {
@@ -52,9 +78,17 @@ fn print_help() {
             [--metric mse|inner_product|linf] \\\n    \
             [--block-size N] [--variance-ratio R] \\\n    \
             [--k K] [--bit-width B] [--rotation-seed S] \\\n    \
-            [--verify]\n\n\
+            [--share-basis] [--verify] \\\n    \
+            [--pca-method exact|randomized] \\\n    \
+            [--skeleton-dtype fp16|fp32] \\\n    \
+            [--exact-rank-cap N] \\\n    \
+            [--rsvd-target-rank N] [--rsvd-oversample N] [--rsvd-power-iters N] \\\n    \
+            [--dump-decoded PATH]\n\n\
             Compresses a KV tensor file block-by-block using the\n\
-            kakeyaturbo codec and writes a JSON report.\n"
+            kakeyaturbo codec and writes a JSON report. With\n\
+            --dump-decoded PATH (and --verify), also writes the\n\
+            round-tripped tensor in KKTV format for downstream\n\
+            e2e quality measurement.\n"
     );
 }
 
@@ -70,6 +104,15 @@ fn parse_args() -> Result<Args, String> {
     let mut rotation_seed: u32 = 0xCAFE_BABE;
     let mut verify = false;
     let mut share_basis = false;
+    let mut pca_method = "exact".to_string();
+    let mut skeleton_dtype = "fp16".to_string();
+    let mut exact_rank_cap: Option<usize> = None;
+    let mut rsvd_target_rank: Option<usize> = None;
+    let mut rsvd_oversample: usize = 8;
+    let mut rsvd_power_iters: u32 = 2;
+    let mut centroids_file: Option<PathBuf> = None;
+    let mut outlier_threshold: Option<f32> = None;
+    let mut dump_decoded: Option<PathBuf> = None;
 
     let mut i = 1;
     while i < argv.len() {
@@ -116,6 +159,46 @@ fn parse_args() -> Result<Args, String> {
             }
             "--verify" => verify = true,
             "--share-basis" => share_basis = true,
+            "--pca-method" => {
+                i += 1;
+                pca_method = argv[i].clone();
+            }
+            "--skeleton-dtype" => {
+                i += 1;
+                skeleton_dtype = argv[i].clone();
+            }
+            "--exact-rank-cap" => {
+                i += 1;
+                exact_rank_cap = Some(
+                    argv[i].parse().map_err(|e| format!("bad --exact-rank-cap: {e}"))?,
+                );
+            }
+            "--rsvd-target-rank" => {
+                i += 1;
+                rsvd_target_rank = Some(argv[i].parse().map_err(|e| format!("bad --rsvd-target-rank: {e}"))?);
+            }
+            "--rsvd-oversample" => {
+                i += 1;
+                rsvd_oversample = argv[i].parse().map_err(|e| format!("bad --rsvd-oversample: {e}"))?;
+            }
+            "--rsvd-power-iters" => {
+                i += 1;
+                rsvd_power_iters = argv[i].parse().map_err(|e| format!("bad --rsvd-power-iters: {e}"))?;
+            }
+            "--dump-decoded" => {
+                i += 1;
+                dump_decoded = Some(PathBuf::from(&argv[i]));
+            }
+            "--centroids-file" => {
+                i += 1;
+                centroids_file = Some(PathBuf::from(&argv[i]));
+            }
+            "--outlier-threshold" => {
+                i += 1;
+                outlier_threshold = Some(
+                    argv[i].parse().map_err(|e| format!("bad --outlier-threshold: {e}"))?,
+                );
+            }
             other => return Err(format!("unknown flag {other}; try --help")),
         }
         i += 1;
@@ -134,7 +217,41 @@ fn parse_args() -> Result<Args, String> {
         rotation_seed,
         verify,
         share_basis,
+        pca_method,
+        skeleton_dtype,
+        exact_rank_cap,
+        rsvd_target_rank,
+        rsvd_oversample,
+        rsvd_power_iters,
+        dump_decoded,
+        centroids_file,
+        outlier_threshold,
     })
+}
+
+fn load_centroids(path: &PathBuf, expected_count: usize) -> Result<Vec<f32>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    if bytes.len() != expected_count * 4 {
+        return Err(format!(
+            "centroids file {} has {} bytes, expected {} (= {} × 4)",
+            path.display(), bytes.len(), expected_count * 4, expected_count
+        ));
+    }
+    let mut out = Vec::with_capacity(expected_count);
+    for chunk in bytes.chunks_exact(4) {
+        let arr = [chunk[0], chunk[1], chunk[2], chunk[3]];
+        out.push(f32::from_le_bytes(arr));
+    }
+    // Validate sorted ascending
+    for w in out.windows(2) {
+        if w[0] >= w[1] {
+            return Err(format!(
+                "centroids must be sorted ascending; {} violates at {} >= {}",
+                path.display(), w[0], w[1]
+            ));
+        }
+    }
+    Ok(out)
 }
 
 fn read_u32_le(r: &mut impl Read) -> std::io::Result<u32> {
@@ -181,12 +298,41 @@ fn read_tensor(path: &PathBuf) -> Result<(Vec<f32>, usize, usize), String> {
 }
 
 fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) -> Report {
+    let pca_method = match args.pca_method.as_str() {
+        "exact" => PcaMethod::Exact,
+        "randomized" => PcaMethod::Randomized {
+            target_rank: args.rsvd_target_rank.unwrap_or((dim / 2).max(8)),
+            oversample: args.rsvd_oversample,
+            power_iters: args.rsvd_power_iters,
+            seed_offset: 0x9E37_79B9_7F4A_7C15,
+        },
+        other => panic!("unknown --pca-method {other}, expected 'exact' or 'randomized'"),
+    };
+    let skeleton_dtype = match args.skeleton_dtype.as_str() {
+        "fp16" | "f16" | "half" => SkeletonDtype::Fp16,
+        "fp32" | "f32" | "float" => SkeletonDtype::Fp32,
+        other => panic!("unknown --skeleton-dtype {other}, expected 'fp16' or 'fp32'"),
+    };
+    let custom_centroids = if let Some(path) = &args.centroids_file {
+        let expected = 1usize << args.bit_width;
+        let c = load_centroids(path, expected)
+            .unwrap_or_else(|e| panic!("loading centroids: {e}"));
+        eprintln!("[bench] loaded {} calibrated centroids from {}", c.len(), path.display());
+        Some(c)
+    } else {
+        None
+    };
     let params = CodecParams {
         variance_ratio: args.variance_ratio,
         k: args.k,
         bit_width: args.bit_width,
         rotation_seed: args.rotation_seed,
         kmeans_max_iter: 32,
+        pca_method,
+        skeleton_dtype,
+        exact_rank_cap: args.exact_rank_cap,
+        custom_centroids,
+        outlier_threshold: args.outlier_threshold,
     };
 
     let bs = args.block_size;
@@ -197,6 +343,14 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
     let mut total_mse_count = 0usize;
     let mut encode_ns: u128 = 0;
     let mut decode_ns: u128 = 0;
+    // If --dump-decoded is set (and verify is on), accumulate the decoded
+    // tensor here and write it at the end.
+    let want_decoded = args.dump_decoded.is_some() && args.verify;
+    let mut decoded_full: Vec<f32> = if want_decoded {
+        Vec::with_capacity(n_full * bs * dim)
+    } else {
+        Vec::new()
+    };
 
     let (total_skeleton, total_codes, total_blocks, total_vecs_encoded, shared_pca_bytes) = if args.share_basis {
         // v1.2 B' path: fit one basis over all blocks, K-means per-block.
@@ -213,7 +367,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
 
         if args.verify {
             let t1 = Instant::now();
-            let recs = decode_layer::<R>(&enc);
+            let recs = decode_layer_with_centroids::<R>(&enc, params.custom_centroids.as_deref());
             decode_ns += t1.elapsed().as_nanos();
             for (i, rec) in recs.iter().enumerate() {
                 let orig = &block_vecs[i];
@@ -224,6 +378,9 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
                 }
                 total_mse_sum += sq / (bs * dim) as f64;
                 total_mse_count += 1;
+                if want_decoded {
+                    decoded_full.extend_from_slice(rec);
+                }
             }
         }
 
@@ -253,7 +410,7 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
 
             if args.verify {
                 let t1 = Instant::now();
-                let rec = decode_block::<R>(&sk, &codes);
+                let rec = decode_block_with_centroids::<R>(&sk, &codes, params.custom_centroids.as_deref());
                 decode_ns += t1.elapsed().as_nanos();
                 let mut sq = 0.0_f64;
                 for i in 0..bs * dim {
@@ -262,10 +419,31 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
                 }
                 total_mse_sum += sq / (bs * dim) as f64;
                 total_mse_count += 1;
+                if want_decoded {
+                    decoded_full.extend_from_slice(&rec);
+                }
             }
         }
         (total_skeleton, total_codes, total_blocks, total_vecs_encoded, 0)
     };
+
+    // Write decoded tensor to disk if requested.
+    if want_decoded {
+        let path = args.dump_decoded.as_ref().expect("dump_decoded path");
+        let f = std::fs::File::create(path).expect("create decoded output");
+        let mut w = std::io::BufWriter::new(f);
+        use std::io::Write;
+        let magic: u32 = 0x4B4B_5456;
+        w.write_all(&magic.to_le_bytes()).expect("write magic");
+        w.write_all(&1u32.to_le_bytes()).expect("write version");
+        w.write_all(&(total_vecs_encoded as u64).to_le_bytes()).expect("write n_vecs");
+        w.write_all(&(dim as u32).to_le_bytes()).expect("write dim");
+        w.write_all(&0u32.to_le_bytes()).expect("write pad");
+        for v in &decoded_full {
+            w.write_all(&v.to_le_bytes()).expect("write f32");
+        }
+        w.flush().expect("flush decoded");
+    }
 
     let baseline_bytes = total_vecs_encoded * dim * std::mem::size_of::<f32>();
     let baseline_bytes_bf16 = total_vecs_encoded * dim * 2;
@@ -297,6 +475,20 @@ fn run<R: Distortion>(args: &Args, data: &[f32], num_vecs: usize, dim: usize) ->
         },
         share_basis: args.share_basis,
         shared_pca_bytes,
+        pca_method: args.pca_method.clone(),
+        skeleton_dtype: args.skeleton_dtype.clone(),
+        rsvd_target_rank: match pca_method {
+            PcaMethod::Randomized { target_rank, .. } => target_rank,
+            PcaMethod::Exact => 0,
+        },
+        rsvd_oversample: match pca_method {
+            PcaMethod::Randomized { oversample, .. } => oversample,
+            PcaMethod::Exact => 0,
+        },
+        rsvd_power_iters: match pca_method {
+            PcaMethod::Randomized { power_iters, .. } => power_iters,
+            PcaMethod::Exact => 0,
+        },
     }
 }
 
@@ -322,6 +514,11 @@ struct Report {
     mean_block_mse: f64,
     share_basis: bool,
     shared_pca_bytes: usize,
+    pca_method: String,
+    skeleton_dtype: String,
+    rsvd_target_rank: usize,
+    rsvd_oversample: usize,
+    rsvd_power_iters: u32,
 }
 
 impl Report {
@@ -348,7 +545,12 @@ impl Report {
                 \"verify\":{verify},\
                 \"mean_block_mse\":{mse:.10},\
                 \"share_basis\":{sb},\
-                \"shared_pca_bytes\":{spb}\
+                \"shared_pca_bytes\":{spb},\
+                \"pca_method\":\"{pm}\",\
+                \"skeleton_dtype\":\"{sd}\",\
+                \"rsvd_target_rank\":{rtr},\
+                \"rsvd_oversample\":{ros},\
+                \"rsvd_power_iters\":{rpi}\
             }}",
             metric = self.metric,
             bs = self.block_size,
@@ -371,6 +573,11 @@ impl Report {
             mse = self.mean_block_mse,
             sb = self.share_basis,
             spb = self.shared_pca_bytes,
+            pm = self.pca_method,
+            sd = self.skeleton_dtype,
+            rtr = self.rsvd_target_rank,
+            ros = self.rsvd_oversample,
+            rpi = self.rsvd_power_iters,
         )
     }
 }

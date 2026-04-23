@@ -1,0 +1,113 @@
+INFO 04-23 11:50:37 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-23 11:50:37 [nixl_utils.py:34] NIXL is not available
+WARNING 04-23 11:50:37 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-23 11:50:37 [utils.py:233] non-default args: {'max_model_len': 2113, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.5, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'google/gemma-4-E4B'}
+WARNING 04-23 11:50:37 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-23 11:50:45 [model.py:554] Resolved architecture: Gemma4ForConditionalGeneration
+INFO 04-23 11:50:45 [model.py:1685] Using max model len 2113
+INFO 04-23 11:50:45 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-23 11:50:45 [config.py:101] Gemma4 model has heterogeneous head dimensions (head_dim=256, global_head_dim=512). Forcing TRITON_ATTN backend to prevent mixed-backend numerical divergence.
+INFO 04-23 11:50:45 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-23 11:50:45 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-23 11:50:45 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-23 11:50:45 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-23 11:50:45 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-23 11:50:45 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+INFO 04-23 11:51:22 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='google/gemma-4-E4B', speculative_config=None, tokenizer='google/gemma-4-E4B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=2113, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=google/gemma-4-E4B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-23 11:51:23 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:59781 backend=nccl
+INFO 04-23 11:51:23 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-23 11:51:23 [gpu_model_runner.py:4752] Starting to load model google/gemma-4-E4B...
+WARNING 04-23 11:51:24 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-23 11:51:24 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-23 11:51:24 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-23 11:51:24 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-23 11:51:24 [cuda.py:308] Using AttentionBackendEnum.TRITON_ATTN backend.
+INFO 04-23 11:51:24 [cuda.py:308] Using AttentionBackendEnum.TRITON_ATTN backend.
+INFO 04-23 11:51:39 [weight_utils.py:615] Time spent downloading weights for google/gemma-4-E4B: 14.055445 seconds
+INFO 04-23 11:51:39 [weight_utils.py:659] No model.safetensors.index.json found in remote.
+INFO 04-23 11:51:39 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 14.89 GiB. Available RAM: 1648.89 GiB.
+INFO 04-23 11:51:39 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:02<00:00,  2.51s/it]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:02<00:00,  2.51s/it]
+
+INFO 04-23 11:51:42 [default_loader.py:384] Loading weights took 2.93 seconds
+INFO 04-23 11:51:42 [gpu_model_runner.py:4854] Model loading took 15.44 GiB memory and 18.028498 seconds
+INFO 04-23 11:51:42 [gpu_model_runner.py:5798] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 6 video items of the maximum feature size.
+WARNING 04-23 11:51:43 [op.py:241] Priority not set for op rms_norm, using native implementation.
+INFO 04-23 11:51:52 [gpu_worker.py:440] Available KV cache memory: 50.25 GiB
+INFO 04-23 11:51:52 [kv_cache_utils.py:1337] GPU KV cache size: 548,864 tokens
+INFO 04-23 11:51:52 [kv_cache_utils.py:1342] Maximum concurrency for 2,113 tokens per request: 435.15x
+2026-04-23 11:51:52,338 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-23 11:51:52,633 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-23 11:51:52 [core.py:307] init engine (profile, create kv cache, warmup model) took 10.14 s
+[model] google/gemma-4-E4B
+[model] num_layers=24  head_dim=256  num_kv_heads=2
+
+=== passage 1/4 ===
+  [capture] 24 layers, 2112 tokens, 0.08s  [strict-GPU]
+  [ref] ppl=6.720
+  [      bf16] bits=4096 CR= 1.00×  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  cos=1.0000  codec=0.00s (38.0ms/M)  fires=24
+  [    TQ b=4] bits=1056 CR= 3.88×  Δppl= -0.447%  top1= 96.88%  K-MSE=1.62e-02  cos=0.9920  codec=0.04s (466.8ms/M)  fires=24
+  [    TQ b=6] bits=1568 CR= 2.61×  Δppl= -0.570%  top1= 98.44%  K-MSE=8.27e-04  cos=0.9996  codec=0.01s (155.1ms/M)  fires=24
+  [    TQ b=8] bits=2080 CR= 1.97×  Δppl= -0.015%  top1= 98.44%  K-MSE=4.93e-05  cos=1.0000  codec=0.01s (122.3ms/M)  fires=24
+  [ v1.4 Q=10] bits=1120 CR= 3.66×  Δppl= -0.257%  top1= 98.44%  K-MSE=1.03e-02  cos=0.9949  codec=0.03s (404.9ms/M)  fires=24
+  [ v1.4 Q=38] bits=1632 CR= 2.51×  Δppl= +0.671%  top1= 98.44%  K-MSE=7.16e-04  cos=0.9996  codec=0.02s (207.6ms/M)  fires=24
+  [v1.4 Q=152] bits=2144 CR= 1.91×  Δppl= +0.363%  top1= 96.88%  K-MSE=4.48e-05  cos=1.0000  codec=0.02s (188.9ms/M)  fires=24
+
+=== passage 2/4 ===
+  [capture] 24 layers, 2112 tokens, 0.08s  [strict-GPU]
+  [ref] ppl=4.205
+  [      bf16] bits=4096 CR= 1.00×  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  cos=1.0000  codec=0.00s (34.4ms/M)  fires=24
+  [    TQ b=4] bits=1056 CR= 3.88×  Δppl= +0.411%  top1=100.00%  K-MSE=1.62e-02  cos=0.9920  codec=0.01s (121.7ms/M)  fires=24
+  [    TQ b=6] bits=1568 CR= 2.61×  Δppl= +0.242%  top1=100.00%  K-MSE=8.25e-04  cos=0.9996  codec=0.01s (121.5ms/M)  fires=24
+  [    TQ b=8] bits=2080 CR= 1.97×  Δppl= +0.236%  top1=100.00%  K-MSE=4.92e-05  cos=1.0000  codec=0.01s (143.9ms/M)  fires=24
+  [ v1.4 Q=10] bits=1120 CR= 3.66×  Δppl= +0.068%  top1=100.00%  K-MSE=1.03e-02  cos=0.9949  codec=0.02s (186.7ms/M)  fires=24
+  [ v1.4 Q=38] bits=1632 CR= 2.51×  Δppl= -0.012%  top1=100.00%  K-MSE=7.15e-04  cos=0.9996  codec=0.02s (185.6ms/M)  fires=24
+  [v1.4 Q=152] bits=2144 CR= 1.91×  Δppl= -0.023%  top1=100.00%  K-MSE=4.47e-05  cos=1.0000  codec=0.02s (205.8ms/M)  fires=24
+
+=== passage 3/4 ===
+  [capture] 24 layers, 2112 tokens, 0.08s  [strict-GPU]
+  [ref] ppl=4.429
+  [      bf16] bits=4096 CR= 1.00×  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  cos=1.0000  codec=0.00s (34.9ms/M)  fires=24
+  [    TQ b=4] bits=1056 CR= 3.88×  Δppl= +2.477%  top1=100.00%  K-MSE=1.62e-02  cos=0.9920  codec=0.01s (134.1ms/M)  fires=24
+  [    TQ b=6] bits=1568 CR= 2.61×  Δppl= +0.586%  top1=100.00%  K-MSE=8.24e-04  cos=0.9996  codec=0.01s (132.7ms/M)  fires=24
+  [    TQ b=8] bits=2080 CR= 1.97×  Δppl= +0.494%  top1=100.00%  K-MSE=4.91e-05  cos=1.0000  codec=0.01s (134.4ms/M)  fires=24
+  [ v1.4 Q=10] bits=1120 CR= 3.66×  Δppl= -0.261%  top1= 96.88%  K-MSE=1.03e-02  cos=0.9949  codec=0.02s (221.1ms/M)  fires=24
+  [ v1.4 Q=38] bits=1632 CR= 2.51×  Δppl= +0.291%  top1=100.00%  K-MSE=7.14e-04  cos=0.9996  codec=0.02s (187.0ms/M)  fires=24
+  [v1.4 Q=152] bits=2144 CR= 1.91×  Δppl= -0.184%  top1=100.00%  K-MSE=4.47e-05  cos=1.0000  codec=0.02s (187.4ms/M)  fires=24
+
+=== passage 4/4 ===
+  [capture] 24 layers, 2112 tokens, 0.09s  [strict-GPU]
+  [ref] ppl=7.558
+  [      bf16] bits=4096 CR= 1.00×  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  cos=1.0000  codec=0.00s (38.9ms/M)  fires=24
+  [    TQ b=4] bits=1056 CR= 3.88×  Δppl= +0.892%  top1=100.00%  K-MSE=1.62e-02  cos=0.9920  codec=0.01s (128.0ms/M)  fires=24
+  [    TQ b=6] bits=1568 CR= 2.61×  Δppl= +0.403%  top1=100.00%  K-MSE=8.28e-04  cos=0.9996  codec=0.01s (123.5ms/M)  fires=24
+  [    TQ b=8] bits=2080 CR= 1.97×  Δppl= +0.010%  top1=100.00%  K-MSE=4.94e-05  cos=1.0000  codec=0.01s (122.2ms/M)  fires=24
+  [ v1.4 Q=10] bits=1120 CR= 3.66×  Δppl= +1.003%  top1=100.00%  K-MSE=1.04e-02  cos=0.9949  codec=0.02s (187.8ms/M)  fires=24
+  [ v1.4 Q=38] bits=1632 CR= 2.51×  Δppl= -0.502%  top1=100.00%  K-MSE=7.17e-04  cos=0.9996  codec=0.02s (190.6ms/M)  fires=24
+  [v1.4 Q=152] bits=2144 CR= 1.91×  Δppl= +0.384%  top1=100.00%  K-MSE=4.49e-05  cos=1.0000  codec=0.02s (188.2ms/M)  fires=24
+
+=== Aggregate (mean over 4 passages, model=google/gemma-4-E4B, strict-GPU) ===
+    Config  bits     CR  KVsave       Δppl   |Δppl|     top1      K-MSE      cos    ms/M
+      bf16  4096  1.00×   0.00%    +0.000%   0.000% 100.00%  0.000e+00   1.0000   36.56
+    TQ b=4  1056  3.88×  74.22%    +0.833%   1.057%  99.22%  1.620e-02   0.9920  212.68
+    TQ b=6  1568  2.61×  61.72%    +0.165%   0.450%  99.61%  8.260e-04   0.9996  133.19
+    TQ b=8  2080  1.97×  49.22%    +0.181%   0.189%  99.61%  4.925e-05   1.0000  130.72
+ v1.4 Q=10  1120  3.66×  72.66%    +0.138%   0.397%  98.83%  1.034e-02   0.9949  250.14
+ v1.4 Q=38  1632  2.51×  60.16%    +0.112%   0.369%  99.61%  7.157e-04   0.9996  192.71
+v1.4 Q=152  2144  1.91×  47.66%    +0.135%   0.238%  99.22%  4.478e-05   1.0000  192.58
+
+=== v1.4 vs TQ head-to-head (matched bit levels) ===
+TQ b  TQ bits v1.4 Q v1.4 bits  K-MSE ratio   |Δppl| ratio   top1 Δpp  speed ratio
+   4     1056     10      1120        0.638          0.376     -0.391        1.176
+   6     1568     38      1632        0.866          0.819     +0.000        1.447
+   8     2080    152      2144        0.909          1.264     -0.391        1.473
+
+[done] written → reports/v1_3_ppl/snapshot_mode_qwen3/multimodel/gemma4_e4b_multimodel.json
+[rank0]:[W423 11:51:59.708832540 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

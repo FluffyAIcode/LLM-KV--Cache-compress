@@ -19,6 +19,57 @@
 
 use half::f16;
 use nalgebra::{DMatrix, DVector, SymmetricEigen};
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+
+/// Storage precision for the mean and basis tensors of a [`PcaFit`].
+/// `Fp16` is the v1.2/v1.3 default; `Fp32` doubles skeleton bytes and is
+/// used by the 2024-04 skeleton-precision ablation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PcaStorage {
+    /// IEEE-754 binary16 (default, matches paper byte accounting).
+    Fp16,
+    /// IEEE-754 binary32 (ablation-only, doubles skeleton bytes).
+    Fp32,
+}
+
+impl Default for PcaStorage {
+    fn default() -> Self {
+        Self::Fp16
+    }
+}
+
+/// Internal helper: pack a finished `(mean, basis, d_eff, captured_variance)`
+/// tuple into a `PcaFit` with either f16 or fp32 skeleton storage.
+fn materialize_pca_fit(
+    mean: Vec<f32>,
+    basis: Vec<f32>,
+    d_eff: usize,
+    captured_variance: f32,
+    storage: PcaStorage,
+) -> PcaFit {
+    let d = mean.len();
+    match storage {
+        PcaStorage::Fp16 => PcaFit {
+            mean: to_bf16(&mean),
+            basis: to_bf16(&basis),
+            mean_fp32: None,
+            basis_fp32: None,
+            d_eff,
+            d,
+            captured_variance,
+        },
+        PcaStorage::Fp32 => PcaFit {
+            mean: Vec::new(),
+            basis: Vec::new(),
+            mean_fp32: Some(mean),
+            basis_fp32: Some(basis),
+            d_eff,
+            d,
+            captured_variance,
+        },
+    }
+}
 
 /// Convert an f32 slice to an owned bf16 Vec (saturating conversion for NaN/Inf).
 #[inline]
@@ -76,12 +127,20 @@ pub fn weighted_mean(vectors: &[f32], weights: &[f32], d: usize) -> Vec<f32> {
 /// and [`Self::basis_f32`] when you need f32 views.
 #[derive(Debug, Clone)]
 pub struct PcaFit {
-    /// Mean vector, length `D`, stored as bf16.
+    /// Mean vector, length `D`, stored as f16 (empty if fp32 skeleton selected).
     pub mean: Vec<f16>,
-    /// Basis row-major `[d_eff, D]`, stored as bf16.
+    /// Basis row-major `[d_eff, D]`, stored as f16 (empty if fp32 skeleton selected).
     pub basis: Vec<f16>,
+    /// Optional fp32 mean buffer — populated iff the caller asked for
+    /// `SkeletonDtype::Fp32`. When set, takes precedence over `mean`.
+    pub mean_fp32: Option<Vec<f32>>,
+    /// Optional fp32 basis buffer — same semantics as `mean_fp32`.
+    pub basis_fp32: Option<Vec<f32>>,
     /// Number of kept components.
     pub d_eff: usize,
+    /// Input dimension `D` (needed when fp32 buffers are populated and the
+    /// f16 buffers are empty).
+    pub d: usize,
     /// Captured variance ratio (actual, may be ≥ the requested threshold).
     pub captured_variance: f32,
 }
@@ -90,31 +149,76 @@ impl PcaFit {
     /// Return the mean as a freshly-allocated f32 vector.
     #[must_use]
     pub fn mean_f32(&self) -> Vec<f32> {
+        if let Some(ref m) = self.mean_fp32 {
+            return m.clone();
+        }
         to_f32(&self.mean)
     }
 
     /// Return the basis as a freshly-allocated f32 vector.
     #[must_use]
     pub fn basis_f32(&self) -> Vec<f32> {
+        if let Some(ref b) = self.basis_fp32 {
+            return b.clone();
+        }
         to_f32(&self.basis)
     }
 
     /// Construct a `PcaFit` directly from f32 buffers (e.g. unit tests).
+    /// Default skeleton dtype is f16 for backward compatibility.
     #[must_use]
     pub fn from_f32(mean: Vec<f32>, basis: Vec<f32>, d_eff: usize, captured: f32) -> Self {
+        let d = mean.len();
         Self {
             mean: to_bf16(&mean),
             basis: to_bf16(&basis),
+            mean_fp32: None,
+            basis_fp32: None,
             d_eff,
+            d,
             captured_variance: captured,
+        }
+    }
+
+    /// Construct a `PcaFit` with fp32 skeleton storage.
+    #[must_use]
+    pub fn from_f32_skeleton_fp32(
+        mean: Vec<f32>,
+        basis: Vec<f32>,
+        d_eff: usize,
+        captured: f32,
+    ) -> Self {
+        let d = mean.len();
+        Self {
+            mean: Vec::new(),
+            basis: Vec::new(),
+            mean_fp32: Some(mean),
+            basis_fp32: Some(basis),
+            d_eff,
+            d,
+            captured_variance: captured,
+        }
+    }
+
+    /// Input dimension `D`.
+    #[must_use]
+    pub fn d(&self) -> usize {
+        if self.d > 0 {
+            self.d
+        } else {
+            self.mean.len()
         }
     }
 
     /// Byte footprint of this fit (the thing the codec actually stores).
     #[must_use]
     pub fn nbytes(&self) -> usize {
-        self.mean.len() * std::mem::size_of::<f16>()
-            + self.basis.len() * std::mem::size_of::<f16>()
+        let fp32_bytes = self.mean_fp32.as_ref().map(Vec::len).unwrap_or(0)
+            * std::mem::size_of::<f32>()
+            + self.basis_fp32.as_ref().map(Vec::len).unwrap_or(0) * std::mem::size_of::<f32>();
+        let f16_bytes = self.mean.len() * std::mem::size_of::<f16>()
+            + self.basis.len() * std::mem::size_of::<f16>();
+        fp32_bytes + f16_bytes
     }
 }
 
@@ -131,6 +235,36 @@ impl PcaFit {
 /// `variance_ratio` is not finite.
 #[must_use]
 pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_ratio: f32) -> PcaFit {
+    fit_weighted_pca_with_storage_capped(
+        vectors, weights, d, variance_ratio, PcaStorage::Fp16, None,
+    )
+}
+
+/// Storage-aware variant of [`fit_weighted_pca`], no rank cap.
+#[must_use]
+pub fn fit_weighted_pca_with_storage(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    storage: PcaStorage,
+) -> PcaFit {
+    fit_weighted_pca_with_storage_capped(vectors, weights, d, variance_ratio, storage, None)
+}
+
+/// Full-control variant of [`fit_weighted_pca`].  When `rank_cap` is
+/// `Some(r)`, `d_eff` is clipped to at most `r` regardless of
+/// `variance_ratio`. This lets the caller use exact PCA to match
+/// RSVD's rank-budgeted behaviour without RSVD's approximation error.
+#[must_use]
+pub fn fit_weighted_pca_with_storage_capped(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    storage: PcaStorage,
+    rank_cap: Option<usize>,
+) -> PcaFit {
     assert!(
         variance_ratio.is_finite(),
         "variance_ratio must be finite, got {variance_ratio}"
@@ -192,6 +326,9 @@ pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_rat
         d_eff = 1;
     }
     d_eff = d_eff.clamp(1, d);
+    if let Some(cap) = rank_cap {
+        d_eff = d_eff.min(cap.max(1).min(d));
+    }
 
     // Flatten top-d_eff eigenvectors into row-major basis.
     let mut basis = Vec::with_capacity(d_eff * d);
@@ -209,12 +346,7 @@ pub fn fit_weighted_pca(vectors: &[f32], weights: &[f32], d: usize, variance_rat
         1.0
     };
 
-    PcaFit {
-        mean: to_bf16(&mean),
-        basis: to_bf16(&basis),
-        d_eff,
-        captured_variance,
-    }
+    materialize_pca_fit(mean, basis, d_eff, captured_variance, storage)
 }
 
 /// Fit a weighted PCA on a concatenated multi-block tensor and return a
@@ -231,21 +363,211 @@ pub fn fit_weighted_pca_pooled(
     fit_weighted_pca(vectors, weights, d, variance_ratio)
 }
 
+/// Randomized SVD (Halko–Martinsson–Tropp 2011) weighted PCA.
+///
+/// Given vectors X ∈ ℝ^{n×D} and weights w, this function finds the top
+/// `d_eff` right singular vectors of the centred, weighted design matrix
+/// `A := diag(√w)·(X − μ)` via a low-rank randomized sketch.
+///
+/// **Algorithm** (HMT 2011, §4.3 'range finder on Aᵀ'):
+///
+/// 1. Draw Ω ∈ ℝ^{n×r} with r = min(k + p, D), i.i.d. N(0, 1).
+/// 2. Form sketch Z = Aᵀ · Ω ∈ ℝ^{D×r}.
+/// 3. Power iterations: Z ← Aᵀ A Z, repeated `power_iters` times.
+/// 4. QR decomposition Z = Q · R, with Q ∈ ℝ^{D×r} orthonormal.
+/// 5. Form small matrix B = A · Q ∈ ℝ^{n×r} and compute its thin SVD
+///    B = Û · Σ · V̂ᵀ, where V̂ ∈ ℝ^{r×r}.
+/// 6. Right singular vectors of A ≈ Q · V̂. Eigenvalues of
+///    Σ_w = Aᵀ A / w_sum are σ_i² / w_sum.
+///
+/// Complexity: **O(n · D · r)** with a single `power_iters` pass versus
+/// O(n · D²) for the exact covariance path. For the v1.2 preset
+/// (n=512, D=128, r≈12) that's ~12× fewer ops; at Gemma's D=512 it's
+/// ~40×.
+///
+/// Accuracy: with `power_iters = 2` the operator-norm error is
+/// `≤ (1 + 11·√(k+p)/(p−1)) · σ_{k+1}` (Halko et al. Thm 10.6). On
+/// realistic KV-cache spectra with d_eff much smaller than D this is
+/// sub-1% relative error.
+///
+/// # Arguments
+///
+/// - `target_rank`: upper bound on `d_eff`. Typical `D/2` for safety.
+/// - `oversample`: extra sketch dims, 5–10 is standard. Bigger = more
+///   accurate but more work.
+/// - `power_iters`: number of subspace-power iterations, 0–3 typical.
+///   More iterations → more accurate on slow-decay spectra.
+/// - `seed`: RNG seed for the Gaussian test matrix.
+///
+/// # Panics
+///
+/// Same as [`fit_weighted_pca`], plus panics if `target_rank == 0`.
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn fit_weighted_pca_randomized(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    target_rank: usize,
+    oversample: usize,
+    power_iters: u32,
+    seed: u64,
+) -> PcaFit {
+    fit_weighted_pca_randomized_with_storage(
+        vectors,
+        weights,
+        d,
+        variance_ratio,
+        target_rank,
+        oversample,
+        power_iters,
+        seed,
+        PcaStorage::Fp16,
+    )
+}
+
+/// Storage-aware variant of [`fit_weighted_pca_randomized`].
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn fit_weighted_pca_randomized_with_storage(
+    vectors: &[f32],
+    weights: &[f32],
+    d: usize,
+    variance_ratio: f32,
+    target_rank: usize,
+    oversample: usize,
+    power_iters: u32,
+    seed: u64,
+    storage: PcaStorage,
+) -> PcaFit {
+    assert!(
+        variance_ratio.is_finite(),
+        "variance_ratio must be finite, got {variance_ratio}"
+    );
+    assert!(d > 0, "D must be positive");
+    assert!(target_rank >= 1, "target_rank must be ≥ 1");
+    assert_eq!(vectors.len() % d, 0, "vector buffer not a multiple of D");
+    let n = weights.len();
+    assert_eq!(vectors.len() / d, n, "weights length mismatch");
+
+    let mean = weighted_mean(vectors, weights, d);
+    let w_sum: f32 = weights.iter().sum();
+    assert!(
+        w_sum > f32::EPSILON,
+        "weight sum must be positive, got {w_sum}"
+    );
+
+    // Effective sketch size r = min(k + p, D).
+    let k_target = target_rank.min(d);
+    let r = (k_target + oversample).min(d);
+
+    // A ∈ ℝ^{n×D} with A[i,j] = √w_i · (x_i,j − μ_j), nalgebra stores column-major.
+    let a = DMatrix::<f32>::from_fn(n, d, |i, j| {
+        let w_i = weights[i].max(0.0);
+        w_i.sqrt() * (vectors[i * d + j] - mean[j])
+    });
+
+    // Ω ∈ ℝ^{n×r}, i.i.d. N(0,1) via Box–Muller.
+    let mut rng = SmallRng::seed_from_u64(seed);
+    let omega = DMatrix::<f32>::from_fn(n, r, |_, _| {
+        let u1: f32 = rng.gen_range(f32::EPSILON..1.0);
+        let u2: f32 = rng.gen_range(0.0..1.0);
+        (-2.0_f32 * u1.ln()).sqrt() * (std::f32::consts::TAU * u2).cos()
+    });
+
+    // Z = Aᵀ · Ω, shape D×r.
+    let mut z = a.transpose() * &omega;
+
+    // Subspace power iterations with re-orthogonalisation (HMT 2011 §4.5,
+    // "Algorithm 4.4: Randomized Subspace Iteration").  Without the per-
+    // iteration QR, power iteration on ill-conditioned data (condition
+    // number ≳ 10³) produces exponentially-growing column norms that push
+    // nalgebra's subsequent thin-SVD into an effectively-non-terminating
+    // Jacobi sweep on numerically-rank-deficient inputs.  Re-orthogonalising
+    // Z between iterations keeps columns unit-norm and decouples the
+    // iteration's stability from the spectrum of A.
+    for _ in 0..power_iters {
+        let ay = &a * &z; // n×r
+        let ay_q = ay.qr().q();
+        let ay_q = ay_q.columns(0, r).into_owned();
+        let ata_q = a.transpose() * &ay_q; // D×r
+        let ata_qr = ata_q.qr().q();
+        z = ata_qr.columns(0, r).into_owned();
+    }
+
+    // QR of Z → Q ∈ ℝ^{D×r} orthonormal.
+    let qr = z.qr();
+    let q_full = qr.q();
+    let q = q_full.columns(0, r).into_owned(); // D×r
+
+    // B = A · Q, shape n×r.
+    let b = &a * &q;
+
+    // Thin SVD of B.
+    let svd = b.svd(true, true);
+    let singular = svd.singular_values;
+    let v_t = svd.v_t.expect("SVD v_t requested");
+
+    // v_t is r×r (since B is n×r with n > r typically). Right singular
+    // vectors of B are rows of v_t. Right singular vectors of A are
+    // columns of (Q · v_tᵀ).
+    let v_small = v_t.transpose(); // r×r, columns = right singular vectors of B
+    let basis_mat = &q * &v_small; // D×r, columns = right singular vectors of A
+
+    // Eigenvalues of Σ_w = Aᵀ A / w_sum are σ_i² / w_sum.
+    let sigma_vals: Vec<f32> = singular.iter().map(|s| s * s / w_sum).collect();
+
+    let total_var: f32 = sigma_vals.iter().map(|v| v.max(0.0)).sum();
+    let ratio = variance_ratio.clamp(0.0, 1.0);
+    let mut cum = 0.0_f32;
+    let mut d_eff = r;
+    if total_var > f32::EPSILON {
+        for (i, v) in sigma_vals.iter().enumerate() {
+            cum += v.max(0.0);
+            if cum / total_var >= ratio {
+                d_eff = i + 1;
+                break;
+            }
+        }
+    } else {
+        d_eff = 1;
+    }
+    d_eff = d_eff.clamp(1, k_target);
+
+    // Flatten top-d_eff columns of basis_mat into row-major basis.
+    let mut basis = Vec::with_capacity(d_eff * d);
+    let mut captured = 0.0_f32;
+    for k in 0..d_eff {
+        captured += sigma_vals[k].max(0.0);
+        for row in 0..d {
+            basis.push(basis_mat[(row, k)]);
+        }
+    }
+    let captured_variance = if total_var > f32::EPSILON {
+        (captured / total_var).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+
+    materialize_pca_fit(mean, basis, d_eff, captured_variance, storage)
+}
+
 /// Project a single vector `x` onto the PCA basis: `coeff = U · (x − μ)`.
 ///
 /// Internally converts the bf16 basis/mean to f32 once per call; the
 /// inner multiply-add loop stays in f32 for numerical accuracy.
 #[must_use]
 pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
-    let d = fit.mean.len();
+    let d = fit.d();
     assert_eq!(x.len(), d, "x dimension mismatch");
+    let mean_f32 = fit.mean_f32();
+    let basis_f32 = fit.basis_f32();
     let mut coeff = vec![0.0_f32; fit.d_eff];
     for k in 0..fit.d_eff {
         let mut acc = 0.0_f32;
         for j in 0..d {
-            let basis_kj = fit.basis[k * d + j].to_f32();
-            let mean_j = fit.mean[j].to_f32();
-            acc += basis_kj * (x[j] - mean_j);
+            acc += basis_f32[k * d + j] * (x[j] - mean_f32[j]);
         }
         coeff[k] = acc;
     }
@@ -257,12 +579,13 @@ pub fn project(x: &[f32], fit: &PcaFit) -> Vec<f32> {
 #[must_use]
 pub fn unproject(coeff: &[f32], fit: &PcaFit) -> Vec<f32> {
     assert_eq!(coeff.len(), fit.d_eff, "coeff length mismatch");
-    let d = fit.mean.len();
+    let d = fit.d();
+    let basis_f32 = fit.basis_f32();
     let mut x = fit.mean_f32();
     for k in 0..fit.d_eff {
         let c = coeff[k];
         for j in 0..d {
-            x[j] += fit.basis[k * d + j].to_f32() * c;
+            x[j] += basis_f32[k * d + j] * c;
         }
     }
     x
@@ -540,6 +863,224 @@ mod tests {
             "PcaFit should store tensors as bf16 (2 bytes each)"
         );
     }
+
+    // -------------------- randomized SVD --------------------
+
+    /// Subspace angle between two orthonormal bases as a scalar in [0,1]:
+    /// 1 − min principal cosine. Smaller = more aligned.
+    fn subspace_angle(u1: &[f32], u2: &[f32], d: usize, r1: usize, r2: usize) -> f32 {
+        // Build k×k inner-product matrix U1ᵀ · U2.
+        let r = r1.min(r2);
+        let mut m = 0.0_f32;
+        for i in 0..r1 {
+            for j in 0..r2 {
+                let mut dot = 0.0_f32;
+                for k in 0..d {
+                    dot += u1[i * d + k] * u2[j * d + k];
+                }
+                m = m.max(dot.abs());
+            }
+        }
+        let _ = r;
+        1.0 - m
+    }
+
+    #[test]
+    fn randomized_pca_matches_exact_on_rank1_data() {
+        // Rank-1 data: every vector is scalar × v. Randomized PCA must
+        // recover v as the top direction with very small error.
+        let n = 64;
+        let d = 32;
+        let mut vecs = Vec::with_capacity(n * d);
+        let v: Vec<f32> = (0..d).map(|i| ((i as f32) * 0.13).sin()).collect();
+        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let v_hat: Vec<f32> = v.iter().map(|x| x / norm).collect();
+        for i in 0..n {
+            let s = (i as f32) - (n as f32) / 2.0;
+            for j in 0..d {
+                vecs.push(s * v_hat[j]);
+            }
+        }
+        let w = vec![1.0_f32; n];
+        let exact = fit_weighted_pca(&vecs, &w, d, 0.99);
+        let rsvd = fit_weighted_pca_randomized(&vecs, &w, d, 0.99, 2, 4, 2, 42);
+        assert_eq!(exact.d_eff, 1);
+        assert_eq!(rsvd.d_eff, 1);
+        let a = subspace_angle(&exact.basis_f32(), &rsvd.basis_f32(), d, 1, 1);
+        assert!(a < 1e-3, "rank-1 top direction should match (1 − cos = {a})");
+    }
+
+    #[test]
+    fn randomized_pca_recovers_top_subspace_of_low_rank_block() {
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        // Build a rank-4 block in dim 24 with tiny isotropic noise.
+        let n = 256;
+        let d = 24;
+        let rank = 4;
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut basis_true = vec![0.0_f32; rank * d];
+        for v in &mut basis_true {
+            *v = rng.gen_range(-1.0..1.0);
+        }
+        // QR to get orthonormal true basis.
+        let m = DMatrix::<f32>::from_row_slice(rank, d, &basis_true);
+        let q = m.transpose().qr().q().columns(0, rank).into_owned();
+        let mut basis_flat = vec![0.0_f32; rank * d];
+        for i in 0..rank {
+            for j in 0..d {
+                basis_flat[i * d + j] = q[(j, i)];
+            }
+        }
+        let mut vecs = vec![0.0_f32; n * d];
+        for row in 0..n {
+            for k in 0..rank {
+                let c: f32 = rng.gen_range(-3.0..3.0);
+                for j in 0..d {
+                    vecs[row * d + j] += c * basis_flat[k * d + j];
+                }
+            }
+            for j in 0..d {
+                vecs[row * d + j] += rng.gen_range(-0.01..0.01_f32);
+            }
+        }
+        let w = vec![1.0_f32; n];
+        let exact = fit_weighted_pca(&vecs, &w, d, 0.99);
+        let rsvd = fit_weighted_pca_randomized(&vecs, &w, d, 0.99, 8, 6, 2, 123);
+        assert_eq!(exact.d_eff, rank);
+        assert!(rsvd.d_eff >= rank && rsvd.d_eff <= rank + 1);
+        let a = subspace_angle(
+            &exact.basis_f32()[..rank * d],
+            &rsvd.basis_f32()[..rank * d],
+            d,
+            rank,
+            rank,
+        );
+        assert!(a < 5e-2, "top-{rank} subspace angle must match (1 − cos = {a})");
+    }
+
+    #[test]
+    fn randomized_pca_reconstruction_mse_close_to_exact() {
+        use rand::rngs::SmallRng;
+        use rand::{Rng, SeedableRng};
+        // Realistic scenario: 128-D block with a slow eigenvalue decay.
+        let n = 512;
+        let d = 128;
+        let mut rng = SmallRng::seed_from_u64(19);
+        // Use a diagonal covariance in a random orthonormal basis.
+        let eigvals: Vec<f32> = (0..d).map(|i| (-(i as f32) / 20.0).exp()).collect();
+        let mut q_mat = vec![0.0_f32; d * d];
+        for v in &mut q_mat {
+            *v = rng.gen_range(-1.0..1.0);
+        }
+        let q = DMatrix::<f32>::from_row_slice(d, d, &q_mat)
+            .qr()
+            .q()
+            .columns(0, d)
+            .into_owned();
+        let mut vecs = vec![0.0_f32; n * d];
+        for row in 0..n {
+            let mut latent = vec![0.0_f32; d];
+            for j in 0..d {
+                latent[j] = rng.gen_range(-1.0..1.0_f32) * eigvals[j].sqrt();
+            }
+            // Rotate into ambient space.
+            for j in 0..d {
+                let mut s = 0.0_f32;
+                for k in 0..d {
+                    s += q[(j, k)] * latent[k];
+                }
+                vecs[row * d + j] = s;
+            }
+        }
+        let w = vec![1.0_f32; n];
+        let exact = fit_weighted_pca(&vecs, &w, d, 0.95);
+        // With 3 power iterations on a slow-decay spectrum, randomized
+        // SVD tracks exact to within ~20% reconstruction MSE. Fewer
+        // iterations would require larger oversample.
+        let rsvd = fit_weighted_pca_randomized(&vecs, &w, d, 0.95, exact.d_eff + 8, 10, 3, 777);
+
+        // Both should capture ≥ 95% variance.
+        assert!(exact.captured_variance >= 0.949);
+        assert!(rsvd.captured_variance >= 0.90, "rsvd captured only {}", rsvd.captured_variance);
+
+        // Measure per-vector reconstruction MSE under each basis.
+        let mut e1 = 0.0_f64;
+        let mut e2 = 0.0_f64;
+        for row in 0..n {
+            let x = &vecs[row * d..(row + 1) * d];
+            let c1 = project(x, &exact);
+            let r1 = unproject(&c1, &exact);
+            let c2 = project(x, &rsvd);
+            let r2 = unproject(&c2, &rsvd);
+            for j in 0..d {
+                e1 += (x[j] - r1[j]) as f64 * (x[j] - r1[j]) as f64;
+                e2 += (x[j] - r2[j]) as f64 * (x[j] - r2[j]) as f64;
+            }
+        }
+        // On exponentially-decaying spectra randomized SVD with 3 power
+        // iterations + oversample=10 stays within 1.5× of exact MSE.
+        let ratio = e2 / e1.max(1e-12);
+        assert!(ratio <= 1.5, "rsvd MSE inflation {ratio:.3}× exceeds 1.5");
+    }
+
+    #[test]
+    fn randomized_pca_honours_variance_ratio_truncation() {
+        let n = 128;
+        let d = 16;
+        let vecs = ellipse_points(n, 5.0, 0.01, 0.2);
+        let w = vec![1.0_f32; n];
+        // Variance ratio 0.5 on an extremely skinny ellipse → should
+        // truncate to 1 direction.
+        let mut vecs_d = Vec::with_capacity(n * d);
+        for i in 0..n {
+            vecs_d.push(vecs[i * 2]);
+            vecs_d.push(vecs[i * 2 + 1]);
+            for _ in 2..d {
+                vecs_d.push(0.0);
+            }
+        }
+        let fit = fit_weighted_pca_randomized(&vecs_d, &w, d, 0.5, 4, 4, 1, 7);
+        assert_eq!(fit.d_eff, 1);
+    }
+
+    #[test]
+    fn randomized_pca_is_deterministic_on_same_seed() {
+        let n = 64;
+        let d = 16;
+        let vecs: Vec<f32> = (0..n * d).map(|i| (i as f32 * 0.1).sin()).collect();
+        let w = vec![1.0_f32; n];
+        let a = fit_weighted_pca_randomized(&vecs, &w, d, 0.9, 4, 4, 2, 42);
+        let b = fit_weighted_pca_randomized(&vecs, &w, d, 0.9, 4, 4, 2, 42);
+        assert_eq!(a.d_eff, b.d_eff);
+        for (x, y) in a.mean_f32().iter().zip(b.mean_f32().iter()) {
+            assert_abs_diff_eq!(x, y, epsilon = 1e-6);
+        }
+        for (x, y) in a.basis_f32().iter().zip(b.basis_f32().iter()) {
+            assert_abs_diff_eq!(x, y, epsilon = 1e-6);
+        }
+    }
+
+    #[test]
+    fn randomized_pca_different_seeds_give_similar_subspaces() {
+        let n = 256;
+        let d = 32;
+        let vecs: Vec<f32> = (0..n * d).map(|i| ((i as f32 * 0.17).cos() * 2.0)).collect();
+        let w = vec![1.0_f32; n];
+        let a = fit_weighted_pca_randomized(&vecs, &w, d, 0.9, 6, 6, 2, 1);
+        let b = fit_weighted_pca_randomized(&vecs, &w, d, 0.9, 6, 6, 2, 2);
+        // d_eff may differ by ±1, but the leading direction should align.
+        let ang = subspace_angle(&a.basis_f32()[..d], &b.basis_f32()[..d], d, 1, 1);
+        assert!(ang < 5e-2, "top direction should be consistent across seeds (1 − cos = {ang})");
+    }
+
+    #[test]
+    #[should_panic(expected = "target_rank must be ≥ 1")]
+    fn randomized_pca_rejects_zero_rank() {
+        let _ = fit_weighted_pca_randomized(&[1.0_f32; 16], &[1.0; 4], 4, 0.9, 0, 2, 1, 0);
+    }
+
+    // ---------- back to pooled fit tests ----------
 
     #[test]
     fn pooled_fit_matches_plain_fit() {

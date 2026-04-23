@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "kakeyaturbo_py"
+version = "0.1.0"
+description = "In-process Rust codec for KV-cache compression (kakeyaturbo)"
+requires-python = ">=3.8"
+authors = [{name = "FluffyAIcode"}]
+license = {text = "Apache-2.0"}
+dependencies = ["numpy>=1.20"]
+
+[tool.maturin]
+module-name = "kakeyaturbo_py._core"
+python-source = "python"
+features = ["pyo3/extension-module"]

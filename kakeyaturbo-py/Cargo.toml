@@ -1,0 +1,27 @@
+[package]
+name = "kakeyaturbo-py"
+version = "0.1.0"
+edition = "2021"
+description = "pyo3 bindings for kakeyaturbo: in-process Rust codec for KV-cache compression"
+license = "Apache-2.0"
+rust-version = "1.75"
+
+[lib]
+name = "kakeyaturbo_py"
+# cdylib = Python extension module.  rlib kept for doctests / future
+# in-process callers from other Rust crates in the workspace.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kakeyaturbo = { path = "../kakeyaturbo" }
+pyo3       = { version = "0.28", features = ["extension-module", "abi3-py38"] }
+numpy      = { version = "0.28" }
+half       = { version = "2.4", default-features = false, features = ["std"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+[lints.rust]
+unsafe_code = "forbid"

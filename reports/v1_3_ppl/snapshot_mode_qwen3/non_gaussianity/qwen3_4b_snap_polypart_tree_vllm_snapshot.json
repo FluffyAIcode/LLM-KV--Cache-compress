@@ -1,0 +1,2762 @@
+{
+  "model_name": "qwen3_4b_snap_polypart_tree",
+  "model_path": "Qwen/Qwen3-4B",
+  "engine": "vllm",
+  "recipe": "v1.3 PPL snapshot-mode (Qwen3)",
+  "ctx_len": 2048,
+  "n_eval": 64,
+  "n_passages_total": 4,
+  "block_size": 512,
+  "bit_width_k": 4,
+  "bit_width_v": 2,
+  "rsvd_target_rank_factor": 0.75,
+  "k_kmeans_k": 64,
+  "v_kmeans_k": 16,
+  "outlier_threshold": 2.0,
+  "boundary_skip_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "q_calib": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_sigma_q.safetensors",
+  "k_centroids": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_lloyd_max_K_b3.f32",
+  "v_centroids": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_lloyd_max_V_b2.f32",
+  "mean_delta_ppl": 0.8144898170619973,
+  "mean_top1_pair": 0.7734375,
+  "verdict": "REJECT",
+  "per_passage": [
+    {
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.6942949313670397,
+      "t_codec_sec": 45.23632971942425,
+      "t_alt_sec": 0.06422322057187557,
+      "ppl_ref": 27.69810560312822,
+      "ppl_alt": 71.51933842247509,
+      "delta_ppl": 1.5821021642143536,
+      "top1_pair": 0.734375,
+      "n_boundary_skipped": 28
+    },
+    {
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.26442715898156166,
+      "t_codec_sec": 43.7989065926522,
+      "t_alt_sec": 0.064543591812253,
+      "ppl_ref": 8.358697138917835,
+      "ppl_alt": 12.1201931530776,
+      "delta_ppl": 0.45000984622906803,
+      "top1_pair": 0.859375,
+      "n_boundary_skipped": 28
+    },
+    {
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.24695518985390663,
+      "t_codec_sec": 46.15138551220298,
+      "t_alt_sec": 0.06535530835390091,
+      "ppl_ref": 3.779843060079098,
+      "ppl_alt": 6.447594294318208,
+      "delta_ppl": 0.7057835978468596,
+      "top1_pair": 0.734375,
+      "n_boundary_skipped": 28
+    },
+    {
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.22965261712670326,
+      "t_codec_sec": 45.79091879166663,
+      "t_alt_sec": 0.06758565455675125,
+      "ppl_ref": 7.508013606536463,
+      "ppl_alt": 11.412658641764086,
+      "delta_ppl": 0.5200636599577079,
+      "top1_pair": 0.765625,
+      "n_boundary_skipped": 28
+    }
+  ],
+  "codec_stats": [
+    {
+      "layer": 0,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5757772326469421,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 7,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.008202418684959412,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5564931035041809,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.013899384066462517,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6830263137817383,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01407268363982439,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4198043644428253,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.02191956527531147,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5947719216346741,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.009534545242786407,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5626744627952576,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.011721065267920494,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.7453400492668152,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.009620937518775463,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.520078182220459,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.017386043444275856,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6166005730628967,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01593921333551407,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5565862059593201,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.027394818142056465,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6704814434051514,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.02007572539150715,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6577872037887573,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.023485815152525902,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6075291633605957,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03717701509594917,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.693081796169281,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03775119036436081,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5902732014656067,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.043477755039930344,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5955842137336731,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.06790900230407715,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6652029752731323,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.06702380627393723,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6924337148666382,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1273629069328308,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5506939888000488,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.09404721111059189,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6135017275810242,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.14791524410247803,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.48354724049568176,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.16991418600082397,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5386565923690796,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1949346661567688,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 29,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5538827180862427,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 7,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.007746357936412096,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5308188796043396,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0130256786942482,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6735246181488037,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.013555558398365974,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.40810713171958923,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.021003002300858498,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5678901672363281,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.009086460806429386,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5267439484596252,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.011238125152885914,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.7107828259468079,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.00952643621712923,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5019102096557617,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.017672818154096603,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5888898372650146,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01595383882522583,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.538538932800293,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.027403514832258224,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6450730562210083,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.020467227324843407,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6435086131095886,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.023525193333625793,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6232178807258606,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0381857194006443,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6973090171813965,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03860257938504219,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5962165594100952,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.04515192657709122,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6079733371734619,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0703572928905487,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6846325993537903,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.06692095100879669,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.7057721018791199,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.12180767953395844,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5459680557250977,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.09384585171937943,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.60114985704422,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.14816735684871674,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4817449450492859,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.17203806340694427,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5255007743835449,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1978205442428589,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 29,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5147334337234497,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 7,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0066352421417832375,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4897956848144531,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.011205438524484634,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.643196165561676,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01220256369560957,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.37965744733810425,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.018354114145040512,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5451294183731079,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.008443624712526798,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5184946656227112,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01089415606111288,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.7037920355796814,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.008950009942054749,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4913710355758667,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01647288165986538,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5834452509880066,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.015426574274897575,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5288515090942383,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.025714896619319916,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6287674903869629,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.019895773380994797,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6199021339416504,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.023445939645171165,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6032382249832153,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03780543431639671,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6796901822090149,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03822607174515724,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5781668424606323,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.04554670304059982,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6103031635284424,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0717846006155014,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6923848390579224,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.06830263882875443,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6842634081840515,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1141030341386795,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.531514048576355,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.08812819421291351,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5863639712333679,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.13751985132694244,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4572877287864685,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1555165946483612,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5046309232711792,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1789560467004776,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 29,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5046531558036804,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 7,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0062054540030658245,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.46942007541656494,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 8,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.010260228998959064,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6271064281463623,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 9,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.011942732147872448,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.37281784415245056,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 10,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.017777856439352036,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5271653532981873,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 11,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.008396702818572521,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.49265405535697937,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 12,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.010799351148307323,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6828298568725586,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 13,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.008781992830336094,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4748437702655792,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 14,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.01664891466498375,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5694952011108398,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 15,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.015390603803098202,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5203084945678711,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 16,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.02630651369690895,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6236488819122314,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 17,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.02053096890449524,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6177860498428345,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 18,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.023694852367043495,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5923503041267395,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 19,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03710756450891495,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6683823466300964,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 20,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.03789795562624931,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5692270994186401,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 21,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.04420410469174385,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5852617025375366,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 22,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.06735792756080627,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6646853685379028,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 23,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.06546014547348022,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.6707414984703064,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 24,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.11145283281803131,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5157343745231628,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 25,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.08244767785072327,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.5632727146148682,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 26,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.13179977238178253,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4319186806678772,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 27,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.14775441586971283,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.4850791096687317,
+      "compressed_bytes": 2315776,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 4,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 28,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.1709478348493576,
+      "compressed_bytes": 1492480,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 29,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "V",
+      "boundary_skip": true
+    }
+  ]
+}

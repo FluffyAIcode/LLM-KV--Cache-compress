@@ -1,0 +1,37 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "kv_cache_dtype": "turboquant_k8v4",
+  "ctx_len": 4096,
+  "prompt_len": 4096,
+  "gen_tokens": 1024,
+  "warmup_iters": 3,
+  "measured_iters": 5,
+  "max_model_len": 5120,
+  "block_size": null,
+  "enforce_eager": false,
+  "tpot_s": {
+    "min": 0.005526834167540073,
+    "median": 0.005527975736185908,
+    "p95": 0.005530143389478326,
+    "mean": 0.0055283030029386285
+  },
+  "ttft_s": {
+    "min": 0.0,
+    "median": 0.0,
+    "p95": 0.0,
+    "mean": 0.0
+  },
+  "aggregate_toks_per_s": {
+    "min": 180.82713766565334,
+    "median": 180.8980443698477,
+    "p95": 180.93540889523157,
+    "mean": 180.88734648244767
+  },
+  "out_tokens": [
+    1024,
+    1024,
+    1024,
+    1024,
+    1024
+  ]
+}
