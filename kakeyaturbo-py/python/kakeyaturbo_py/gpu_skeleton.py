@@ -372,6 +372,168 @@ def fit_skeleton_batched(
     }
 
 
+def _assign_spherical_kmeans_batched(
+    coeff: torch.Tensor,
+    centres: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Spherical K-means nearest-centre **assignment + projection**.
+
+    Mirrors `kakeyaturbo::kmeans::assign_and_project` (the Rust
+    reference), which is what encode_block_codes stage 3 uses:
+
+        cos[i, c]  =  ⟨coeff[i], centres[c]⟩           (NOT unit-normalised)
+        seg_id[i]  =  argmax_c |cos[i, c]|
+        t[i]       =  cos[i, seg_id[i]]                  (signed scalar projection)
+        residual[i]=  coeff[i] − t[i] · centres[seg_id[i]]
+
+    Zero-norm coeff rows → (seg_id=0, t=0).  Centres are assumed to be
+    unit-length on output of `_fit_kmeans_batched`; this function does
+    NOT re-normalise them.  If the caller passes non-unit centres, the
+    returned `t` still carries the correct signed projection for the
+    decoder identity `coeff ≈ t · centres[seg_id] + residual`.
+
+    Args:
+        coeff:   [B, n, d] fp32 on device.
+        centres: [B, k, d] fp32 on device (unit-normalised per row).
+    Returns:
+        seg_id: [B, n] int64.
+        t:      [B, n] fp32  = ⟨coeff, centres[seg_id]⟩.
+    """
+    assert coeff.dim() == 3 and centres.dim() == 3, \
+        f"coeff {coeff.shape} / centres {centres.shape} must both be rank-3"
+    B, n, d = coeff.shape
+    assert centres.shape[0] == B and centres.shape[2] == d, \
+        f"centres {centres.shape} mismatches coeff {coeff.shape}"
+
+    # cos[b, i, c] = ⟨coeff[b, i], centres[b, c]⟩ — NOT unit-normalised.
+    cos = torch.einsum("bnd,bkd->bnk", coeff, centres)        # [B, n, k]
+    seg_id = cos.abs().argmax(dim=2)                          # [B, n]
+    t = cos.gather(2, seg_id.unsqueeze(-1)).squeeze(-1)       # [B, n]
+
+    # Zero-coeff guard (same Rust-side `coeff_norm_sq ≤ eps` test).
+    coeff_norm_sq = (coeff * coeff).sum(dim=2)                # [B, n]
+    zero = coeff_norm_sq <= torch.finfo(coeff.dtype).eps
+    seg_id = torch.where(zero, torch.zeros_like(seg_id), seg_id)
+    t = torch.where(zero, torch.zeros_like(t), t)
+    return seg_id, t
+
+
+def fit_skeleton_rvq_batched(
+    X: torch.Tensor,
+    *,
+    d_eff: int,
+    k1: int,
+    k2: int,
+    seed: int = 3405691582,
+    kmeans_max_iter: int = 8,
+    rsvd_oversample: int = 8,
+    rsvd_power_iters: int = 2,
+    variance_ratio: float = 1.0,
+    pca_kind: str = "rsvd",
+) -> dict:
+    """Stage-1 skeleton fit with **two-level Residual VQ** instead of
+    flat spherical K-means.
+
+    Replaces `fit_skeleton_batched`'s single `k`-centre K-means with a
+    cascade:
+
+        coeff  →  (seg_id_1 ∈ [0, k1), t_1)
+        residual_1 = coeff − t_1 · centres_1[seg_id_1]
+        residual_1  →  (seg_id_2 ∈ [0, k2), t_2)
+        # final residual (for downstream Lloyd-Max) is
+        # residual = coeff − t_1·c1[seg_id_1] − t_2·c2[seg_id_2]
+
+    Effective codebook size = k1 · k2 (same as flat k = k1·k2), but the
+    stored centroid table shrinks from `k1·k2 × d` to `(k1 + k2) × d` —
+    exactly the Perron-tree-inspired "shatter + reuse" structure applied
+    to K-means, at the cost of 2 seg_id indices per token instead of 1.
+
+    Args:
+        X: [B, n, d] captured K block (fp32 on device).
+        d_eff: PCA rank (as `fit_skeleton_batched`).
+        k1, k2: per-stage K-means cluster counts (both powers of two).
+        Other args: forwarded to `_fit_rsvd_batched` / `_fit_kmeans_batched`.
+
+    Returns:
+        dict with all `fit_skeleton_batched` fields **plus**:
+          "centers_2":  [B, k2, d_eff] fp32 (stage-2 residual centres)
+          "k1":         int
+          "k2":         int
+          "rvq_levels": 2
+        `centers` aliases `centers_1` for backward-compat with any
+        caller that only reads the flat-VQ fields.
+    """
+    assert X.dim() == 3, f"X must be [B, n, d], got {X.shape}"
+    _B, _n, d = X.shape
+    if d_eff < 1 or d_eff > d:
+        raise ValueError(f"d_eff {d_eff} out of range [1, {d}]")
+    for name, v in (("k1", k1), ("k2", k2)):
+        if v < 1 or (v & (v - 1)) != 0:
+            raise ValueError(f"{name} must be positive power of two, got {v}")
+
+    # PCA stage (identical to fit_skeleton_batched).
+    if pca_kind == "rsvd":
+        mean, basis, _sigma, d_eff_out = _fit_rsvd_batched(
+            X, target_rank=d_eff,
+            oversample=rsvd_oversample, power_iters=rsvd_power_iters,
+            variance_ratio=variance_ratio, rotation_seed=seed,
+        )
+    else:
+        raise ValueError(
+            f"fit_skeleton_rvq_batched only supports pca_kind='rsvd'; "
+            f"got {pca_kind!r}"
+        )
+
+    coeff = (X - mean.unsqueeze(1)) @ basis.transpose(1, 2)  # [B, n, d_eff_out]
+    if d_eff_out < d_eff:
+        pad = d_eff - d_eff_out
+        basis = torch.cat(
+            [basis, torch.zeros(_B, pad, d, device=basis.device, dtype=basis.dtype)],
+            dim=1,
+        )
+        coeff = torch.cat(
+            [coeff, torch.zeros(_B, _n, pad, device=coeff.device, dtype=coeff.dtype)],
+            dim=2,
+        )
+
+    # Level-1 K-means on coeff — identical to flat VQ with k=k1.
+    centres_1 = _fit_kmeans_batched(coeff, k1, seed, kmeans_max_iter)  # [B, k1, d_eff]
+
+    # Subtract level-1 projection to form the stage-2 input.  We MUST
+    # compute the same (seg_id, t) that the decoder would, so the
+    # residual we fit level-2 on is byte-identical to runtime.
+    seg_id_1, t_1 = _assign_spherical_kmeans_batched(coeff, centres_1)
+    chosen_1 = centres_1.gather(                             # [B, n, d_eff]
+        1, seg_id_1.unsqueeze(-1).expand(-1, -1, d_eff),
+    )
+    residual_1 = coeff - t_1.unsqueeze(-1) * chosen_1       # [B, n, d_eff]
+
+    # Level-2 K-means on residual.  Same spherical-K-means primitive;
+    # runs with its own farthest-first seed to avoid near-colinearity
+    # between the two levels' centre tables.
+    centres_2 = _fit_kmeans_batched(
+        residual_1, k2,
+        seed ^ 0xA5A5_A5A5,        # independent seed for stage-2 init
+        kmeans_max_iter,
+    )                                                        # [B, k2, d_eff]
+
+    return {
+        "mean":          mean,
+        "basis":         basis,
+        "centers":       centres_1,   # back-compat alias
+        "centers_1":     centres_1,
+        "centers_2":     centres_2,
+        "d":             d,
+        "d_eff":         d_eff,
+        "k":             k1,          # back-compat alias
+        "k1":            k1,
+        "k2":            k2,
+        "rvq_levels":    2,
+        "rotation_seed": int(seed),
+        "wht_len":       _next_pow2(d_eff),
+    }
+
+
 def unbatched_skeleton_to_rust_dict(
     batch_out: dict,
     b_idx: int,

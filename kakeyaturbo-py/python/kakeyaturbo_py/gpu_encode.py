@@ -122,6 +122,31 @@ def _wht_rotate_rows_gpu(
     return xd @ H                                    # [B, L]
 
 
+def _wht_inverse_rotate_rows_gpu(
+    y: torch.Tensor,
+    sign: torch.Tensor,
+) -> torch.Tensor:
+    """Inverse of `_wht_rotate_rows_gpu`.
+
+    `_hadamard_matrix(L)` returns the **un-normalised** Sylvester
+    Hadamard (±1 entries), so `H @ H = L · I`, NOT `I`.  The forward
+    transform is `y = (x * sign) @ H`, and its inverse is
+
+        x = (y @ H) * sign / L
+
+    because `H @ H / L = I` and `sign * sign = 1`.  We divide by L at
+    decode because the slot decoder (Rust `inverse_rotate_rows`) does
+    the same — the forward rotation stored un-normalised coefficients.
+
+    Used by Residual-VQ roundtrip (snapshot-only) where we need the
+    inverse rotation on GPU without a CPU bounce.
+    """
+    B, L = y.shape
+    assert sign.shape == (L,), f"sign must be [L], got {sign.shape}"
+    H = _hadamard_matrix(L, y.device, y.dtype)       # [L, L], un-normalised
+    return ((y @ H) * sign.unsqueeze(0)) / float(L)  # [B, L]
+
+
 # ---------------------------------------------------------------------------
 # Bit packing on GPU.
 # ---------------------------------------------------------------------------
@@ -598,3 +623,203 @@ def encode_and_pack_batched(
             out[:, off_entries:off_entries + entries_budget] = entries_gpu
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Residual-VQ snapshot-only codec (Perron-tree inspired).
+#
+# This is an *alternative* end-to-end encode/decode that bypasses the
+# vLLM slot layout and returns decoded K directly.  It exists purely
+# for the Qwen3-4B snapshot harness — the production vLLM backend
+# (impl.py / spec.py / decode kernel) is NOT touched.
+#
+# Motivation: on near-isotropic K, flat K-means(k=k1·k2) and 2-level
+# Residual VQ(k1 × k2) achieve the same effective codebook size, but
+# RVQ stores only `k1 + k2` centres instead of `k1·k2`.  For the snapA
+# budget (flat k=64, d_eff=96, fp16 centres) this shrinks the per-block
+# per-head centroid table from 12 288 B → 3 072 B (8×8 split), a
+# strictly bytes-reducing change with ~0 precision impact on the
+# bare-codec K-MSE.
+# ---------------------------------------------------------------------------
+
+def roundtrip_residual_vq(
+    X: torch.Tensor,
+    skel_rvq: dict,
+    *,
+    bit_width: int,
+    metric: str,
+    wht_sign: torch.Tensor,
+    custom_centroids: torch.Tensor | None = None,
+    outlier_threshold: float | None = None,
+) -> torch.Tensor:
+    """Encode + decode a batched K block through the 2-level RVQ codec.
+
+    End-to-end semantics (per token t, per kv-head b):
+        coeff_t      = (X_t − μ) · basisᵀ
+        seg1, t1     = argmax_c1 |⟨coeff, c1⟩|,  t1 = ⟨coeff, c1[seg1]⟩
+        residual1    = coeff − t1 · c1[seg1]
+        seg2, t2     = argmax_c2 |⟨residual1, c2⟩|,  t2 = ⟨r1, c2[seg2]⟩
+        residual2    = residual1 − t2 · c2[seg2]
+        residual_q   = Lloyd-Max(WHT(residual2) / ‖residual2‖, bit_width)
+                       (with optional outlier override)
+        decoded K_t  ≈ μ + (t1·c1[seg1] + t2·c2[seg2] + residual_rec) · basis
+
+    This is precisely the flat-K-means encode+decode with one extra
+    residual stage in front of the WHT + Lloyd-Max branch — same codec
+    semantics, smaller centroid storage (which we account for in the
+    compression-ratio reporting, even though this snapshot-only routine
+    doesn't emit byte slots).
+
+    Args:
+        X: [B, n, D] fp32 on device.
+        skel_rvq: dict from `fit_skeleton_rvq_batched`.
+        bit_width: Lloyd-Max bit width (2, 3, or 4).
+        metric: "mse" | "inner_product" | "linf" (same semantics as
+                `encode_and_pack_batched`).
+        wht_sign: [wht_len] fp32 on device — the per-layer WHT sign
+                  pattern (same as `encode_and_pack_batched`).
+        custom_centroids: optional Lloyd-Max codebook on device; falls
+                  back to Rust's `centroids_gaussian(bit_width)`.
+        outlier_threshold: if set, `|scaled| > T` entries are stored
+                  exactly (analogous to the slot outlier side-buffer).
+
+    Returns:
+        decoded: [B, n, D] fp32 on device — the round-tripped K.
+    """
+    import numpy as np
+    assert X.dim() == 3, f"X must be [B, n, D], got {X.shape}"
+    B, n, D = X.shape
+    mean     = skel_rvq["mean"]          # [B, D]
+    basis    = skel_rvq["basis"]         # [B, d_eff, D]
+    centres1 = skel_rvq["centers_1"]     # [B, k1, d_eff]
+    centres2 = skel_rvq["centers_2"]     # [B, k2, d_eff]
+    d_eff    = int(skel_rvq["d_eff"])
+    wht_len  = int(skel_rvq["wht_len"])
+    assert basis.shape == (B, d_eff, D)
+    assert centres1.shape[0] == B and centres1.shape[2] == d_eff
+    assert centres2.shape[0] == B and centres2.shape[2] == d_eff
+    assert wht_sign.shape == (wht_len,)
+
+    eps = torch.finfo(torch.float32).eps
+
+    # Stage 1: PCA project.
+    coeff = torch.einsum(
+        "bnd,bkd->bnk",
+        X - mean.unsqueeze(1),
+        basis,
+    )                                                         # [B, n, d_eff]
+
+    # Stage 2 (level 1 + level 2): cascaded spherical K-means.
+    #
+    # Both assignments use the exact `_assign_spherical_kmeans_batched`
+    # semantics (cos = ⟨row, centre⟩ NOT unit-normalised; seg_id =
+    # argmax |cos|; t = cos[seg_id]).  This keeps bit-for-bit
+    # consistency with `reference_torch._assign_and_project` used by
+    # the flat-VQ slot path.
+    from .gpu_skeleton import _assign_spherical_kmeans_batched
+    seg1, t1 = _assign_spherical_kmeans_batched(coeff, centres1)
+    chosen1 = centres1.gather(
+        1, seg1.unsqueeze(-1).expand(B, n, d_eff),
+    )                                                         # [B, n, d_eff]
+    residual1 = coeff - t1.unsqueeze(-1) * chosen1            # [B, n, d_eff]
+
+    seg2, t2 = _assign_spherical_kmeans_batched(residual1, centres2)
+    chosen2 = centres2.gather(
+        1, seg2.unsqueeze(-1).expand(B, n, d_eff),
+    )                                                         # [B, n, d_eff]
+
+    # Final residual after two VQ levels (this is what flat-VQ's
+    # `residual` would be after one level).
+    residual = residual1 - t2.unsqueeze(-1) * chosen2         # [B, n, d_eff]
+
+    # ---- Stage 3: WHT rotate + per-vec scale + Lloyd-Max on residual ----
+    if wht_len > d_eff:
+        pad = torch.zeros(B, n, wht_len - d_eff, device=X.device, dtype=X.dtype)
+        residual_padded = torch.cat([residual, pad], dim=2)
+    else:
+        residual_padded = residual
+    flat = residual_padded.reshape(B * n, wht_len)
+    rotated_flat = _wht_rotate_rows_gpu(flat, wht_sign)       # [B*n, wht_len]
+    res_norm = residual.reshape(B * n, d_eff).norm(dim=1)     # [B*n]
+    scale = torch.where(res_norm > eps, 1.0 / res_norm, torch.ones_like(res_norm))
+    scaled_flat = rotated_flat * scale.unsqueeze(1)           # [B*n, wht_len]
+
+    # Lloyd-Max argmin (same formula as encode_and_pack_batched).
+    if custom_centroids is None:
+        from . import _core
+        c_np = np.asarray(_core.centroids_gaussian(int(bit_width)))
+        centroids = torch.from_numpy(c_np).to(X.device, dtype=torch.float32)
+    else:
+        centroids = custom_centroids.to(device=X.device, dtype=torch.float32)
+        if centroids.numel() != (1 << int(bit_width)):
+            raise ValueError(
+                f"custom_centroids size {centroids.numel()} != 2^bit_width"
+            )
+    if metric in ("mse", "inner_product"):
+        diff = scaled_flat.unsqueeze(-1) - centroids.view(1, 1, -1)
+        dist = diff * diff
+    elif metric == "linf":
+        delta = 0.1
+        e = (scaled_flat.unsqueeze(-1) - centroids.view(1, 1, -1)).abs()
+        dist = torch.where(e < delta, (e * e) / (2.0 * delta), e - (delta / 2.0))
+    else:
+        raise ValueError(f"unknown metric {metric!r}")
+    q_idx = dist.argmin(dim=-1)                               # [B*n, wht_len]
+
+    # Dequantise.  Must mirror `reference_torch.decode_block_torch_from_parts`
+    # EXACTLY to match the slot-based decoder used by the flat-VQ path:
+    #   * metric="mse"/"linf":  _NORM_MODE="absorbed"  → inv_scale = stored `norm`
+    #                           (which was 1/scale = ‖residual‖ at encode time)
+    #   * metric="inner_product": _NORM_MODE="explicit" → inv_scale = 1.0
+    #                           (residual recovered at unit norm; the `t`
+    #                           factor absorbs the magnitude implicitly)
+    # We re-use `res_norm` computed above as the ‖residual‖ value at
+    # encode time, fp16-rounded to match the slot field.
+    q_vals = centroids[q_idx]                                 # [B*n, wht_len]
+
+    # Outlier override: entries with |scaled| > T stored exactly.
+    if outlier_threshold is not None and outlier_threshold > 0:
+        outlier_mask = scaled_flat.abs() > float(outlier_threshold)
+        q_vals = torch.where(outlier_mask, scaled_flat, q_vals)
+
+    # Un-scale: always apply ‖residual‖ regardless of `metric`.
+    #
+    # Rationale: the slot-based reference decoder uses "absorbed"
+    # semantics for "mse"/"linf" and "explicit" (inv_scale=1) for
+    # "inner_product".  The latter is a storage trick — inner_product
+    # mode stores ‖X‖ in the `norm` field instead of ‖residual‖, and
+    # relies on the 1-level residual being "large enough" that losing
+    # its scale at decode still gives a sensible reconstruction (the
+    # `t · centre` term dominates).
+    #
+    # RVQ's level-2 residual is much smaller than flat VQ's residual
+    # (since level-1 already absorbed the dominant energy), so dropping
+    # its scale inflates K-MSE by orders of magnitude.  Since this
+    # routine is snapshot-only — we never write to a vLLM slot — we can
+    # carry the exact ‖residual‖ through without relying on a stored
+    # field.  fp16 round-trip preserves the quality contract of the
+    # slot-based path for consistency with flat-VQ measurements.
+    res_norm_f16 = res_norm.to(torch.float16).to(torch.float32)
+    inv_scale = torch.where(
+        res_norm > eps, res_norm_f16, torch.ones_like(res_norm),
+    )
+    q_scaled = q_vals * inv_scale.unsqueeze(1)
+    # Inverse WHT rotation on GPU.
+    unrotated_flat = _wht_inverse_rotate_rows_gpu(
+        q_scaled, wht_sign,
+    )                                                          # [B*n, wht_len]
+    # Strip the WHT pad back down to d_eff.
+    unscaled = unrotated_flat.view(B, n, wht_len)[:, :, :d_eff].contiguous()
+
+    # Re-assemble coeff_hat = t1·c1 + t2·c2 + residual_rec.
+    coeff_hat = (
+        t1.unsqueeze(-1) * chosen1
+        + t2.unsqueeze(-1) * chosen2
+        + unscaled
+    )                                                         # [B, n, d_eff]
+
+    # Unproject: X̂ = μ + coeff_hat · basis.
+    X_hat = mean.unsqueeze(1) + torch.einsum(
+        "bnk,bkd->bnd", coeff_hat, basis,
+    )
+    return X_hat

@@ -250,6 +250,122 @@ schema and the table of legacy aliases.
 Does not hit the MARGINAL Δppl bar (≤+20 %).  top-1 is above the
 PR #17 DS-1.5B MARGINAL (74.22 %).
 
+### Perron-tree-inspired Residual VQ (2-level K-means)
+
+Motivation: if K is (near-)isotropic the K-means nearest-centre
+projection is the dominant K-MSE source (stage 3 → 4 decomposition
+showed K-MSE leap 0.006 → 0.78, a 135× amplification).  At
+effective codebook size `k_eff = 64`, flat K-means stores
+`k · d_eff · 2` = 12 288 B of fp16 centroids per (block, head).
+A two-level Residual VQ `(k1 × k2 = k_eff)` stores only
+`(k1 + k2) · d_eff · 2` bytes, a Perron-tree-inspired
+"shatter + reuse" structure that shrinks the centroid table 3-4×
+at the same effective codebook size.
+
+We implemented this as a **snapshot-only** alternative encode/decode
+in `kakeyaturbo_py.gpu_encode.roundtrip_residual_vq` (backed by
+`gpu_skeleton.fit_skeleton_rvq_batched`).  The vLLM slot byte
+layout is unchanged; the new path returns decoded K directly, so
+it can be evaluated in the snapshot harness without touching
+production code.  Gated behind `--k-rvq-level2 <k2>` in the
+Qwen3-4B harness.
+
+4-passage snapshot, snapA base (b_K=4, d_eff=96, 14-layer bdry,
+V b_V=2 k_V=16), paired across identical `ppl_ref`:
+
+| run                                    | Δppl (paired) | top-1     | K-MSE (mean non-bdry) | centroid storage / (block, head) |
+|:---------------------------------------|--------------:|----------:|----------------------:|:---------------------------------|
+| snapA (slot path, flat k=64)           |    +61.84 %   |  79.30 %  |   0.5030              | 64 × 96 × 2 = **12 288 B**       |
+| snapshot-path flat k=64 (k2=1)         |    +53.41 %   |  82.81 %  |   0.0511              | (64+1) × 96 × 2 = 12 480 B       |
+| RVQ 16×4 (snapshot-only)               |    +54.30 %   |  81.64 %  |   0.0526              | (16+4) × 96 × 2 = 3 840 B        |
+| RVQ 8×8 (snapshot-only)                |    +56.59 %   |  83.20 %  |   0.0529              | (8+8) × 96 × 2 = **3 072 B**     |
+| **RVQ 4×16** (snapshot-only)           | **+52.37 %**  | **83.98 %**|  0.0528              | (4+16) × 96 × 2 = 3 840 B        |
+
+Interpretation — three independent effects compound:
+
+1. **Snapshot-only decode path absorbs residual scale losslessly.**
+   The slot-based decoder uses `_NORM_MODE="explicit"` for
+   `inner_product` metric, which stores `‖X‖` but drops residual
+   scale at dequantisation (sets `inv_scale=1`).  Our snapshot-only
+   path has access to the exact `‖residual‖` on device and always
+   applies it.  Ablation (k2=1, same path as RVQ, same effective
+   k_eff=64): K-MSE drops from 0.5030 to 0.0511, a **10×
+   improvement** at the **same effective codebook** — this is the
+   dominant contributor to the Δppl improvement (**−8.43 pp of the
+   −9.47 pp total**), and it is a correctness improvement, not a
+   structural one.
+
+2. **RVQ centroid-table shrinkage is real and large.**  All three
+   RVQ splits (16×4, 8×8, 4×16) use **3-4× less centroid storage**
+   than the flat-k=64 table.  Projecting this back onto the slot
+   format would bring the snapA compression ratio from 1.87× to
+   roughly 2.10× (9 KiB saved per block per head, amortised across
+   512 tokens) — though this would require wiring RVQ into the
+   vLLM slot path, not just the snapshot harness.
+
+3. **RVQ structural effect on Δppl is small and non-monotone.**
+   Comparing RVQ {16×4, 8×8, 4×16} against the same-path k2=1
+   baseline (both at k_eff=64, both on the snapshot path):
+   * RVQ 4×16: **−1.04 pp Δppl**, **+1.17 pp top-1** (modest win)
+   * RVQ 16×4: +0.89 pp Δppl, −1.17 pp top-1 (modest loss)
+   * RVQ 8×8:  +3.18 pp Δppl, +0.39 pp top-1 (small Δppl regression)
+
+   The variance across (k1, k2) orderings, together with K-MSE
+   staying ≈ constant at 0.052 across all three splits, matches
+   the earlier analytical prediction that Perron-tree-family
+   tricks give at most few-percent shaping gain on isotropic input.
+   **RVQ's value is in storage efficiency, not K-MSE improvement.**
+
+4. **K-MSE saturates at 0.05 across all snapshot-path variants**
+   (including flat-k=64).  This is ~10× above what TurboQuant
+   achieves (0.0048) at the same nominal bit budget — reconfirming
+   the earlier conclusion that closing the Kakeya↔TQ gap requires
+   replacing PCA + K-means with Hadamard + per-coord Lloyd-Max,
+   not just optimising the K-means step.
+
+**Operational recipe emerging from this round**:
+
+**`v1.3-GPU-Qwen-snap-rvq-4x16`** (alias **`v1.3-GPU-snapF`**) —
+RVQ-4×16 with snapshot-only decode path.  Δppl = **+52.37 %**
+(the lowest Δppl we have measured on Qwen3-4B snapshot to date,
+−9.47 pp vs snapA), top-1 = **83.98 %** (**new high-water mark,
++4.68 pp vs snapA**), centroid storage 3 840 B / (block, head)
+vs snapA's 12 288 B (**3.2× reduction**).
+
+**Deployment caveat**: snapF's K-MSE and Δppl advantages are
+primarily from the snapshot-only decode path's absorbed-scale
+semantics, which is not currently wired into the vLLM slot layout.
+Porting this to production vLLM would require changing the
+`inner_product`-metric decode to carry `‖residual‖` through the
+slot `norm` field (an actual slot-format change), not just
+swapping the snapshot harness.  Documented here for later
+productionisation.
+
+### Binary-tree K-means encode — measured, NOT adopted
+
+We measured the per-stage encode time breakdown on a single
+layer-17 block (H=8, block=512, d_eff=96, k=64, H200, cached PCA+K-means warm):
+
+| stage                                  | time / block    | % of codec |
+|:---------------------------------------|----------------:|-----------:|
+| RSVD (PCA stage 1)                     | **43.8 ms**     |   **91 %** |
+| K-means farthest-first init (k=64)     |   3.2 ms        |      7 %   |
+| K-means single Lloyd iter              |   0.026 ms      |     <1 %   |
+| K-means full (init + 8 iters)          |   4.4 ms        |      9 %   |
+
+The Lloyd iteration itself is already GPU-matmul-bound at 26 µs
+(tiny `coeff @ centres.T` matmul at tensor-core speed).  Binary-
+tree K-means encoding would speed up the `argmax` over centres
+from O(k) to O(log k), saving at most ~3 ms of farthest-first
+init — a **≤ 7 % reduction in total codec time at best**.  The
+real bottleneck (91 %) is RSVD, which a tree-structured K-means
+cannot touch.
+
+**Verdict: not implemented.**  Any further codec wall-clock
+reduction must target the RSVD stage (e.g., pre-computed basis
+sharing across blocks, or dropping the PCA stage entirely
+TurboQuant-style).
+
 ## Report index (JSONs in this directory)
 
 Baselines (historical, pre-ablation):

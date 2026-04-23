@@ -199,6 +199,7 @@ def _gpu_codec_per_head(
     variance_ratio: float,
     centroids_file: str | None,
     outlier_threshold: float | None,
+    rvq_k2: int | None = None,
 ) -> np.ndarray:
     """Run the GPU codec per kv-head on a [n, H, D] fp32 tensor and
     return the decoded [n, H, D] fp32 array.
@@ -213,8 +214,14 @@ def _gpu_codec_per_head(
     # `vllm_backend/pyproject.toml`; NOT the source-tree path.
     from kakeya_v1_3_ppl.config import KakeyaV13PPLConfig
     from kakeya_v1_3_ppl.impl import KakeyaV13PPLAttentionImpl
-    from kakeyaturbo_py.gpu_skeleton import fit_skeleton_batched
-    from kakeyaturbo_py.gpu_encode import encode_and_pack_batched
+    from kakeyaturbo_py.gpu_skeleton import (
+        fit_skeleton_batched,
+        fit_skeleton_rvq_batched,
+    )
+    from kakeyaturbo_py.gpu_encode import (
+        encode_and_pack_batched,
+        roundtrip_residual_vq,
+    )
     from kakeyaturbo_py.reference_torch import decode_block_torch_from_parts
     from kakeyaturbo_py import _core
 
@@ -264,6 +271,39 @@ def _gpu_codec_per_head(
         lo, hi = bi * block_size, (bi + 1) * block_size
         # [H, block_size, D] — batch = num_kv_heads.
         K_block = K_gpu[lo:hi].permute(1, 0, 2).contiguous()
+
+        if rvq_k2 is not None:
+            # ---- Residual VQ path (Perron-tree-inspired) ----------
+            # Effective codebook = k · rvq_k2 (level-1 · level-2);
+            # centroid storage = (k + rvq_k2) × d_eff × fp16, strictly
+            # smaller than flat-VQ's (k · rvq_k2) × d_eff × fp16 when
+            # rvq_k2 > 1.  Snapshot-only — bypasses the slot byte
+            # layout and returns decoded K directly.
+            skel_rvq = fit_skeleton_rvq_batched(
+                K_block, d_eff=d_eff,
+                k1=int(k), k2=int(rvq_k2), seed=3405691582,
+                rsvd_oversample=8, rsvd_power_iters=2,
+                kmeans_max_iter=8, variance_ratio=variance_ratio,
+            )
+            sign_np = np.asarray(
+                _core.wht_sign_pattern(
+                    int(skel_rvq["rotation_seed"]), int(skel_rvq["wht_len"]),
+                )
+            ).reshape(-1).astype(np.float32)
+            sign = torch.from_numpy(sign_np).cuda()
+
+            X_hat = roundtrip_residual_vq(
+                K_block, skel_rvq,
+                bit_width=bit_width, metric=metric,
+                wht_sign=sign,
+                custom_centroids=centroids_gpu,
+                outlier_threshold=outlier_threshold,
+            )                                          # [H, block_size, D]
+            # Back to [block_size, H, D] layout for `out`.
+            out[lo:hi] = X_hat.permute(1, 0, 2).contiguous().cpu().numpy()
+            continue
+
+        # ---- Flat K-means path (baseline, slot-byte exact) --------
         skel = fit_skeleton_batched(
             K_block, d_eff=d_eff, k=k, seed=3405691582,
             rsvd_oversample=8, rsvd_power_iters=2,
@@ -286,8 +326,6 @@ def _gpu_codec_per_head(
             wht_sign=sign,
         )                                              # [H, slot_bytes]
 
-        # Decode each head slot (decode_block_torch_from_parts is
-        # light-weight and byte-matched to the production decoder).
         for h in range(H):
             slot_cpu = slots[h].cpu().numpy()
             parts = impl._unpack_slot_into_parts(
@@ -311,9 +349,22 @@ def gpu_roundtrip(
     centroids_file: str | None = None,
     outlier_threshold: float | None = None,
     k_centers: int = 16,
+    rvq_k2: int | None = None,
 ) -> tuple[np.ndarray, dict]:
     """Signature-compatible stand-in for `rust_roundtrip` operating
-    on the [n, H, D] pre-flatten layout.  Returns (decoded, report)."""
+    on the [n, H, D] pre-flatten layout.  Returns (decoded, report).
+
+    When `rvq_k2 is None` (default), the flat-K-means codec runs with
+    `k_centers` centroids (identical to snapA / snapB semantics).
+
+    When `rvq_k2` is a positive power of two, the 2-level Residual VQ
+    codec runs: level-1 K-means uses `k_centers` centroids, level-2
+    uses `rvq_k2` centroids.  Effective codebook = k_centers · rvq_k2,
+    centroid storage = (k_centers + rvq_k2) × d_eff × fp16.  Snapshot-
+    only — the vLLM slot byte layout is bypassed.  See
+    `reports/v1_3_ppl/snapshot_mode_qwen3/NAMING.md` for the
+    snapF / snapG recipes built on this flag.
+    """
     n, H, D = K_bnd.shape
     dec = _gpu_codec_per_head(
         K_bnd,
@@ -325,6 +376,7 @@ def gpu_roundtrip(
         variance_ratio=variance_ratio,
         centroids_file=centroids_file,
         outlier_threshold=outlier_threshold,
+        rvq_k2=rvq_k2,
     )
     # Best-effort report: mean per-block MSE + compressed-bytes
     # estimate (matching kakeyaturbo-bench's report keys).
@@ -362,6 +414,7 @@ def codec_layer(
     share_basis_v: bool = True, share_basis_k: bool = False,
     use_gpu_codec: bool = False, disable_share_basis_v: bool = False,
     k_kmeans_k: int = 16, v_kmeans_k: int = 16,
+    k_rvq_level2: int | None = None,
 ) -> tuple[np.ndarray, dict]:
     """Per-layer codec of a captured K/V tensor.
 
@@ -424,12 +477,20 @@ def codec_layer(
             # pooled-heads layout so we have to un-pool the result.
             dec = dec.reshape(n, n_kv, hd)
         else:
+            # Residual VQ (Perron-tree-inspired) applies only to the
+            # K stream — V is already Pareto-minimal at b_V=2, k_V=16
+            # and doesn't need the centroid-table shrink.  When
+            # `k_rvq_level2` is set, `kmeans_k` becomes the level-1 k
+            # and `k_rvq_level2` the level-2 k; effective codebook =
+            # k · k_rvq_level2.
+            rvq_k2 = k_rvq_level2 if not is_v else None
             dec, rep = gpu_roundtrip(
                 arr_enc.astype(np.float32, copy=False),
                 block_size=block_size, bit_width=bit_width,
                 rsvd_target_rank=rank, metric=metric,
                 centroids_file=centroids, outlier_threshold=outlier_thr,
                 k_centers=kmeans_k,
+                rvq_k2=rvq_k2,
             )
     else:
         flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
@@ -556,6 +617,19 @@ def main() -> int:
                          "bit_width_v (V residual carries log2(k) bits "
                          "of seg_id information separately).  Ignored when "
                          "V falls back to the CPU Rust share_basis path.")
+    ap.add_argument("--k-rvq-level2", type=int, default=None,
+                    help="K-stream 2-level Residual VQ: level-2 "
+                         "K-means cluster count.  When set, `--k-kmeans-k` "
+                         "becomes the level-1 cluster count and this flag "
+                         "the level-2.  Effective K codebook = k_K · "
+                         "k_rvq_level2 with storage (k_K + k_rvq_level2) "
+                         "× d_eff × fp16 per block per head — strictly "
+                         "smaller than the flat K-means centroid table "
+                         "when k_rvq_level2 > 1.  Snapshot-only (bypasses "
+                         "the vLLM slot byte layout and returns decoded "
+                         "K directly); the V stream is untouched.  See "
+                         "reports/v1_3_ppl/snapshot_mode_qwen3/FINDINGS_GPU.md "
+                         "for the Perron-tree motivation.")
     ap.add_argument("--q-calib", type=str,
         default="reports/v1_3_ppl/vllm_backend/calibration/"
                 "qwen3_4b_sigma_q.safetensors")
@@ -659,6 +733,7 @@ def main() -> int:
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
                 k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
+                k_rvq_level2=args.k_rvq_level2,
             )
             v_hat, v_rep = codec_layer(
                 kv["V"], is_v=True, layer_id=lid, q_precond=qp,
@@ -671,6 +746,7 @@ def main() -> int:
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
                 k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
+                k_rvq_level2=args.k_rvq_level2,
             )
             replacements[lid] = {
                 "K": torch.from_numpy(k_hat).cuda(),

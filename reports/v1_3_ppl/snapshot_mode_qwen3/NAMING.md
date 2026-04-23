@@ -56,6 +56,50 @@ In conversation, Slack, code comments, and diff summaries use
 is the default context; only spell it out when comparing across
 models or boundary depths.
 
+## Sibling: `v1.3-GPU-Qwen-snap-rvq-4x16` (alias `snapF`)
+
+2-level Residual VQ applied to the K-stream; same snapA base
+(b_K=4, d_eff=96, bdry14, V b_V=2, k_V=16) but replaces flat
+K-means (k=64) with cascaded K-means (k1=4, k2=16, k_eff=64).
+Snapshot-only — implemented in `kakeyaturbo_py.gpu_encode.
+roundtrip_residual_vq` (not in the vLLM slot path).
+
+* Δppl (paired) = **+52.37 %** (−9.47 pp vs snapA, lowest Δppl
+  on Qwen3-4B snapshot to date)
+* top-1 = **83.98 %** (+4.68 pp vs snapA — **new high-water mark
+  for Qwen3-4B snapshot**)
+* K reconstruction MSE = **0.053** (10× lower than snapA's 0.503,
+  but still 10× higher than TurboQuant k8v4's 0.0048)
+* Centroid storage per (block, head): **3 840 B** vs snapA's
+  12 288 B — **3.2× reduction**.  If ported to the vLLM slot path
+  this would raise the compression ratio from 1.87× to ~2.10×.
+
+Honest attribution: **−8.43 pp of the −9.47 pp Δppl advantage**
+vs snapA comes from the snapshot-only decode path using "absorbed"
+scale semantics (always applying `‖residual‖`) whereas the slot
+decoder uses "explicit" mode (sets `inv_scale=1`) for
+`inner_product` metric.  Only −1.04 pp is attributable to the
+RVQ structure itself (measured against the same-path k2=1 baseline).
+See `FINDINGS_GPU.md` "Perron-tree-inspired Residual VQ" for the
+full three-effect decomposition.
+
+Canonical parameter set:
+
+```
+--bit-width-k 4 --k-kmeans-k 4 --k-rvq-level2 16
+--rsvd-target-rank-factor 0.75
+--bit-width-v 2 --v-kmeans-k 16
+--boundary-skip-layers 0 1 2 3 4 5 6 29 30 31 32 33 34 35
+--gpu-codec --no-share-basis-v
+--disable-q-precond --disable-centroids --disable-outlier
+```
+
+Deployment caveat: snapF's advantages are snapshot-harness only.
+Porting to production vLLM requires changing the slot decode path
+(`inner_product`-mode to carry `‖residual‖` through the `norm`
+field), which is a real slot-format change.  Recorded here for
+later productionisation.
+
 ## Historical aliases (DO NOT use in new docs)
 
 The following legacy names all refer to **`v1.3-GPU-snapA`** and
@@ -73,9 +117,12 @@ appear in existing commits / JSONs.  Kept for back-reference only:
 ## Rules going forward
 
 1. New reports, commit messages, and conversation use
-   `v1.3-GPU-snapA` or the full canonical name.  `snapB` has been
-   retired (removed from documentation and recipe list); the JSON
-   that used to be labelled `snapB` is deleted.
+   `v1.3-GPU-snapA` or `v1.3-GPU-snapF` (or the full canonical
+   name).  `snapB` has been retired (removed from documentation
+   and recipe list); the JSON that used to be labelled `snapB` is
+   deleted.  `snapC` (exact PCA) and `snapD` / `snapE` (extended-k
+   sweep) were reverted as negative results; see repo git history
+   for details.
 2. Legacy JSON file names are **not** renamed — `git mv` is
    cheap but it breaks `git blame` and existing URLs in earlier
    commits.  Instead, a new report that references old data
