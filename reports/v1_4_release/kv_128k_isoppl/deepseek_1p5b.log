@@ -1,0 +1,143 @@
+[config] v1.4 Q sweep: [4, 6, 10, 15, 22, 38, 76, 152]
+[config] TQ b sweep:   [3, 4, 5, 6, 7, 8]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-23 14:14:00 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-23 14:14:00 [nixl_utils.py:34] NIXL is not available
+WARNING 04-23 14:14:00 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-23 14:14:00 [utils.py:233] non-default args: {'max_model_len': 2113, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.4, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B'}
+WARNING 04-23 14:14:00 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 04-23 14:14:00 [model.py:554] Resolved architecture: Qwen2ForCausalLM
+INFO 04-23 14:14:00 [model.py:1685] Using max model len 2113
+INFO 04-23 14:14:00 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-23 14:14:00 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-23 14:14:00 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-23 14:14:00 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-23 14:14:00 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-23 14:14:00 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-23 14:14:00 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+INFO 04-23 14:14:02 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B', speculative_config=None, tokenizer='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=2113, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-23 14:14:02 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:48183 backend=nccl
+INFO 04-23 14:14:02 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-23 14:14:03 [gpu_model_runner.py:4752] Starting to load model deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B...
+INFO 04-23 14:14:04 [cuda.py:368] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+INFO 04-23 14:14:04 [flash_attn.py:637] Using FlashAttention version 3
+INFO 04-23 14:14:08 [weight_utils.py:615] Time spent downloading weights for deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B: 4.461517 seconds
+INFO 04-23 14:14:08 [weight_utils.py:659] No model.safetensors.index.json found in remote.
+INFO 04-23 14:14:08 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 3.31 GiB. Available RAM: 1629.35 GiB.
+INFO 04-23 14:14:08 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  1.22it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  1.22it/s]
+
+INFO 04-23 14:14:09 [default_loader.py:384] Loading weights took 0.96 seconds
+INFO 04-23 14:14:10 [gpu_model_runner.py:4854] Model loading took 3.35 GiB memory and 6.050657 seconds
+INFO 04-23 14:14:11 [gpu_worker.py:440] Available KV cache memory: 50.16 GiB
+INFO 04-23 14:14:11 [kv_cache_utils.py:1337] GPU KV cache size: 1,878,400 tokens
+INFO 04-23 14:14:11 [kv_cache_utils.py:1342] Maximum concurrency for 2,113 tokens per request: 882.71x
+2026-04-23 14:14:11,626 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-23 14:14:11,636 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-23 14:14:11 [core.py:307] init engine (profile, create kv cache, warmup model) took 1.45 s
+[model] deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+[model] L=28 hd=128 kv_h=2
+
+=== passage 1/4 ===
+  [capture] layers=28 tokens=2112 ref_ppl=130.427 in 0.06s
+  [bf16_pass   ] K2048b V2048b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=28
+  [v14_Q4_K+V  ] K416b V416b  Δppl=+21.535%  top1= 76.56%  K-MSE=5.21e-02  V-MSE=5.45e-02  CR=3.15×  fires=28
+  [v14_Q6_K+V  ] K480b V480b  Δppl= +5.604%  top1= 92.19%  K-MSE=2.32e-02  V-MSE=2.42e-02  CR=2.91×  fires=28
+  [v14_Q10_K+V ] K576b V576b  Δppl= +2.223%  top1= 93.75%  K-MSE=8.34e-03  V-MSE=8.72e-03  CR=2.60×  fires=28
+  [v14_Q15_K+V ] K640b V640b  Δppl= +1.683%  top1= 95.31%  K-MSE=3.71e-03  V-MSE=3.88e-03  CR=2.43×  fires=28
+  [v14_Q22_K+V ] K704b V704b  Δppl= +0.184%  top1= 96.88%  K-MSE=1.72e-03  V-MSE=1.80e-03  CR=2.29×  fires=28
+  [v14_Q38_K+V ] K832b V832b  Δppl= -0.860%  top1=100.00%  K-MSE=5.77e-04  V-MSE=6.04e-04  CR=2.04×  fires=28
+  [v14_Q76_K+V ] K960b V960b  Δppl= +0.292%  top1= 96.88%  K-MSE=1.44e-04  V-MSE=1.51e-04  CR=1.84×  fires=28
+  [v14_Q152_K+V] K1088b V1088b  Δppl= -0.035%  top1= 98.44%  K-MSE=3.61e-05  V-MSE=3.78e-05  CR=1.67×  fires=28
+  [tq_b3_K+V   ] K416b V416b  Δppl=+11.396%  top1= 84.38%  K-MSE=7.11e-02  V-MSE=7.43e-02  CR=3.15×  fires=28
+  [tq_b4_K+V   ] K544b V544b  Δppl= +5.828%  top1= 84.38%  K-MSE=1.30e-02  V-MSE=1.36e-02  CR=2.70×  fires=28
+  [tq_b5_K+V   ] K672b V672b  Δppl= +0.520%  top1= 95.31%  K-MSE=2.84e-03  V-MSE=2.97e-03  CR=2.36×  fires=28
+  [tq_b6_K+V   ] K800b V800b  Δppl= +1.299%  top1= 95.31%  K-MSE=6.65e-04  V-MSE=6.95e-04  CR=2.09×  fires=28
+  [tq_b7_K+V   ] K928b V928b  Δppl= -0.269%  top1= 95.31%  K-MSE=1.61e-04  V-MSE=1.68e-04  CR=1.88×  fires=28
+  [tq_b8_K+V   ] K1056b V1056b  Δppl= -0.233%  top1= 98.44%  K-MSE=3.97e-05  V-MSE=4.15e-05  CR=1.71×  fires=28
+
+=== passage 2/4 ===
+  [capture] layers=28 tokens=2112 ref_ppl=33.122 in 0.03s
+  [bf16_pass   ] K2048b V2048b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=28
+  [v14_Q4_K+V  ] K416b V416b  Δppl= +3.491%  top1= 81.25%  K-MSE=5.25e-02  V-MSE=5.46e-02  CR=3.15×  fires=28
+  [v14_Q6_K+V  ] K480b V480b  Δppl=+17.223%  top1= 84.38%  K-MSE=2.33e-02  V-MSE=2.43e-02  CR=2.91×  fires=28
+  [v14_Q10_K+V ] K576b V576b  Δppl= -1.072%  top1= 82.81%  K-MSE=8.39e-03  V-MSE=8.73e-03  CR=2.60×  fires=28
+  [v14_Q15_K+V ] K640b V640b  Δppl= -0.987%  top1= 92.19%  K-MSE=3.73e-03  V-MSE=3.88e-03  CR=2.43×  fires=28
+  [v14_Q22_K+V ] K704b V704b  Δppl= -0.970%  top1= 98.44%  K-MSE=1.73e-03  V-MSE=1.80e-03  CR=2.29×  fires=28
+  [v14_Q38_K+V ] K832b V832b  Δppl= -0.140%  top1= 92.19%  K-MSE=5.81e-04  V-MSE=6.05e-04  CR=2.04×  fires=28
+  [v14_Q76_K+V ] K960b V960b  Δppl= -0.233%  top1= 98.44%  K-MSE=1.45e-04  V-MSE=1.51e-04  CR=1.84×  fires=28
+  [v14_Q152_K+V] K1088b V1088b  Δppl= +0.750%  top1= 96.88%  K-MSE=3.64e-05  V-MSE=3.78e-05  CR=1.67×  fires=28
+  [tq_b3_K+V   ] K416b V416b  Δppl=+11.862%  top1= 79.69%  K-MSE=7.16e-02  V-MSE=7.44e-02  CR=3.15×  fires=28
+  [tq_b4_K+V   ] K544b V544b  Δppl= +4.403%  top1= 92.19%  K-MSE=1.31e-02  V-MSE=1.37e-02  CR=2.70×  fires=28
+  [tq_b5_K+V   ] K672b V672b  Δppl= -2.000%  top1= 92.19%  K-MSE=2.86e-03  V-MSE=2.97e-03  CR=2.36×  fires=28
+  [tq_b6_K+V   ] K800b V800b  Δppl= +1.378%  top1= 95.31%  K-MSE=6.69e-04  V-MSE=6.97e-04  CR=2.09×  fires=28
+  [tq_b7_K+V   ] K928b V928b  Δppl= +0.100%  top1= 98.44%  K-MSE=1.62e-04  V-MSE=1.69e-04  CR=1.88×  fires=28
+  [tq_b8_K+V   ] K1056b V1056b  Δppl= +0.157%  top1= 96.88%  K-MSE=3.99e-05  V-MSE=4.15e-05  CR=1.71×  fires=28
+
+=== passage 3/4 ===
+  [capture] layers=28 tokens=2112 ref_ppl=8.558 in 0.03s
+  [bf16_pass   ] K2048b V2048b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=28
+  [v14_Q4_K+V  ] K416b V416b  Δppl= +7.247%  top1= 87.50%  K-MSE=5.22e-02  V-MSE=5.45e-02  CR=3.15×  fires=28
+  [v14_Q6_K+V  ] K480b V480b  Δppl= +5.524%  top1= 84.38%  K-MSE=2.32e-02  V-MSE=2.42e-02  CR=2.91×  fires=28
+  [v14_Q10_K+V ] K576b V576b  Δppl= -4.711%  top1= 92.19%  K-MSE=8.35e-03  V-MSE=8.72e-03  CR=2.60×  fires=28
+  [v14_Q15_K+V ] K640b V640b  Δppl= -0.762%  top1= 96.88%  K-MSE=3.71e-03  V-MSE=3.88e-03  CR=2.43×  fires=28
+  [v14_Q22_K+V ] K704b V704b  Δppl= +0.379%  top1= 96.88%  K-MSE=1.73e-03  V-MSE=1.80e-03  CR=2.29×  fires=28
+  [v14_Q38_K+V ] K832b V832b  Δppl= +0.085%  top1= 96.88%  K-MSE=5.78e-04  V-MSE=6.04e-04  CR=2.04×  fires=28
+  [v14_Q76_K+V ] K960b V960b  Δppl= +1.305%  top1= 96.88%  K-MSE=1.45e-04  V-MSE=1.51e-04  CR=1.84×  fires=28
+  [v14_Q152_K+V] K1088b V1088b  Δppl= -0.122%  top1= 96.88%  K-MSE=3.62e-05  V-MSE=3.78e-05  CR=1.67×  fires=28
+  [tq_b3_K+V   ] K416b V416b  Δppl=+18.309%  top1= 78.12%  K-MSE=7.12e-02  V-MSE=7.44e-02  CR=3.15×  fires=28
+  [tq_b4_K+V   ] K544b V544b  Δppl= +1.601%  top1= 95.31%  K-MSE=1.31e-02  V-MSE=1.37e-02  CR=2.70×  fires=28
+  [tq_b5_K+V   ] K672b V672b  Δppl= +2.495%  top1= 98.44%  K-MSE=2.84e-03  V-MSE=2.97e-03  CR=2.36×  fires=28
+  [tq_b6_K+V   ] K800b V800b  Δppl= +0.704%  top1= 96.88%  K-MSE=6.66e-04  V-MSE=6.96e-04  CR=2.09×  fires=28
+  [tq_b7_K+V   ] K928b V928b  Δppl= +0.439%  top1= 96.88%  K-MSE=1.61e-04  V-MSE=1.69e-04  CR=1.88×  fires=28
+  [tq_b8_K+V   ] K1056b V1056b  Δppl= +0.257%  top1= 98.44%  K-MSE=3.97e-05  V-MSE=4.15e-05  CR=1.71×  fires=28
+
+=== passage 4/4 ===
+  [capture] layers=28 tokens=2112 ref_ppl=19.790 in 0.03s
+  [bf16_pass   ] K2048b V2048b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=28
+  [v14_Q4_K+V  ] K416b V416b  Δppl= +4.185%  top1= 85.94%  K-MSE=5.24e-02  V-MSE=5.46e-02  CR=3.15×  fires=28
+  [v14_Q6_K+V  ] K480b V480b  Δppl= +2.278%  top1= 89.06%  K-MSE=2.33e-02  V-MSE=2.43e-02  CR=2.91×  fires=28
+  [v14_Q10_K+V ] K576b V576b  Δppl= +0.866%  top1= 95.31%  K-MSE=8.38e-03  V-MSE=8.73e-03  CR=2.60×  fires=28
+  [v14_Q15_K+V ] K640b V640b  Δppl= -2.413%  top1= 95.31%  K-MSE=3.73e-03  V-MSE=3.88e-03  CR=2.43×  fires=28
+  [v14_Q22_K+V ] K704b V704b  Δppl= -1.176%  top1= 98.44%  K-MSE=1.73e-03  V-MSE=1.80e-03  CR=2.29×  fires=28
+  [v14_Q38_K+V ] K832b V832b  Δppl= -0.694%  top1=100.00%  K-MSE=5.80e-04  V-MSE=6.05e-04  CR=2.04×  fires=28
+  [v14_Q76_K+V ] K960b V960b  Δppl= -0.376%  top1= 96.88%  K-MSE=1.45e-04  V-MSE=1.51e-04  CR=1.84×  fires=28
+  [v14_Q152_K+V] K1088b V1088b  Δppl= -0.197%  top1=100.00%  K-MSE=3.64e-05  V-MSE=3.79e-05  CR=1.67×  fires=28
+  [tq_b3_K+V   ] K416b V416b  Δppl= +0.264%  top1= 90.62%  K-MSE=7.15e-02  V-MSE=7.44e-02  CR=3.15×  fires=28
+  [tq_b4_K+V   ] K544b V544b  Δppl= -2.052%  top1= 95.31%  K-MSE=1.31e-02  V-MSE=1.37e-02  CR=2.70×  fires=28
+  [tq_b5_K+V   ] K672b V672b  Δppl= -2.409%  top1= 92.19%  K-MSE=2.86e-03  V-MSE=2.98e-03  CR=2.36×  fires=28
+  [tq_b6_K+V   ] K800b V800b  Δppl= +0.055%  top1= 96.88%  K-MSE=6.69e-04  V-MSE=6.96e-04  CR=2.09×  fires=28
+  [tq_b7_K+V   ] K928b V928b  Δppl= -0.764%  top1= 93.75%  K-MSE=1.62e-04  V-MSE=1.69e-04  CR=1.88×  fires=28
+  [tq_b8_K+V   ] K1056b V1056b  Δppl= -0.341%  top1=100.00%  K-MSE=3.99e-05  V-MSE=4.16e-05  CR=1.71×  fires=28
+
+====================================================================================================
+v1.4 KakeyaLattice — 128k KV storage report
+Model: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B  (L=28, hd=128, kv_h=2)
+Boundary skip: [0, 1, 26, 27]  (bf16-kept layers; codec applied to the other 24)
+====================================================================================================
+Channel            128k Baseline KV       128k Kakeya KV   Total ratio    |Δppl|   top-1      K-MSE      V-MSE
+-----------------------------------------------------------------------------------------------------------------
+bf16_pass                  3.50 GiB             3.50 GiB        1.00×    0.000% 100.00%  0.000e+00  0.000e+00
+v14_Q4_K+V                 3.50 GiB             1.11 GiB        3.15×    9.114%  82.81%  5.231e-02  5.456e-02
+v14_Q6_K+V                 3.50 GiB             1.20 GiB        2.91×    7.657%  87.50%  2.325e-02  2.425e-02
+v14_Q10_K+V                3.50 GiB             1.34 GiB        2.60×    2.218%  91.02%  8.365e-03  8.728e-03
+v14_Q15_K+V                3.50 GiB             1.44 GiB        2.43×    1.461%  94.92%  3.718e-03  3.879e-03
+v14_Q22_K+V                3.50 GiB             1.53 GiB        2.29×    0.677%  97.66%  1.728e-03  1.804e-03
+v14_Q38_K+V                3.50 GiB             1.72 GiB        2.04×    0.445%  97.27%  5.793e-04  6.045e-04
+v14_Q76_K+V                3.50 GiB             1.91 GiB        1.84×    0.552%  97.27%  1.449e-04  1.512e-04
+v14_Q152_K+V               3.50 GiB             2.09 GiB        1.67×    0.276%  98.05%  3.626e-05  3.782e-05
+tq_b3_K+V                  3.50 GiB             1.11 GiB        3.15×   10.458%  83.20%  7.137e-02  7.440e-02
+tq_b4_K+V                  3.50 GiB             1.30 GiB        2.70×    3.471%  91.80%  1.309e-02  1.365e-02
+tq_b5_K+V                  3.50 GiB             1.48 GiB        2.36×    1.856%  94.53%  2.850e-03  2.973e-03
+tq_b6_K+V                  3.50 GiB             1.67 GiB        2.09×    0.859%  96.09%  6.670e-04  6.961e-04
+tq_b7_K+V                  3.50 GiB             1.86 GiB        1.88×    0.393%  96.09%  1.616e-04  1.686e-04
+tq_b8_K+V                  3.50 GiB             2.05 GiB        1.71×    0.247%  98.44%  3.980e-05  4.152e-05
+
+[done] → reports/v1_4_release/kv_128k_isoppl/deepseek_1p5b_kv_128k.json
+[rank0]:[W423 14:14:18.200975882 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
