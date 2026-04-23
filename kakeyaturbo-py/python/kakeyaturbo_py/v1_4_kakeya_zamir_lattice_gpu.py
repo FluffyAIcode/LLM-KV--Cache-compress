@@ -1,55 +1,34 @@
-"""v1.4 kakeya zamir lattice GPU — canonical implementation.
+"""v1.4 KakeyaLattice — canonical codec implementation.
 
-This is the OFFICIAL codec for all Qwen3-4B deployment work going
-forward.  It strictly supersedes the v1.3 PCA+K-means+WHT+Lloyd-Max
-codec family for codec-kernel purposes (the v1.3 deployment layer
-— snapshot-mode, boundary skip — is orthogonal and remains valid).
+The head-of-line KV-cache compression codec: full Zamir-Feder
+nested-lattice quantiser using the D4 root lattice as the shaping
+lattice, wrapped in the complete TurboQuant-style engineering stack
+(Hadamard rotation + unit normalisation + per-vector qmax + inverse
+Hadamard + rescale).  Strict GPU — no numpy, no CPU detour in the
+codec hot path.
 
-Architecture: full Zamir-Feder nested-lattice quantiser using the
-D4 root lattice as the shaping lattice, wrapped in the complete
-TurboQuant engineering stack.  Strict GPU — no numpy, no CPU
-detour in the codec hot path.
+Internal structure: this module delegates to
+`bridge_b2_d4_tq_style.D4TQStyleCodebook`, which is the research
+prototype name kept for provenance.  The wrapper below is the
+production-named class all public code, documentation, and
+benchmarks should reference.
 
-Provenance: this module was prototyped as "Bridge B2" in
-`bridge_b2_d4_tq_style.py` (research-lineage name; do not re-export
-from that module into new code).  The research provenance is:
+Measured head-to-head performance vs TurboQuant k8v4 (Qwen3-4B,
+strict-GPU harness, 4 × WikiText-103 passages) at Q=152 / 1088 bits:
 
-  bridge_b_nested_lattice.py    : raw Zamir-Feder D4 (naive, lost
-                                   to TQ by 1414× due to missing
-                                   engineering; see FINDINGS_GPU.md
-                                   "Three bridges from Dvir to
-                                   Euclidean quantisation").
-  bridge_b2_d4_tq_style.py      : D4 + Hadamard + per-vector qmax +
-                                   matched bits + joint quantisation
-                                   — the research prototype that
-                                   first measured a win over TQ.
-  v1_4_kakeya_zamir_lattice_gpu : canonical production-named class
-                                   wrapping bridge_b2_d4_tq_style.
-                                   This is the name all new code
-                                   and documentation should use.
+  K rel-MSE:  3.38 × 10⁻⁵   (TQ: 3.71 × 10⁻⁵ → 0.911× better)
+  |Δppl|:     0.37 %        (TQ: 0.66 %      → 0.552× better)
+  top-1 pair: 99.61 %       (TQ: 98.83 %     → +0.78 pp)
+  Encode:     6.7 ms/M vec  (TQ: 10 ms/M     → 1.5× faster)
 
-Measured performance (Qwen3-4B, strict-GPU harness, 4 × WikiText-103
-passages):
+Full multi-model / multi-threshold numbers in
+`reports/v1_4_release/` (iso-bit and iso-PPL comparisons).
 
-  Q=152 (head-to-head with TQ k8v4 at 1056 bits):
-    K rel-MSE:  3.38 × 10⁻⁵  (TQ: 3.71 × 10⁻⁵ → 0.911× better)
-    |Δppl|:     0.37 %       (TQ: 0.66 %      → 0.552× better)
-    top-1 pair: 99.61 %      (TQ: 98.83 %     → +0.78 pp)
-    Encode:     6.7 ms/M vec (TQ: 10 ms/M     → 1.5× faster)
-
-  Full Pareto (7 bit levels): B2 strictly dominates TQ on K-MSE at
-  every point, ratio ranges 0.350× (at 6.4× compression) to 0.911×
-  (at 1.88× compression).  See FINDINGS_GPU.md and
-  SESSION_KAKEYA_RESEARCH.md section "6ter Compression-rate Pareto
-  sweep" for the full data.
-
-Naming convention (enforce strictly in all new writing):
-  Spoken / written:      "v1.4 kakeya zamir lattice GPU"
-  Short with parameter:  "v1.4 kakeya zamir lattice GPU Q=152"
+Naming convention (enforce strictly):
+  Written / spoken:      "v1.4 KakeyaLattice"  or  "KakeyaLattice"
+  With parameter:        "v1.4 KakeyaLattice Q=152"
   Class name:            V14KakeyaZamirLatticeGPU
   Module name:           v1_4_kakeya_zamir_lattice_gpu
-  Do NOT use:            D4, Bridge B2, Kakeya-D4, nested lattice
-                         codec (those are research lineage aliases).
 """
 from __future__ import annotations
 

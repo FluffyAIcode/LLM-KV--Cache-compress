@@ -1,89 +1,0 @@
-[setup] capturing 4 × 2048-token passages of Qwen3-4B post-qk-norm K …
-Token indices sequence length is longer than the specified maximum sequence length for this model (299078 > 131072). Running this sequence through the model will result in indexing errors
-INFO 04-23 07:44:31 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
-WARNING 04-23 07:44:31 [nixl_utils.py:34] NIXL is not available
-WARNING 04-23 07:44:31 [nixl_utils.py:44] NIXL agent config is not available
-[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
-INFO 04-23 07:44:31 [utils.py:233] non-default args: {'max_model_len': 2049, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.4, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'Qwen/Qwen3-4B'}
-WARNING 04-23 07:44:31 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
-INFO 04-23 07:44:32 [model.py:554] Resolved architecture: Qwen3ForCausalLM
-INFO 04-23 07:44:32 [model.py:1685] Using max model len 2049
-INFO 04-23 07:44:32 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
-INFO 04-23 07:44:32 [vllm.py:845] Asynchronous scheduling is enabled.
-WARNING 04-23 07:44:32 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
-WARNING 04-23 07:44:32 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
-INFO 04-23 07:44:32 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
-INFO 04-23 07:44:32 [vllm.py:1092] Cudagraph is disabled under eager mode
-INFO 04-23 07:44:32 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
-INFO 04-23 07:44:33 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='Qwen/Qwen3-4B', speculative_config=None, tokenizer='Qwen/Qwen3-4B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=2049, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen/Qwen3-4B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
-INFO 04-23 07:44:34 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:37631 backend=nccl
-INFO 04-23 07:44:34 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
-INFO 04-23 07:44:34 [gpu_model_runner.py:4752] Starting to load model Qwen/Qwen3-4B...
-INFO 04-23 07:44:35 [cuda.py:368] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
-INFO 04-23 07:44:35 [flash_attn.py:637] Using FlashAttention version 3
-INFO 04-23 07:44:35 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 7.49 GiB. Available RAM: 1622.38 GiB.
-INFO 04-23 07:44:35 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
-Loading safetensors checkpoint shards:   0% Completed | 0/3 [00:00<?, ?it/s]
-Loading safetensors checkpoint shards:  33% Completed | 1/3 [00:00<00:01,  1.17it/s]
-Loading safetensors checkpoint shards:  67% Completed | 2/3 [00:01<00:00,  1.05it/s]
-Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:02<00:00,  1.69it/s]
-Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:02<00:00,  1.47it/s]
-
-INFO 04-23 07:44:37 [default_loader.py:384] Loading weights took 2.05 seconds
-INFO 04-23 07:44:38 [gpu_model_runner.py:4854] Model loading took 7.56 GiB memory and 2.885867 seconds
-INFO 04-23 07:44:39 [gpu_worker.py:440] Available KV cache memory: 45.92 GiB
-INFO 04-23 07:44:39 [kv_cache_utils.py:1337] GPU KV cache size: 334,352 tokens
-INFO 04-23 07:44:39 [kv_cache_utils.py:1342] Maximum concurrency for 2,049 tokens per request: 161.99x
-2026-04-23 07:44:39,765 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
-2026-04-23 07:44:39,779 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
-INFO 04-23 07:44:39 [core.py:307] init engine (profile, create kv cache, warmup model) took 1.60 s
-Rendering prompts:   0%|          | 0/1 [00:00<?, ?it/s]Rendering prompts: 100%|██████████| 1/1 [00:00<00:00, 150.13it/s]
-Processed prompts:   0%|          | 0/1 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  1.48it/s, est. speed input: 3027.08 toks/s, output: 1.48 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  1.48it/s, est. speed input: 3027.08 toks/s, output: 1.48 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  1.48it/s, est. speed input: 3027.08 toks/s, output: 1.48 toks/s]
-  [capture] passage 1/4: 36 layers captured
-Rendering prompts:   0%|          | 0/1 [00:00<?, ?it/s]Rendering prompts: 100%|██████████| 1/1 [00:00<00:00, 2957.90it/s]
-Processed prompts:   0%|          | 0/1 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.77it/s, est. speed input: 5669.30 toks/s, output: 2.77 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.77it/s, est. speed input: 5669.30 toks/s, output: 2.77 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.77it/s, est. speed input: 5669.30 toks/s, output: 2.77 toks/s]
-  [capture] passage 2/4: 36 layers captured
-Rendering prompts:   0%|          | 0/1 [00:00<?, ?it/s]Rendering prompts: 100%|██████████| 1/1 [00:00<00:00, 3830.41it/s]
-Processed prompts:   0%|          | 0/1 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.73it/s, est. speed input: 5593.57 toks/s, output: 2.73 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.73it/s, est. speed input: 5593.57 toks/s, output: 2.73 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.73it/s, est. speed input: 5593.57 toks/s, output: 2.73 toks/s]
-  [capture] passage 3/4: 36 layers captured
-Rendering prompts:   0%|          | 0/1 [00:00<?, ?it/s]Rendering prompts: 100%|██████████| 1/1 [00:00<00:00, 3609.56it/s]
-Processed prompts:   0%|          | 0/1 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.72it/s, est. speed input: 5579.52 toks/s, output: 2.72 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.72it/s, est. speed input: 5579.52 toks/s, output: 2.72 toks/s]Processed prompts: 100%|██████████| 1/1 [00:00<00:00,  2.72it/s, est. speed input: 5579.52 toks/s, output: 2.72 toks/s]
-  [capture] passage 4/4: 36 layers captured
-[capture] done in 18.9s, 36 layers captured
-[measure] running on 22 non-boundary layers: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
-  layer  7: kurt=2.723 (Δ=-0.277)  W_2/σ=0.295  score_rel=0.123  var_ratio= 4.40  [0.2s]
-  layer  8: kurt=2.160 (Δ=-0.840)  W_2/σ=0.388  score_rel=0.119  var_ratio= 4.71  [0.0s]
-  layer  9: kurt=2.788 (Δ=-0.212)  W_2/σ=0.245  score_rel=0.124  var_ratio= 3.20  [0.0s]
-  layer 10: kurt=2.540 (Δ=-0.460)  W_2/σ=0.442  score_rel=0.121  var_ratio= 3.23  [0.0s]
-  layer 11: kurt=2.433 (Δ=-0.567)  W_2/σ=0.271  score_rel=0.123  var_ratio= 3.89  [0.0s]
-  layer 12: kurt=2.568 (Δ=-0.432)  W_2/σ=0.243  score_rel=0.124  var_ratio= 3.00  [0.0s]
-  layer 13: kurt=2.853 (Δ=-0.147)  W_2/σ=0.280  score_rel=0.124  var_ratio= 2.56  [0.0s]
-  layer 14: kurt=2.774 (Δ=-0.226)  W_2/σ=0.652  score_rel=0.117  var_ratio= 3.28  [0.0s]
-  layer 15: kurt=2.769 (Δ=-0.231)  W_2/σ=0.265  score_rel=0.124  var_ratio= 3.13  [0.0s]
-  layer 16: kurt=2.704 (Δ=-0.296)  W_2/σ=0.236  score_rel=0.124  var_ratio= 3.28  [0.0s]
-  layer 17: kurt=2.773 (Δ=-0.227)  W_2/σ=0.231  score_rel=0.125  var_ratio= 2.48  [0.0s]
-  layer 18: kurt=2.755 (Δ=-0.245)  W_2/σ=0.203  score_rel=0.125  var_ratio= 2.51  [0.0s]
-  layer 19: kurt=2.825 (Δ=-0.175)  W_2/σ=0.264  score_rel=0.124  var_ratio= 3.52  [0.0s]
-  layer 20: kurt=2.828 (Δ=-0.172)  W_2/σ=0.220  score_rel=0.125  var_ratio= 2.35  [0.0s]
-  layer 21: kurt=2.741 (Δ=-0.259)  W_2/σ=0.237  score_rel=0.124  var_ratio= 2.84  [0.0s]
-  layer 22: kurt=2.735 (Δ=-0.265)  W_2/σ=0.282  score_rel=0.123  var_ratio= 3.64  [0.0s]
-  layer 23: kurt=2.765 (Δ=-0.235)  W_2/σ=0.300  score_rel=0.124  var_ratio= 3.48  [0.0s]
-  layer 24: kurt=2.802 (Δ=-0.198)  W_2/σ=0.179  score_rel=0.125  var_ratio= 2.34  [0.0s]
-  layer 25: kurt=2.693 (Δ=-0.307)  W_2/σ=0.294  score_rel=0.123  var_ratio= 4.64  [0.0s]
-  layer 26: kurt=2.878 (Δ=-0.122)  W_2/σ=0.278  score_rel=0.124  var_ratio= 2.78  [0.0s]
-  layer 27: kurt=2.792 (Δ=-0.208)  W_2/σ=0.365  score_rel=0.122  var_ratio= 3.71  [0.0s]
-  layer 28: kurt=2.767 (Δ=-0.233)  W_2/σ=0.242  score_rel=0.124  var_ratio= 4.56  [0.0s]
-
-========================================================================
-GATE DECISION
-========================================================================
-NON-GAUSSIAN — Kakeya-style / non-Gaussian shaping has measurable space above Shannon i.i.d. Gaussian bound. Research paths (iii), (iv), (vi) from HANDOFF §5.8 are worth pursuing.
-
-Triggered gates:
-  • kurtosis: excess |kurt - 3|_max = 0.840 > 0.5
-  • W_2: max per-layer mean-over-dim W_2/σ = 0.652 > 0.05
-  • score: max per-layer mean-over-dim rel score dev = 0.125 > 0.1
-  • isotropy: max per-layer variance ratio (max/min) = 4.711 > 1.5
-
-[done] written → reports/v1_3_ppl/snapshot_mode_qwen3/non_gaussianity/qwen3_4b_k_non_gaussianity.json
-[rank0]:[W423 07:44:43.947054768 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
