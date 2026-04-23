@@ -1,0 +1,150 @@
+[config] v1.4 Q sweep: [4, 6, 10, 15, 22, 38, 76, 152]
+[config] TQ b sweep:   [3, 4, 5, 6, 7, 8]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-23 14:24:19 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-23 14:24:19 [nixl_utils.py:34] NIXL is not available
+WARNING 04-23 14:24:19 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-23 14:24:19 [utils.py:233] non-default args: {'max_model_len': 2113, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.5, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'google/gemma-4-E4B'}
+WARNING 04-23 14:24:19 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 04-23 14:24:19 [model.py:554] Resolved architecture: Gemma4ForConditionalGeneration
+INFO 04-23 14:24:19 [model.py:1685] Using max model len 2113
+INFO 04-23 14:24:19 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-23 14:24:19 [config.py:101] Gemma4 model has heterogeneous head dimensions (head_dim=256, global_head_dim=512). Forcing TRITON_ATTN backend to prevent mixed-backend numerical divergence.
+INFO 04-23 14:24:19 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-23 14:24:19 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-23 14:24:19 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-23 14:24:19 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-23 14:24:19 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-23 14:24:19 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+INFO 04-23 14:24:59 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='google/gemma-4-E4B', speculative_config=None, tokenizer='google/gemma-4-E4B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=2113, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=google/gemma-4-E4B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-23 14:25:00 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:42059 backend=nccl
+INFO 04-23 14:25:00 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-23 14:25:01 [gpu_model_runner.py:4752] Starting to load model google/gemma-4-E4B...
+WARNING 04-23 14:25:01 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-23 14:25:01 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-23 14:25:01 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-23 14:25:01 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-23 14:25:01 [cuda.py:308] Using AttentionBackendEnum.TRITON_ATTN backend.
+INFO 04-23 14:25:01 [cuda.py:308] Using AttentionBackendEnum.TRITON_ATTN backend.
+INFO 04-23 14:25:17 [weight_utils.py:615] Time spent downloading weights for google/gemma-4-E4B: 15.368223 seconds
+INFO 04-23 14:25:17 [weight_utils.py:659] No model.safetensors.index.json found in remote.
+INFO 04-23 14:25:17 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 14.89 GiB. Available RAM: 1623.98 GiB.
+INFO 04-23 14:25:17 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:02<00:00,  2.65s/it]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:02<00:00,  2.65s/it]
+
+INFO 04-23 14:25:20 [default_loader.py:384] Loading weights took 3.10 seconds
+INFO 04-23 14:25:21 [gpu_model_runner.py:4854] Model loading took 15.44 GiB memory and 19.397793 seconds
+INFO 04-23 14:25:21 [gpu_model_runner.py:5798] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 6 video items of the maximum feature size.
+WARNING 04-23 14:25:22 [op.py:241] Priority not set for op rms_norm, using native implementation.
+INFO 04-23 14:25:26 [gpu_worker.py:440] Available KV cache memory: 50.25 GiB
+INFO 04-23 14:25:26 [kv_cache_utils.py:1337] GPU KV cache size: 548,864 tokens
+INFO 04-23 14:25:26 [kv_cache_utils.py:1342] Maximum concurrency for 2,113 tokens per request: 435.15x
+2026-04-23 14:25:26,566 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-23 14:25:26,615 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-23 14:25:26 [core.py:307] init engine (profile, create kv cache, warmup model) took 5.30 s
+[model] google/gemma-4-E4B
+[model] L=24 hd=256 kv_h=2
+
+=== passage 1/4 ===
+  [capture] layers=24 tokens=2112 ref_ppl=6.720 in 0.08s
+  [bf16_pass   ] K4096b V4096b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=24
+  [v14_Q4_K+V  ] K800b V800b  Δppl= +1.531%  top1= 98.44%  K-MSE=6.47e-02  V-MSE=6.56e-02  CR=3.04×  fires=24
+  [v14_Q6_K+V  ] K928b V928b  Δppl= +0.879%  top1= 98.44%  K-MSE=2.87e-02  V-MSE=2.92e-02  CR=2.81×  fires=24
+  [v14_Q10_K+V ] K1120b V1120b  Δppl= -0.481%  top1= 96.88%  K-MSE=1.03e-02  V-MSE=1.05e-02  CR=2.53×  fires=24
+  [v14_Q15_K+V ] K1248b V1248b  Δppl= +0.599%  top1= 96.88%  K-MSE=4.60e-03  V-MSE=4.67e-03  CR=2.38×  fires=24
+  [v14_Q22_K+V ] K1376b V1376b  Δppl= -0.374%  top1= 98.44%  K-MSE=2.14e-03  V-MSE=2.17e-03  CR=2.24×  fires=24
+  [v14_Q38_K+V ] K1632b V1632b  Δppl= -0.136%  top1= 98.44%  K-MSE=7.16e-04  V-MSE=7.27e-04  CR=2.01×  fires=24
+  [v14_Q76_K+V ] K1888b V1888b  Δppl= +0.721%  top1=100.00%  K-MSE=1.79e-04  V-MSE=1.82e-04  CR=1.82×  fires=24
+  [v14_Q152_K+V] K2144b V2144b  Δppl= +0.625%  top1= 96.88%  K-MSE=4.48e-05  V-MSE=4.55e-05  CR=1.66×  fires=24
+  [tq_b3_K+V   ] K800b V800b  Δppl= -0.515%  top1= 96.88%  K-MSE=8.83e-02  V-MSE=8.96e-02  CR=3.04×  fires=24
+  [tq_b4_K+V   ] K1056b V1056b  Δppl= +0.157%  top1= 96.88%  K-MSE=1.62e-02  V-MSE=1.64e-02  CR=2.62×  fires=24
+  [tq_b5_K+V   ] K1312b V1312b  Δppl= +1.172%  top1= 98.44%  K-MSE=3.53e-03  V-MSE=3.58e-03  CR=2.31×  fires=24
+  [tq_b6_K+V   ] K1568b V1568b  Δppl= +0.466%  top1= 96.88%  K-MSE=8.27e-04  V-MSE=8.39e-04  CR=2.06×  fires=24
+  [tq_b7_K+V   ] K1824b V1824b  Δppl= -0.196%  top1= 96.88%  K-MSE=2.00e-04  V-MSE=2.03e-04  CR=1.86×  fires=24
+  [tq_b8_K+V   ] K2080b V2080b  Δppl= +0.039%  top1= 96.88%  K-MSE=4.93e-05  V-MSE=5.00e-05  CR=1.70×  fires=24
+
+=== passage 2/4 ===
+  [capture] layers=24 tokens=2112 ref_ppl=4.205 in 0.09s
+  [bf16_pass   ] K4096b V4096b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=24
+  [v14_Q4_K+V  ] K800b V800b  Δppl= +0.297%  top1=100.00%  K-MSE=6.45e-02  V-MSE=6.60e-02  CR=3.04×  fires=24
+  [v14_Q6_K+V  ] K928b V928b  Δppl= -0.168%  top1= 98.44%  K-MSE=2.87e-02  V-MSE=2.93e-02  CR=2.81×  fires=24
+  [v14_Q10_K+V ] K1120b V1120b  Δppl= -0.247%  top1=100.00%  K-MSE=1.03e-02  V-MSE=1.06e-02  CR=2.53×  fires=24
+  [v14_Q15_K+V ] K1248b V1248b  Δppl= +0.749%  top1=100.00%  K-MSE=4.59e-03  V-MSE=4.69e-03  CR=2.38×  fires=24
+  [v14_Q22_K+V ] K1376b V1376b  Δppl= +0.518%  top1=100.00%  K-MSE=2.13e-03  V-MSE=2.18e-03  CR=2.24×  fires=24
+  [v14_Q38_K+V ] K1632b V1632b  Δppl= +0.170%  top1=100.00%  K-MSE=7.15e-04  V-MSE=7.31e-04  CR=2.01×  fires=24
+  [v14_Q76_K+V ] K1888b V1888b  Δppl= +0.070%  top1=100.00%  K-MSE=1.79e-04  V-MSE=1.83e-04  CR=1.82×  fires=24
+  [v14_Q152_K+V] K2144b V2144b  Δppl= -0.140%  top1=100.00%  K-MSE=4.47e-05  V-MSE=4.57e-05  CR=1.66×  fires=24
+  [tq_b3_K+V   ] K800b V800b  Δppl= +0.439%  top1=100.00%  K-MSE=8.82e-02  V-MSE=9.01e-02  CR=3.04×  fires=24
+  [tq_b4_K+V   ] K1056b V1056b  Δppl= +0.770%  top1=100.00%  K-MSE=1.62e-02  V-MSE=1.65e-02  CR=2.62×  fires=24
+  [tq_b5_K+V   ] K1312b V1312b  Δppl= -0.169%  top1=100.00%  K-MSE=3.52e-03  V-MSE=3.60e-03  CR=2.31×  fires=24
+  [tq_b6_K+V   ] K1568b V1568b  Δppl= +0.014%  top1=100.00%  K-MSE=8.25e-04  V-MSE=8.43e-04  CR=2.06×  fires=24
+  [tq_b7_K+V   ] K1824b V1824b  Δppl= -0.592%  top1=100.00%  K-MSE=2.00e-04  V-MSE=2.04e-04  CR=1.86×  fires=24
+  [tq_b8_K+V   ] K2080b V2080b  Δppl= -0.415%  top1=100.00%  K-MSE=4.92e-05  V-MSE=5.03e-05  CR=1.70×  fires=24
+
+=== passage 3/4 ===
+  [capture] layers=24 tokens=2112 ref_ppl=4.429 in 0.08s
+  [bf16_pass   ] K4096b V4096b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=24
+  [v14_Q4_K+V  ] K800b V800b  Δppl= +0.295%  top1= 96.88%  K-MSE=6.44e-02  V-MSE=6.54e-02  CR=3.04×  fires=24
+  [v14_Q6_K+V  ] K928b V928b  Δppl= -0.662%  top1= 98.44%  K-MSE=2.86e-02  V-MSE=2.91e-02  CR=2.81×  fires=24
+  [v14_Q10_K+V ] K1120b V1120b  Δppl= +0.552%  top1= 98.44%  K-MSE=1.03e-02  V-MSE=1.05e-02  CR=2.53×  fires=24
+  [v14_Q15_K+V ] K1248b V1248b  Δppl= +1.806%  top1=100.00%  K-MSE=4.58e-03  V-MSE=4.65e-03  CR=2.38×  fires=24
+  [v14_Q22_K+V ] K1376b V1376b  Δppl= +1.735%  top1=100.00%  K-MSE=2.13e-03  V-MSE=2.16e-03  CR=2.24×  fires=24
+  [v14_Q38_K+V ] K1632b V1632b  Δppl= +0.141%  top1= 98.44%  K-MSE=7.14e-04  V-MSE=7.25e-04  CR=2.01×  fires=24
+  [v14_Q76_K+V ] K1888b V1888b  Δppl= +0.258%  top1=100.00%  K-MSE=1.79e-04  V-MSE=1.81e-04  CR=1.82×  fires=24
+  [v14_Q152_K+V] K2144b V2144b  Δppl= +0.432%  top1=100.00%  K-MSE=4.47e-05  V-MSE=4.53e-05  CR=1.66×  fires=24
+  [tq_b3_K+V   ] K800b V800b  Δppl= -1.531%  top1= 96.88%  K-MSE=8.80e-02  V-MSE=8.93e-02  CR=3.04×  fires=24
+  [tq_b4_K+V   ] K1056b V1056b  Δppl= +3.004%  top1=100.00%  K-MSE=1.62e-02  V-MSE=1.64e-02  CR=2.62×  fires=24
+  [tq_b5_K+V   ] K1312b V1312b  Δppl= +0.251%  top1=100.00%  K-MSE=3.52e-03  V-MSE=3.57e-03  CR=2.31×  fires=24
+  [tq_b6_K+V   ] K1568b V1568b  Δppl= +0.243%  top1= 98.44%  K-MSE=8.24e-04  V-MSE=8.36e-04  CR=2.06×  fires=24
+  [tq_b7_K+V   ] K1824b V1824b  Δppl= +1.128%  top1= 98.44%  K-MSE=2.00e-04  V-MSE=2.02e-04  CR=1.86×  fires=24
+  [tq_b8_K+V   ] K2080b V2080b  Δppl= +1.285%  top1=100.00%  K-MSE=4.91e-05  V-MSE=4.98e-05  CR=1.70×  fires=24
+
+=== passage 4/4 ===
+  [capture] layers=24 tokens=2112 ref_ppl=7.558 in 0.07s
+  [bf16_pass   ] K4096b V4096b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=24
+  [v14_Q4_K+V  ] K800b V800b  Δppl= +0.999%  top1=100.00%  K-MSE=6.47e-02  V-MSE=6.53e-02  CR=3.04×  fires=24
+  [v14_Q6_K+V  ] K928b V928b  Δppl= +0.087%  top1=100.00%  K-MSE=2.88e-02  V-MSE=2.90e-02  CR=2.81×  fires=24
+  [v14_Q10_K+V ] K1120b V1120b  Δppl= -0.020%  top1=100.00%  K-MSE=1.04e-02  V-MSE=1.04e-02  CR=2.53×  fires=24
+  [v14_Q15_K+V ] K1248b V1248b  Δppl= +0.800%  top1=100.00%  K-MSE=4.60e-03  V-MSE=4.64e-03  CR=2.38×  fires=24
+  [v14_Q22_K+V ] K1376b V1376b  Δppl= +0.220%  top1=100.00%  K-MSE=2.14e-03  V-MSE=2.16e-03  CR=2.24×  fires=24
+  [v14_Q38_K+V ] K1632b V1632b  Δppl= +0.169%  top1=100.00%  K-MSE=7.17e-04  V-MSE=7.23e-04  CR=2.01×  fires=24
+  [v14_Q76_K+V ] K1888b V1888b  Δppl= -0.168%  top1=100.00%  K-MSE=1.79e-04  V-MSE=1.81e-04  CR=1.82×  fires=24
+  [v14_Q152_K+V] K2144b V2144b  Δppl= -0.077%  top1=100.00%  K-MSE=4.49e-05  V-MSE=4.52e-05  CR=1.66×  fires=24
+  [tq_b3_K+V   ] K800b V800b  Δppl= +0.666%  top1= 96.88%  K-MSE=8.84e-02  V-MSE=8.92e-02  CR=3.04×  fires=24
+  [tq_b4_K+V   ] K1056b V1056b  Δppl= +0.212%  top1=100.00%  K-MSE=1.62e-02  V-MSE=1.64e-02  CR=2.62×  fires=24
+  [tq_b5_K+V   ] K1312b V1312b  Δppl= +0.120%  top1=100.00%  K-MSE=3.54e-03  V-MSE=3.57e-03  CR=2.31×  fires=24
+  [tq_b6_K+V   ] K1568b V1568b  Δppl= +0.284%  top1=100.00%  K-MSE=8.28e-04  V-MSE=8.35e-04  CR=2.06×  fires=24
+  [tq_b7_K+V   ] K1824b V1824b  Δppl= +0.021%  top1=100.00%  K-MSE=2.01e-04  V-MSE=2.02e-04  CR=1.86×  fires=24
+  [tq_b8_K+V   ] K2080b V2080b  Δppl= +0.581%  top1=100.00%  K-MSE=4.94e-05  V-MSE=4.98e-05  CR=1.70×  fires=24
+
+====================================================================================================
+v1.4 KakeyaLattice — 128k KV storage report
+Model: google/gemma-4-E4B  (L=24, hd=256, kv_h=2)
+Boundary skip: [0, 1, 22, 23]  (bf16-kept layers; codec applied to the other 20)
+====================================================================================================
+Channel            128k Baseline KV       128k Kakeya KV   Total ratio    |Δppl|   top-1      K-MSE      V-MSE
+-----------------------------------------------------------------------------------------------------------------
+bf16_pass                  6.00 GiB             6.00 GiB        1.00×    0.000% 100.00%  0.000e+00  0.000e+00
+v14_Q4_K+V                 6.00 GiB             1.98 GiB        3.04×    0.780%  98.83%  6.459e-02  6.556e-02
+v14_Q6_K+V                 6.00 GiB             2.13 GiB        2.81×    0.449%  98.83%  2.871e-02  2.914e-02
+v14_Q10_K+V                6.00 GiB             2.37 GiB        2.53×    0.325%  98.83%  1.034e-02  1.049e-02
+v14_Q15_K+V                6.00 GiB             2.52 GiB        2.38×    0.989%  99.22%  4.593e-03  4.662e-03
+v14_Q22_K+V                6.00 GiB             2.68 GiB        2.24×    0.712%  99.61%  2.136e-03  2.167e-03
+v14_Q38_K+V                6.00 GiB             2.99 GiB        2.01×    0.154%  99.22%  7.157e-04  7.264e-04
+v14_Q76_K+V                6.00 GiB             3.30 GiB        1.82×    0.304% 100.00%  1.790e-04  1.816e-04
+v14_Q152_K+V               6.00 GiB             3.62 GiB        1.66×    0.319%  99.22%  4.478e-05  4.542e-05
+tq_b3_K+V                  6.00 GiB             1.98 GiB        3.04×    0.788%  97.66%  8.824e-02  8.957e-02
+tq_b4_K+V                  6.00 GiB             2.29 GiB        2.62×    1.036%  99.22%  1.620e-02  1.644e-02
+tq_b5_K+V                  6.00 GiB             2.60 GiB        2.31×    0.428%  99.61%  3.527e-03  3.581e-03
+tq_b6_K+V                  6.00 GiB             2.91 GiB        2.06×    0.252%  98.83%  8.260e-04  8.382e-04
+tq_b7_K+V                  6.00 GiB             3.23 GiB        1.86×    0.484%  98.83%  2.000e-04  2.030e-04
+tq_b8_K+V                  6.00 GiB             3.54 GiB        1.70×    0.580%  99.22%  4.925e-05  4.997e-05
+
+[done] → reports/v1_4_release/kv_128k_isoppl/gemma4_e4b_kv_128k.json
+[rank0]:[W423 14:25:36.272972721 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
