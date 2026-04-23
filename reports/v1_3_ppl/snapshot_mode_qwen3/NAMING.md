@@ -58,68 +58,17 @@ models or boundary depths.
 
 ## Sibling: `v1.3-GPU-Qwen-snap-bK128-bdry14` (alias `snapB`)
 
-Same recipe but `--k-kmeans-k 128`.  Originally registered as the
-top-1-agreement optimum on the first K budget sweep (which only
-tested k ∈ {16, 32, 64, 128}):
+Same recipe but `--k-kmeans-k 128`.  This is the top-1-agreement
+optimum on the K budget sweep:
 
 * Δppl (paired) = +65.98 %
 * Δppl (pooled) = +90.41 %
 * top-1 = **81.64 %** (+2.34 pp vs snapA)
 * Compression ratio: 2.00×, blended 1.44×.
 
-**Superseded by snapD / snapE** — the extended sweep (k ∈
-{256, 512, 1024}) found strictly Pareto-better points on both
-axes.  snapB is retained for historical reference and backward
-compatibility with any pinned experiment; new work should use
-snapD (Δppl-optimal) or snapE (top-1-optimal).
-
-## Sibling: `v1.3-GPU-Qwen-snap-bK256-bdry14` (alias `snapD`)
-
-Same recipe but `--k-kmeans-k 256`.  **Δppl-optimal on the
-extended K budget sweep**, dominating snapA and snapB on the
-Δppl axis:
-
-* Δppl (paired) = **+56.15 %** (−5.69 pp vs snapA, −9.83 pp vs snapB)
-* top-1 = 79.69 % (+0.39 pp vs snapA, −1.95 pp vs snapB)
-* K reconstruction MSE (non-boundary layer mean) = **0.1745**
-  (2.9× lower than snapA's 0.5030, 2.0× lower than snapB's 0.3431)
-* V-MSE unchanged (0.0517 — V stream uses k_V=16 in all rows).
-* Per-token slot cost: +2 bit seg_id vs snapA (k_K=64 → k_K=256 =
-  6 → 8 bits).  Centroid table grows 4× but is per-block /
-  per-head (amortised across 512 tokens).
-
-## Sibling: `v1.3-GPU-Qwen-snap-bK512-bdry14` (alias `snapE`)
-
-Same recipe but `--k-kmeans-k 512`.  **top-1-optimal on the
-extended K budget sweep** — new high-water mark for Qwen3-4B
-snapshot-mode:
-
-* Δppl (paired) = +57.36 % (−4.48 pp vs snapA, −8.62 pp vs snapB)
-* top-1 = **83.59 %** (+4.29 pp vs snapA, +1.95 pp vs snapB —
-  highest ever measured on Qwen3-4B snapshot)
-* K reconstruction MSE = **0.0550** (9.1× lower than snapA)
-
-Ceiling reached at block_size=512: `--k-kmeans-k 1024` produces
-byte-identical results to `--k-kmeans-k 512` because
-`_fit_kmeans_batched` receives only 512 coeff vectors per
-(block × kv-head) and saturates.  Raising `k` beyond
-`block_size_codec` is pointless without also raising block_size
-or pooling K-means across blocks.
-
-## Recipe selection guide
-
-Depending on downstream task:
-
-| task                                    | recipe            |
-|:----------------------------------------|:------------------|
-| Perplexity / LM-eval-harness (logprobs) | **snapD** (k=256) |
-| Argmax / MMLU / GSM8K (top-1 matters)   | **snapE** (k=512) |
-| Bytes-minimum under fixed quality floor | **snapA** (k=64)  |
-| (legacy, **do not use in new work**)    | snapB (k=128)     |
-| (negative result, **do not use**)       | snapC (exact PCA) |
-
-Use snapA only when the +5 pp Δppl cost is worth the seg_id byte
-savings (k=64 → k=256 costs 2 extra bits / token / head).
+Use snapB when the downstream eval is argmax-based (MMLU-style,
+GSM8K extraction, etc.) and top-1 trumps logprob spread.  Use
+snapA when it's perplexity or LM-eval-harness.
 
 ## Historical aliases (DO NOT use in new docs)
 
@@ -146,8 +95,7 @@ And for **`v1.3-GPU-snapB`**:
 ## Rules going forward
 
 1. New reports, commit messages, and conversation use
-   `v1.3-GPU-snapA` / `snapD` / `snapE` or the full canonical
-   name.  `snapB` is superseded, `snapC` is a recorded negative.
+   `v1.3-GPU-snapA` / `snapB` or the full canonical name.
 2. Legacy JSON file names are **not** renamed — `git mv` is
    cheap but it breaks `git blame` and existing URLs in earlier
    commits.  Instead, a new report that references old data
