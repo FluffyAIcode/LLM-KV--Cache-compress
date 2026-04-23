@@ -625,11 +625,17 @@ improved further.
 
 \subsection{Implementation}
 
-The canonical class is \texttt{V14KakeyaZamirLatticeGPU} in
-\texttt{kakeyaturbo\_py/v1\_4\_kakeya\_zamir\_lattice\_gpu.py}. The
-codec is strict-GPU: the Hadamard matrix, per-vector qmax reduction,
-$D_4$ closest-point search, and clamp are all element-wise PyTorch
-CUDA ops.
+The canonical implementation is the Python class
+\texttt{V14KakeyaZamirLatticeGPU}, released under Apache-2.0 in the
+\texttt{kakeyaturbo\_py} package at the project's
+\texttt{v1.4} tag~\cite{kakeya-v14-release}. The codec is
+strict-GPU: the Sylvester--Hadamard matrix, the per-vector
+$q_\mathrm{max}$ reduction, the $D_4$ closest-point search, and the
+clamp step are all element-wise PyTorch CUDA operations with no CPU
+round-trip. The $D_4$ closest-point kernel is Conway--Sloane's
+Algorithm~4~\cite{conway-sloane-d4}: one rounding pass and at most
+one parity flip per $4$-dimensional block, $O(D)$ total, mapped to
+warp-level primitives without branching outside the parity test.
 
 \paragraph{Compliance.}
 The repository enforces a strict ban list at test time: (i) \textbf{no
@@ -1370,133 +1376,8 @@ MSE proxy is tight in practice.
 \begin{thebibliography}{99}
 
 % ------------------------------------------------------------------
-% KV cache compression — production and prior codecs
-% ------------------------------------------------------------------
-
-\bibitem{turboquant-vllm}
-vibhavagarwal5 \emph{et al.}
-\newblock TurboQuant: 2-bit KV cache compression with 4x capacity.
-\newblock \emph{vLLM merged attention backend}, 2026.
-\newblock (Merged into vllm-project/vllm main on 2026-04-15.)
-
-\bibitem{vllm-pr-38479}
-vibhavagarwal5.
-\newblock [Attention Backend] TurboQuant: 2-bit KV cache compression with 4x capacity.
-\newblock \emph{vllm-project/vllm Pull Request \#38479}, 2026.
-\newblock \url{https://github.com/vllm-project/vllm/pull/38479}.
-
-\bibitem{vllm-pr-40194}
-Alistarh, D.
-\newblock [Attention] TurboQuant: remove redundant random signs, add prior art attribution.
-\newblock \emph{vllm-project/vllm Pull Request \#40194}, 2026.
-
-\bibitem{vllm-pr-39953}
-aditi-amd.
-\newblock [ROCm] Fix TurboQuant on ROCm: backend routing, flash-attn compat.
-\newblock \emph{vllm-project/vllm Pull Request \#39953}, 2026.
-
-\bibitem{vllm-pr-40060}
-mgoin.
-\newblock Fix TURBOQUANT backend selection in \texttt{cuda.py}.
-\newblock \emph{vllm-project/vllm Pull Request \#40060}, 2026.
-
-\bibitem{vllm-pr-40122}
-huangzhilin-hzl.
-\newblock [TurboQuant] Add NIAH long-context eval for TurboQuant KV cache.
-\newblock \emph{vllm-project/vllm Pull Request \#40122}, 2026.
-
-\bibitem{kakeya-v13-paper}
-Li, A.
-\newblock {Randomized Kakeya Skeletons for LLM KV Cache Compression: Algorithm and Rate--Distortion Boundary.}
-\newblock \emph{LLM-KV--Cache-compress v1.3 paper}, April 2026.
-\newblock (Superseded by this paper at tag \texttt{v1.4}.)
-
-\bibitem{kivi}
-Liu, Z., Yuan, J., Jin, H., Zhong, S., Xu, Z., Braverman, V., Chen, B., Hu, X.
-\newblock {KIVI: A tuning-free asymmetric 2bit quantization for KV cache.}
-\newblock \emph{ICML}, 2024.
-
-\bibitem{shutova-cache}
-Shutova, E. \emph{et al.}
-\newblock {Cache Me If You Must: Adaptive KV Cache Quantization for LLMs.}
-\newblock \emph{arXiv preprint arXiv:2501.19392}, 2025.
-
-\bibitem{h2o}
-Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., R\'e, C., Barrett, C., Wang, Z., Chen, B.
-\newblock {H$_2$O: Heavy-hitter oracle for efficient generative inference of large language models.}
-\newblock \emph{NeurIPS}, 2023.
-
-\bibitem{scissorhands}
-Liu, Z., Desai, A., Liao, F., Wang, W., Xie, V., Xu, Z., Kyrillidis, A., Shrivastava, A.
-\newblock {Scissorhands: Exploiting the persistence of importance hypothesis for LLM KV cache compression at test time.}
-\newblock \emph{NeurIPS}, 2023.
-
-\bibitem{streaming-llm}
-Xiao, G., Tian, Y., Chen, B., Han, S., Lewis, M.
-\newblock {Efficient streaming language models with attention sinks.}
-\newblock \emph{ICLR}, 2024.
-
-\bibitem{dmc}
-Nawrot, P., Lancucki, A., Chochowski, M., Tarjan, D., Ponti, E.~M.
-\newblock {Dynamic memory compression: Retrofitting LLMs for accelerated inference.}
-\newblock \emph{arXiv preprint arXiv:2403.09636}, 2024.
-
-\bibitem{less}
-Dong, H., Yang, X., Zhang, Z., Wang, Z., Chi, Y., Chen, B.
-\newblock {Get more with LESS: Synthesizing recurrence with KV cache compression for efficient LLM inference.}
-\newblock \emph{ICML}, 2024.
-
-\bibitem{deepseekv3}
-DeepSeek-AI.
-\newblock {DeepSeek-V3 Technical Report.}
-\newblock \emph{arXiv preprint arXiv:2412.19437}, 2024.
-
-% ------------------------------------------------------------------
-% Lattice source coding
-% ------------------------------------------------------------------
-
-\bibitem{zamir-feder}
-Zamir, R., Feder, M.
-\newblock {On lattice quantization noise.}
-\newblock \emph{IEEE Transactions on Information Theory}, 42(4):1152--1159, 1996.
-
-\bibitem{conway-sloane-d4}
-Conway, J.~H., Sloane, N.~J.~A.
-\newblock {Fast quantizing and decoding algorithms for lattice quantizers and codes.}
-\newblock \emph{IEEE Transactions on Information Theory}, 28(2):227--232, 1982.
-
-\bibitem{conway-sloane-book}
-Conway, J.~H., Sloane, N.~J.~A.
-\newblock \emph{Sphere Packings, Lattices and Groups}, 3rd ed.
-\newblock Springer, 1999.
-
-\bibitem{eyuboglu-forney}
-Eyuboglu, M.~V., Forney, G.~D.
-\newblock {Lattice and trellis quantization with lattice- and trellis-bounded codebooks---high-rate theory for memoryless sources.}
-\newblock \emph{IEEE Transactions on Information Theory}, 39(1):46--59, 1993.
-
-\bibitem{forney-trellis}
-Forney, G.~D.
-\newblock {Coset codes---part I: introduction and geometrical classification.}
-\newblock \emph{IEEE Transactions on Information Theory}, 34(5):1123--1151, 1988.
-
-\bibitem{erez-zamir}
-Erez, U., Zamir, R.
-\newblock {Achieving $1/2\log(1+\mathrm{SNR})$ on the AWGN channel with lattice encoding and decoding.}
-\newblock \emph{IEEE Transactions on Information Theory}, 50(10):2293--2314, 2004.
-
-\bibitem{quip-sharp}
-Chee, J., Cai, Y., Kuleshov, V., De~Sa, C.
-\newblock {QuIP\#: Even better LLM quantization with Hadamard incoherence and lattice codebooks.}
-\newblock \emph{ICML}, 2024.
-
-\bibitem{quip-hash}
-Tseng, A., Chee, J., Sun, Q., Kuleshov, V., De~Sa, C.
-\newblock {QuIP: 2-bit quantization of large language models with guarantees.}
-\newblock \emph{NeurIPS}, 2023.
-
-% ------------------------------------------------------------------
-% Kakeya problem — full historical chain
+% Kakeya problem — full historical chain (cited throughout
+% Sections 1.2, 2, and 8 as the mathematical backbone of the codec)
 % ------------------------------------------------------------------
 
 \bibitem{kakeya-problem}
@@ -1617,6 +1498,141 @@ Tropp, J.~A.
 Halko, N., Martinsson, P.-G., Tropp, J.~A.
 \newblock {Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions.}
 \newblock \emph{SIAM Review}, 53(2):217--288, 2011.
+
+% ------------------------------------------------------------------
+% Lattice source coding
+% ------------------------------------------------------------------
+
+\bibitem{zamir-feder}
+Zamir, R., Feder, M.
+\newblock {On lattice quantization noise.}
+\newblock \emph{IEEE Transactions on Information Theory}, 42(4):1152--1159, 1996.
+
+\bibitem{conway-sloane-d4}
+Conway, J.~H., Sloane, N.~J.~A.
+\newblock {Fast quantizing and decoding algorithms for lattice quantizers and codes.}
+\newblock \emph{IEEE Transactions on Information Theory}, 28(2):227--232, 1982.
+
+\bibitem{conway-sloane-book}
+Conway, J.~H., Sloane, N.~J.~A.
+\newblock \emph{Sphere Packings, Lattices and Groups}, 3rd ed.
+\newblock Springer, 1999.
+
+\bibitem{eyuboglu-forney}
+Eyuboglu, M.~V., Forney, G.~D.
+\newblock {Lattice and trellis quantization with lattice- and trellis-bounded codebooks---high-rate theory for memoryless sources.}
+\newblock \emph{IEEE Transactions on Information Theory}, 39(1):46--59, 1993.
+
+\bibitem{forney-trellis}
+Forney, G.~D.
+\newblock {Coset codes---part I: introduction and geometrical classification.}
+\newblock \emph{IEEE Transactions on Information Theory}, 34(5):1123--1151, 1988.
+
+\bibitem{erez-zamir}
+Erez, U., Zamir, R.
+\newblock {Achieving $1/2\log(1+\mathrm{SNR})$ on the AWGN channel with lattice encoding and decoding.}
+\newblock \emph{IEEE Transactions on Information Theory}, 50(10):2293--2314, 2004.
+
+\bibitem{quip-sharp}
+Chee, J., Cai, Y., Kuleshov, V., De~Sa, C.
+\newblock {QuIP\#: Even better LLM quantization with Hadamard incoherence and lattice codebooks.}
+\newblock \emph{ICML}, 2024.
+
+\bibitem{quip-hash}
+Tseng, A., Chee, J., Sun, Q., Kuleshov, V., De~Sa, C.
+\newblock {QuIP: 2-bit quantization of large language models with guarantees.}
+\newblock \emph{NeurIPS}, 2023.
+
+% ------------------------------------------------------------------
+% KV cache compression — prior work, production codecs, and this codec
+% ------------------------------------------------------------------
+
+\bibitem{kakeya-v14-release}
+Li, A.
+\newblock \textsc{KakeyaLattice}~v1.4: the canonical implementation.
+\newblock Open-source release, \emph{LLM-KV--Cache-compress}, tag \texttt{v1.4}, April 2026.
+\newblock Python class \texttt{kakeyaturbo\_py.V14KakeyaZamirLatticeGPU}; multi-model
+  measurement harness \texttt{benchmarks/multimodel\_v14\_vs\_tq.py}; four
+  per-architecture snapshot hooks in
+  \texttt{vllm\_backend/kakeya\_v1\_3\_ppl/snapshot\_hook.py}.
+
+\bibitem{kakeya-v13-paper}
+Li, A.
+\newblock {Randomized Kakeya Skeletons for LLM KV Cache Compression: Algorithm and Rate--Distortion Boundary.}
+\newblock \emph{LLM-KV--Cache-compress v1.3 paper}, April 2026.
+\newblock (Superseded by this paper at tag \texttt{v1.4}.)
+
+\bibitem{turboquant-vllm}
+vibhavagarwal5 \emph{et al.}
+\newblock TurboQuant: 2-bit KV cache compression with 4x capacity.
+\newblock \emph{vLLM merged attention backend}, 2026.
+\newblock (Merged into vllm-project/vllm main on 2026-04-15.)
+
+\bibitem{vllm-pr-38479}
+vibhavagarwal5.
+\newblock [Attention Backend] TurboQuant: 2-bit KV cache compression with 4x capacity.
+\newblock \emph{vllm-project/vllm Pull Request \#38479}, 2026.
+\newblock \url{https://github.com/vllm-project/vllm/pull/38479}.
+
+\bibitem{vllm-pr-40194}
+Alistarh, D.
+\newblock [Attention] TurboQuant: remove redundant random signs, add prior art attribution.
+\newblock \emph{vllm-project/vllm Pull Request \#40194}, 2026.
+
+\bibitem{vllm-pr-39953}
+aditi-amd.
+\newblock [ROCm] Fix TurboQuant on ROCm: backend routing, flash-attn compat.
+\newblock \emph{vllm-project/vllm Pull Request \#39953}, 2026.
+
+\bibitem{vllm-pr-40060}
+mgoin.
+\newblock Fix TURBOQUANT backend selection in \texttt{cuda.py}.
+\newblock \emph{vllm-project/vllm Pull Request \#40060}, 2026.
+
+\bibitem{vllm-pr-40122}
+huangzhilin-hzl.
+\newblock [TurboQuant] Add NIAH long-context eval for TurboQuant KV cache.
+\newblock \emph{vllm-project/vllm Pull Request \#40122}, 2026.
+
+\bibitem{kivi}
+Liu, Z., Yuan, J., Jin, H., Zhong, S., Xu, Z., Braverman, V., Chen, B., Hu, X.
+\newblock {KIVI: A tuning-free asymmetric 2bit quantization for KV cache.}
+\newblock \emph{ICML}, 2024.
+
+\bibitem{shutova-cache}
+Shutova, E. \emph{et al.}
+\newblock {Cache Me If You Must: Adaptive KV Cache Quantization for LLMs.}
+\newblock \emph{arXiv preprint arXiv:2501.19392}, 2025.
+
+\bibitem{h2o}
+Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., R\'e, C., Barrett, C., Wang, Z., Chen, B.
+\newblock {H$_2$O: Heavy-hitter oracle for efficient generative inference of large language models.}
+\newblock \emph{NeurIPS}, 2023.
+
+\bibitem{scissorhands}
+Liu, Z., Desai, A., Liao, F., Wang, W., Xie, V., Xu, Z., Kyrillidis, A., Shrivastava, A.
+\newblock {Scissorhands: Exploiting the persistence of importance hypothesis for LLM KV cache compression at test time.}
+\newblock \emph{NeurIPS}, 2023.
+
+\bibitem{streaming-llm}
+Xiao, G., Tian, Y., Chen, B., Han, S., Lewis, M.
+\newblock {Efficient streaming language models with attention sinks.}
+\newblock \emph{ICLR}, 2024.
+
+\bibitem{dmc}
+Nawrot, P., Lancucki, A., Chochowski, M., Tarjan, D., Ponti, E.~M.
+\newblock {Dynamic memory compression: Retrofitting LLMs for accelerated inference.}
+\newblock \emph{arXiv preprint arXiv:2403.09636}, 2024.
+
+\bibitem{less}
+Dong, H., Yang, X., Zhang, Z., Wang, Z., Chi, Y., Chen, B.
+\newblock {Get more with LESS: Synthesizing recurrence with KV cache compression for efficient LLM inference.}
+\newblock \emph{ICML}, 2024.
+
+\bibitem{deepseekv3}
+DeepSeek-AI.
+\newblock {DeepSeek-V3 Technical Report.}
+\newblock \emph{arXiv preprint arXiv:2412.19437}, 2024.
 
 % ------------------------------------------------------------------
 % LLM inference infrastructure
