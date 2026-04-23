@@ -200,6 +200,7 @@ def _gpu_codec_per_head(
     centroids_file: str | None,
     outlier_threshold: float | None,
     rvq_k2: int | None = None,
+    tree_partition: bool = False,
 ) -> np.ndarray:
     """Run the GPU codec per kv-head on a [n, H, D] fp32 tensor and
     return the decoded [n, H, D] fp32 array.
@@ -217,6 +218,9 @@ def _gpu_codec_per_head(
     from kakeyaturbo_py.gpu_skeleton import (
         fit_skeleton_batched,
         fit_skeleton_rvq_batched,
+    )
+    from kakeyaturbo_py.gpu_polypart import (
+        fit_skeleton_polypart_tree_batched,
     )
     from kakeyaturbo_py.gpu_encode import (
         encode_and_pack_batched,
@@ -303,12 +307,24 @@ def _gpu_codec_per_head(
             out[lo:hi] = X_hat.permute(1, 0, 2).contiguous().cpu().numpy()
             continue
 
-        # ---- Flat K-means path (baseline, slot-byte exact) --------
-        skel = fit_skeleton_batched(
-            K_block, d_eff=d_eff, k=k, seed=3405691582,
-            rsvd_oversample=8, rsvd_power_iters=2,
-            kmeans_max_iter=8, variance_ratio=variance_ratio,
-        )
+        # ---- Flat K-means (or tree-partition) path -----------------
+        # Both go through the slot-exact encode + decode pipeline.
+        # The difference is only in how centroids are fit:
+        #   flat  : spherical K-means with farthest-first init + Lloyd
+        #   tree  : recursive PCA-axis hyperplane splits (Guth-Katz-
+        #           inspired polynomial partitioning with degree 1)
+        if tree_partition:
+            skel = fit_skeleton_polypart_tree_batched(
+                K_block, d_eff=d_eff, k=k, seed=3405691582,
+                rsvd_oversample=8, rsvd_power_iters=2,
+                kmeans_max_iter=8, variance_ratio=variance_ratio,
+            )
+        else:
+            skel = fit_skeleton_batched(
+                K_block, d_eff=d_eff, k=k, seed=3405691582,
+                rsvd_oversample=8, rsvd_power_iters=2,
+                kmeans_max_iter=8, variance_ratio=variance_ratio,
+            )
         sign_np = np.asarray(
             _core.wht_sign_pattern(
                 int(skel["rotation_seed"]), int(skel["wht_len"]),
@@ -350,6 +366,7 @@ def gpu_roundtrip(
     outlier_threshold: float | None = None,
     k_centers: int = 16,
     rvq_k2: int | None = None,
+    tree_partition: bool = False,
 ) -> tuple[np.ndarray, dict]:
     """Signature-compatible stand-in for `rust_roundtrip` operating
     on the [n, H, D] pre-flatten layout.  Returns (decoded, report).
@@ -377,6 +394,7 @@ def gpu_roundtrip(
         centroids_file=centroids_file,
         outlier_threshold=outlier_threshold,
         rvq_k2=rvq_k2,
+        tree_partition=tree_partition,
     )
     # Best-effort report: mean per-block MSE + compressed-bytes
     # estimate (matching kakeyaturbo-bench's report keys).
@@ -415,6 +433,7 @@ def codec_layer(
     use_gpu_codec: bool = False, disable_share_basis_v: bool = False,
     k_kmeans_k: int = 16, v_kmeans_k: int = 16,
     k_rvq_level2: int | None = None,
+    k_tree_partition: bool = False,
 ) -> tuple[np.ndarray, dict]:
     """Per-layer codec of a captured K/V tensor.
 
@@ -484,6 +503,9 @@ def codec_layer(
             # and `k_rvq_level2` the level-2 k; effective codebook =
             # k · k_rvq_level2.
             rvq_k2 = k_rvq_level2 if not is_v else None
+            # Tree partitioning applies to the K stream only (V is at
+            # Pareto minimum already — see snapF discussion).
+            tree_flag = k_tree_partition if not is_v else False
             dec, rep = gpu_roundtrip(
                 arr_enc.astype(np.float32, copy=False),
                 block_size=block_size, bit_width=bit_width,
@@ -491,6 +513,7 @@ def codec_layer(
                 centroids_file=centroids, outlier_threshold=outlier_thr,
                 k_centers=kmeans_k,
                 rvq_k2=rvq_k2,
+                tree_partition=tree_flag,
             )
     else:
         flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
@@ -617,6 +640,12 @@ def main() -> int:
                          "bit_width_v (V residual carries log2(k) bits "
                          "of seg_id information separately).  Ignored when "
                          "V falls back to the CPU Rust share_basis path.")
+    ap.add_argument("--k-tree-partition", action="store_true",
+                    help="Use polynomial-partitioning binary-tree K-means "
+                         "(degree-1 hyperplane splits) for the K stream "
+                         "instead of spherical K-means.  Guth-Katz-inspired, "
+                         "Phase 3 of the non-Gaussian shaping research. "
+                         "Snapshot-only; uses the same slot format as snapA.")
     ap.add_argument("--k-rvq-level2", type=int, default=None,
                     help="K-stream 2-level Residual VQ: level-2 "
                          "K-means cluster count.  When set, `--k-kmeans-k` "
@@ -734,6 +763,7 @@ def main() -> int:
                 disable_share_basis_v=args.no_share_basis_v,
                 k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
                 k_rvq_level2=args.k_rvq_level2,
+                k_tree_partition=args.k_tree_partition,
             )
             v_hat, v_rep = codec_layer(
                 kv["V"], is_v=True, layer_id=lid, q_precond=qp,
@@ -747,6 +777,7 @@ def main() -> int:
                 disable_share_basis_v=args.no_share_basis_v,
                 k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
                 k_rvq_level2=args.k_rvq_level2,
+                k_tree_partition=args.k_tree_partition,
             )
             replacements[lid] = {
                 "K": torch.from_numpy(k_hat).cuda(),

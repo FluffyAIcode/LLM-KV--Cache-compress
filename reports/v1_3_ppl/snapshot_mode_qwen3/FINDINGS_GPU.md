@@ -586,6 +586,139 @@ research stays on the HANDOFF.md §5.8 catalogue as legitimate
 research directions, but with honest expectations: **measurable but
 not deployment-actionable gains on Qwen3-4B**.
 
+### Phase 2 & 3 research prototypes — both NEGATIVE
+
+Following the Phase 1 non-Gaussianity measurement, we implemented
+two research prototypes from HANDOFF.md §5.8 to test whether
+non-Gaussian shaping (path iv) and Guth-Katz polynomial partitioning
+(path vi) give measurable Δppl improvements:
+
+- **Phase 2**: `benchmarks/calibrate_datamatched_lloyd_max.py` —
+  calibrate Lloyd-Max centroids on the actual empirical distribution
+  of `scaled` values (post-WHT, post-‖residual‖-normalise) seen by
+  the codec on real Qwen3-4B K.  Then feed them through the existing
+  `--k-centroids` flag.
+- **Phase 3**: `kakeyaturbo_py/gpu_polypart.py` —
+  `fit_skeleton_polypart_tree_batched`: recursive top-1 PCA-axis
+  hyperplane splits (degree-1 polynomial partitioning) replacing
+  spherical K-means.  Tree depth = log₂(k) = 6 for k=64.  Gated
+  behind new `--k-tree-partition` CLI flag.
+
+4-passage snapshot results on Qwen3-4B (paired with snapA):
+
+| Recipe                                  | Δppl       | top-1   | K-MSE   | Δ vs snapA (paired) |
+|:----------------------------------------|-----------:|--------:|--------:|---------------------:|
+| snapA (flat K-means k=64, Gaussian LM)  | +61.84 %   | 79.30 % | 0.5030  | baseline             |
+| snapF (RVQ 4×16, snapshot path)         | +52.37 %   | 83.98 % | 0.0528  | **−9.46 pp** (wins) |
+| **Phase 2** (data-matched Lloyd-Max)    | +63.16 %   | 79.30 % | 0.5000  | **+1.32 pp** (noise)|
+| **Phase 3** (polypart tree)             | +81.45 %   | 77.34 % | 0.5790  | **+19.61 pp** (**regresses**) |
+| **Phase 2+3** (tree + data-matched)     | +80.27 %   | 77.73 % | 0.5758  | **+18.43 pp**        |
+
+**Both prototypes fail to beat snapA on Δppl.**
+
+### Why Phase 2 failed — Phase 1's measurement didn't apply to our codec
+
+Phase 1 measured non-Gaussianity of `y = Hx̂` (Hadamard-rotated unit K
+vector).  That's TurboQuant's Lloyd-Max input.
+
+**Our codec's Lloyd-Max input is different.**  Kakeya-v1.3 applies
+Lloyd-Max to `scaled = WHT(residual) / ‖residual‖` where
+`residual = coeff − t · centre[seg_id]` after PCA projection and
+K-means assignment.  The calibration script measured the empirical
+distribution of this quantity directly:
+
+  *Empirical `scaled`*: mean = 0.00024, std = 1.000000, range ±5σ.
+
+**That is almost perfect Gaussian shape** — the `1/‖residual‖`
+normalisation + WHT rotation + D=96 CLT produce a near-exact
+N(0, 1) marginal on each coordinate.  The data-matched centroids
+differ from Gaussian-default by **at most 4.5 %** (in the outer
+tails), and mostly match to < 2 %:
+
+```
+[ 7]  Gaussian -0.128100   data-matched -0.125740   (-1.84 %)
+[ 8]  Gaussian +0.128100   data-matched +0.126769   (-1.04 %)
+...
+[ 0]  Gaussian -2.732200   data-matched -2.609528   (-4.49 %)
+[15]  Gaussian +2.732200   data-matched +2.608856   (-4.51 %)
+```
+
+The only systematic deviation is **slight inward shift of outer
+centroids** (sub-Gaussian, matching Phase 1's kurtosis < 3
+finding).  But this effect is an order of magnitude smaller than
+TQ's 20× K-MSE excess, because **our codec pre-processes the
+data much more aggressively** than TQ before Lloyd-Max sees it.
+
+Lesson for future work: **Phase 1-style non-Gaussianity measurement
+must be done at the ACTUAL Lloyd-Max input of the target codec, not
+at TurboQuant's Lloyd-Max input.**  The 20× TQ K-MSE headroom
+established in the cross-validation section does NOT transfer to
+Kakeya-v1.3 because Kakeya's PCA + K-means + residual pipeline
+Gaussianises its inputs before Lloyd-Max by construction.
+
+### Why Phase 3 failed — degree-1 tree is structurally weaker than K-means
+
+Smoke test on layer 17 predicted this: tree partitioning gives
+1.13× worse stage-3 K-MSE than flat K-means (0.745 vs 0.659 at
+k=64).  In end-to-end PPL this translates to +19.6 pp regression.
+
+Structural reasons:
+  1. **Single top-1 PCA direction per node** is only a linear
+     hyperplane; K-means Voronoi cells can be arbitrary convex
+     regions.
+  2. **No Lloyd refinement** — tree centroids are raw cluster
+     means, unrefined by iteration.
+  3. **No signed inner product** — K-means uses `|⟨coeff, centre⟩|`
+     argmax and absorbs the sign into `t`.  Tree has no analog.
+  4. **Farthest-first seeding** in spherical K-means spreads
+     centroids apart on the sphere; PCA-split starts at the
+     variance-maximising axis and subdivides orthogonal to it,
+     producing tighter-packed clusters on low-variance dims.
+
+True Guth-Katz polynomial partitioning requires **degree-d
+polynomial zero sets** (not just hyperplanes) that give balanced
+cells.  Writing a practical degree-d solver in D=128 is itself a
+multi-month research project — our degree-1 prototype captures
+the "tree structure" aspect of Guth-Katz but misses the "balanced
+cells via high-degree polynomial" aspect.
+
+**Conclusion**: Guth-Katz is the wrong abstraction for Kakeya-v1.3's
+current structure.  The right test would be **spherical VQ with
+Zamir-Feder nested lattice**, which is a bigger implementation
+project (2-3 weeks if we're optimistic).
+
+### Artefacts (for audit + reproducibility)
+
+- `reports/v1_3_ppl/snapshot_mode_qwen3/non_gaussianity/`
+  - `qwen3_4b_k_non_gaussianity.json` — Phase 1 raw metrics
+  - `qwen3_4b_lloyd_max_datamatched_b4.f32` — empirical Lloyd-Max centroids
+  - `qwen3_4b_lloyd_max_datamatched_b4.json` — metadata + training stats
+  - `qwen3_4b_snap_datamatched_b4_vllm_snapshot.json` — Phase 2 full run
+  - `qwen3_4b_snap_polypart_tree_vllm_snapshot.json` — Phase 3 full run
+  - `qwen3_4b_snap_polypart_plus_datamatched_vllm_snapshot.json` — 2+3 combined
+
+### Revised research-path ROI (after Phase 2 + 3 results)
+
+The measurements above force a meaningful downward revision of
+HANDOFF.md §5.8's priority ordering:
+
+| Path | Before P2/P3 | After P2/P3 | Reason |
+|:-|:-:|:-:|:-|
+| (iv) data-matched Lloyd-Max (minimal Phase 2) | High | **Retired** | Measured neutral/negative; our codec already Gaussianises its Lloyd-Max input |
+| (iv) full Zamir-Feder nested lattice | High | **Medium** | Still untested; requires multi-week effort |
+| (vi) Guth-Katz polynomial partitioning (degree 1) | Medium | **Retired** | Measured strongly negative |
+| (vi) Guth-Katz true high-degree polynomial | Medium | **Very low** | Research-only; no path to D=128 solver |
+| (iii) deep Perron-tree RVQ (beyond snapF's 2-level) | Low | **Low** (unchanged) | Plateau risk remains |
+
+**Honest implication**: the research-path ROIs suggested in §5.8
+were over-optimistic for Kakeya-v1.3's actual structure.  The codec
+design already implements enough pre-Lloyd-Max Gaussianisation that
+further non-Gaussian-shaping tricks at the Lloyd-Max stage give
+<1 % K-MSE improvement (Phase 2).  The value must come from
+**deeper architectural changes** (snapF's absorbed-scale snapshot
+path, or replacing the codec kernel with TurboQuant-style) — not
+from Lloyd-Max or K-means micro-optimisations.
+
 ### Binary-tree K-means encode — measured, NOT adopted
 
 We measured the per-stage encode time breakdown on a single

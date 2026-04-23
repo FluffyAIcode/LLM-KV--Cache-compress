@@ -346,9 +346,28 @@ agent can recognise them if the user raises them:
   Replace Zamir-Feder's Gaussian shaping region `Λ_c` with the
   empirical support of LLM K (possibly a union of Voronoi cells
   learned offline).  Theoretical scaffolding exists; LLM
-  adaptation is new.  **Highest-ROI path given (i)'s results** —
-  directly exploits the measured W_2 and isotropy deviations.
-  Expected 0.5 - 1.5 dB.  Implementable in 2-3 weeks.
+  adaptation is new.
+
+  ✅ **Minimal prototype EXECUTED** (this session) via
+  `benchmarks/calibrate_datamatched_lloyd_max.py` — calibrate
+  Lloyd-Max centroids on empirical distribution, plug in via
+  `--k-centroids`.  **Result: NEGATIVE, paired Δppl +1.32 pp
+  vs snapA, no Δtop-1 change, K-MSE -0.6 % (noise).**
+
+  Root cause: Phase 1 measured non-Gaussianity at TurboQuant's
+  Lloyd-Max input (`Hx̂` = Hadamard × unit K), NOT at our
+  codec's Lloyd-Max input (`WHT(residual) / ‖residual‖`).
+  Kakeya-v1.3's pipeline pre-Gaussianises before Lloyd-Max by
+  construction; empirical `scaled` values show std=1.000000 with
+  < 4.5% deviation from Gaussian on centroid positions.  The
+  20× K-MSE headroom from §5.7 cross-validation is a TQ-specific
+  finding, not transferable.
+
+  Full Zamir-Feder nested lattice (2D+ coarse/fine lattice pair)
+  remains untested.  Expected 0.3 - 1.0 dB under optimistic
+  assumptions.  2-3 weeks implementation, now **Medium priority**
+  given the minimal prototype's failure.  See FINDINGS_GPU.md
+  section "Phase 2 & 3 research prototypes — both NEGATIVE".
 - **(v) Finite-field Kakeya as a quantization code.**  Dvir's
   `F_q^D` Kakeya sets interpreted as binary-alphabet codebooks.
   Most speculative; no known bridge theorem.  **No-go per (i)**:
@@ -359,9 +378,27 @@ agent can recognise them if the user raises them:
   multi-scale tube induction + sticky-set analysis.  Tube
   induction generalises cleanly to n-D; sticky analysis is 3D-
   specific but usable as a codebook diversity heuristic.
-  Expected 0.3 - 0.8 dB over TurboQuant, bounded above by (i)'s
-  ceiling.  4-7 weeks research prototype.  **Medium priority**:
-  more novel than (iv) but lower ROI on measured data.
+
+  ✅ **Degree-1 Guth-Katz prototype EXECUTED** (this session)
+  via `kakeyaturbo_py/gpu_polypart.py`
+  (`fit_skeleton_polypart_tree_batched`) — recursive PCA-axis
+  hyperplane splits.  **Result: STRONGLY NEGATIVE, paired Δppl
+  +19.61 pp vs snapA, Δtop-1 -1.95 pp, K-MSE +15 %.**
+
+  Root cause: degree-1 hyperplane is structurally weaker than
+  K-means Voronoi.  Single PCA direction per tree node can't
+  match K-means' farthest-first init + Lloyd refinement +
+  signed-inner-product cluster optimality.  True Guth-Katz
+  requires degree-d ≥ 2 polynomial zero sets for balanced cells
+  — **no practical solver in D=128**.  This path is now
+  **Retired**.  See FINDINGS_GPU.md section "Why Phase 3 failed"
+  for details.
+
+  Multi-scale tube induction (Technique A of Wang-Zahl) and
+  sticky analysis (Technique C) remain unexplored as independent
+  heuristics, but given snapF already has Pareto-best Δppl and
+  top-1 without them, their marginal value is low.  4-7 weeks
+  for an honest attempt; **Low priority**.
 
 ### Honest project framing going forward
 
