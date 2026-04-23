@@ -159,9 +159,10 @@ counter-productive, but together with larger `k` they compound to
 regresses — the codec is PCA-saturated beyond d_eff=96 on
 Qwen3-4B's post-qk-norm K.
 
-The best-measured configuration is **b_K=4, k_K=64, d_eff=96** at
-`--boundary-skip-layers 0..6 29..35` (V-stream kept at defaults
-`b_V=2, k_V=16`):
+The best-measured configuration — canonical name
+**`v1.3-GPU-Qwen-snap-bK64-bdry14`** (spoken: **`v1.3-GPU-snapA`**) —
+is `b_K=4, k_K=64, d_eff=96` at `--boundary-skip-layers 0..6 29..35`
+(V-stream kept at defaults `b_V=2, k_V=16`):
 
   * Δppl = **+61.84 %**
   * top-1 = **79.30 %**
@@ -244,7 +245,8 @@ Reading:
 
 Depending on downstream task:
 
-**Recipe A (Δppl-optimal, for perplexity / LM-eval tasks):**
+**`v1.3-GPU-Qwen-snap-bK64-bdry14`** (spoken: **`v1.3-GPU-snapA`**)
+— Δppl-optimal, for perplexity / LM-eval tasks:
 ```
 --bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
 --bit-width-v 2 --v-kmeans-k 16
@@ -254,9 +256,14 @@ Depending on downstream task:
 ```
 → Δppl = **+61.84 %**, top-1 = 79.30 %
 
-**Recipe B (top-1-optimal, for argmax / MMLU-style evals):**
-Same as Recipe A but with `--k-kmeans-k 128`.
+**`v1.3-GPU-Qwen-snap-bK128-bdry14`** (spoken: **`v1.3-GPU-snapB`**)
+— top-1-optimal, for argmax / MMLU-style evals.
+Same as snapA but with `--k-kmeans-k 128`.
 → Δppl = +65.98 %, top-1 = **81.64 %**
+
+See `NAMING.md` in this directory for the full canonical-name
+schema and the table of legacy aliases (Recipe A / best-K /
+`qwen3_4b_budget_k64_bK4_deff96` / …).
 
 Neither hits the MARGINAL Δppl bar (≤+20 %), but both have top-1
 above the PR #17 DS-1.5B MARGINAL (74.22 %).
@@ -296,7 +303,7 @@ Codec-budget sweep (`budget_sweep/` subfolder, all 4-passage, on
 - `qwen3_4b_budget_bestK_VbV1_vllm_snapshot.json` — V b=1: +79.84 %, 76.56 %.
 - `qwen3_4b_budget_bestK_Vk8_vllm_snapshot.json` — V k=8: +69.24 %, 78.52 %.
 - `qwen3_4b_budget_bestK_Vk8_bV1_vllm_snapshot.json` — V k=8 + b=1: +92.80 %, 74.22 % (worst).
-- `qwen3_4b_budget_kK128_vllm_snapshot.json` — **K k=128** (Recipe B): +65.98 %, **81.64 %** (top-1 new high).
+- `qwen3_4b_budget_kK128_vllm_snapshot.json` — **K k=128** (= `v1.3-GPU-snapB`): +65.98 %, **81.64 %** (top-1 new high).
 - `qwen3_4b_budget_kK128_Vk8_vllm_snapshot.json` — K k=128 + V k=8 (Pareto-incompatible shrink): +67.95 %, 80.08 %.
 
 Boundary-skip sweep (`bdry_sweep/` subfolder, all 4-passage):

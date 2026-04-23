@@ -23,7 +23,27 @@ rationale.  This version adapts the capture + replace hook to vLLM's
 All other machinery (WikiText loader, Rust codec CLI, Q-precond,
 Lloyd-Max centroids, boundary-skip) is reused verbatim.
 
-Usage (Qwen3-4B):
+Canonical named configurations
+------------------------------
+
+See `reports/v1_3_ppl/snapshot_mode_qwen3/NAMING.md` for the
+full naming schema.  The current best-measured recipes on
+Qwen3-4B + WikiText-103 test (ctx=2048, n_eval=64, 4 passages):
+
+  v1.3-GPU-Qwen-snap-bK64-bdry14   spoken: v1.3-GPU-snapA
+      Δppl-optimal. Δppl = +61.84%, top-1 = 79.30%.
+      Flags:
+        --bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
+        --bit-width-v 2 --v-kmeans-k 16
+        --boundary-skip-layers 0 1 2 3 4 5 6 29 30 31 32 33 34 35
+        --gpu-codec --no-share-basis-v
+        --disable-q-precond --disable-centroids --disable-outlier
+
+  v1.3-GPU-Qwen-snap-bK128-bdry14  spoken: v1.3-GPU-snapB
+      top-1-optimal. Δppl = +65.98%, top-1 = 81.64%.
+      Same as snapA but with `--k-kmeans-k 128`.
+
+Usage (Qwen3-4B, plain defaults):
     python benchmarks/e2e_ppl_validation_vllm_snapshot_qwen3.py \\
         --model-path Qwen/Qwen3-4B --model-name qwen3_4b_snapshot \\
         --ctx-len 2048 --n-eval 64 --n-passages 4 \\

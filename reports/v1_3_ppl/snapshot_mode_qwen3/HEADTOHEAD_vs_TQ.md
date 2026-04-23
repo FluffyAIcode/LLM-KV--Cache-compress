@@ -16,7 +16,7 @@ are aligned.
 
 ## Summary table
 
-| Metric                            | bf16 baseline | TurboQuant k8v4 | Kakeya Recipe A | Kakeya Recipe B |
+| Metric                            | bf16 baseline | TurboQuant k8v4 | `v1.3-GPU-snapA` | `v1.3-GPU-snapB` |
 |:----------------------------------|:-------------:|:---------------:|:---------------:|:---------------:|
 | PPL (mean over passages)          |       11.836  |         11.847  |         22.982  |         22.537  |
 | PPL (median over passages)        |        7.933  |          7.909  |         10.954  |         12.395  |
@@ -34,9 +34,10 @@ are aligned.
 | Offline codec time                |           —   |          —     |      **18.08 s** |    18.10 s   |
 | Peak GPU memory (all 4 passages)  |      56.65 GiB |      56.63 GiB |      ~56.7 GiB  |    ~56.7 GiB  |
 
-## Kakeya recipe definitions
+## Kakeya configuration definitions
 
-Recipe A (Δppl-optimal):
+`v1.3-GPU-Qwen-snap-bK64-bdry14` (spoken: **`v1.3-GPU-snapA`**,
+Δppl-optimal):
 ```
 --bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
 --bit-width-v 2 --v-kmeans-k 16
@@ -45,7 +46,11 @@ Recipe A (Δppl-optimal):
 --disable-q-precond --disable-centroids --disable-outlier
 ```
 
-Recipe B (top-1-optimal): same as Recipe A but with `--k-kmeans-k 128`.
+`v1.3-GPU-Qwen-snap-bK128-bdry14` (spoken: **`v1.3-GPU-snapB`**,
+top-1-optimal): same as snapA but with `--k-kmeans-k 128`.
+
+See `NAMING.md` in this directory for the canonical-name schema
+and the full alias table.
 
 ## Reading
 
@@ -55,7 +60,7 @@ int8 per-token quantisation keeps >99.98 % of K variance (rel
 MSE = 2e−4).  V int4 loses ~2 % of variance but this doesn't
 propagate to visible PPL cost — softmax de-amplifies V error.
 
-**2. Kakeya Recipe A / B lose 60-94 pp Δppl** and have K
+**2. `v1.3-GPU-snapA / snapB` lose 60-94 pp Δppl** and have K
 reconstruction MSE **two orders of magnitude worse** than TQ
 (0.503 vs 0.0048).  V MSE is comparable (0.052 vs 0.053).
 
@@ -82,7 +87,7 @@ mattering past a few × 10k tokens).
 ## Bottom line on Qwen3-4B
 
 **TurboQuant k8v4 dominates the current Kakeya v1.3 PPL recipe on
-every axis we measured except top-1 agreement** (Kakeya Recipe B's
+every axis we measured except top-1 agreement** (`v1.3-GPU-snapB`'s
 81.64% is 17 pp behind TQ's ~100%, so this isn't actually a win
 either).  For this model, TQ k8v4 is the correct production
 choice.
@@ -102,6 +107,6 @@ the 2× one we've been tuning in.
 - `headtohead/turboquant_k8v4_snapshot_protocol.json` — TQ PPL +
   forward time on the same protocol.
 - `budget_sweep/qwen3_4b_budget_k64_bK4_deff96_vllm_snapshot.json`
-  — Recipe A (kakeya best Δppl).
+  — `v1.3-GPU-snapA` (kakeya best Δppl).
 - `budget_sweep/qwen3_4b_budget_kK128_vllm_snapshot.json` —
-  Recipe B (kakeya best top-1).
+  `v1.3-GPU-snapB` (kakeya best top-1).
