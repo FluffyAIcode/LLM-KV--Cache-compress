@@ -199,8 +199,31 @@ def main() -> None:
               f"build={t_build:.1f}s  encode={res['encode_ms_per_M_vec']:.1f}ms/M")
         results.append(res)
 
-    # --- Bridge B: D4 nested lattice ---
-    print("\n[bridge B] D4 nested lattice")
+    # --- Bridge B2: D4 + full TurboQuant engineering stack ---
+    print("\n[bridge B2] D4 nested lattice + Hadamard + per-vector qmax + fp16 norms")
+    from kakeyaturbo_py.bridge_b2_d4_tq_style import D4TQStyleCodebook
+    # q_range=152 → 32 bits / D4 block × 32 blocks = 1024 lattice bits + 32 overhead = 1056
+    # total bits, exactly matching TQ k8v4's 1024 + 32 fp16 scalars.
+    for q_range in [16, 64, 152]:
+        t0 = time.perf_counter()
+        cb = D4TQStyleCodebook(D=D, q_range=q_range)
+        t_build = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        K_hat = cb.roundtrip(K_test)
+        dt = (time.perf_counter() - t0) * 1000
+        res = evaluate_bridge(
+            f"D4-TQ-Q{q_range}", K_test, K_hat,
+            bits=cb.bits_per_token_per_head,
+        )
+        res["build_time_s"] = t_build
+        res["encode_ms_per_M_vec"] = dt * 1_000_000 / K_test.shape[0]
+        print(f"  q_range={q_range}  rel-MSE={res['rel_mse']:.6f}  "
+              f"cos={res['cos_mean']:.4f}  bits={res['bits_per_token_per_head']}  "
+              f"build={t_build:.1f}s  encode={res['encode_ms_per_M_vec']:.1f}ms/M")
+        results.append(res)
+
+    # --- Bridge B: D4 nested lattice (naive, for contrast) ---
+    print("\n[bridge B] D4 nested lattice (naive, no Hadamard / no per-vector scale)")
     from kakeyaturbo_py.bridge_b_nested_lattice import D4NestedLatticeCodebook
     for q_range in [1, 2, 4, 8, 16]:
         t0 = time.perf_counter()
