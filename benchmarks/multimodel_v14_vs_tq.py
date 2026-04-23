@@ -215,7 +215,7 @@ def main() -> int:
 
     from vllm import LLM
     from transformers import AutoTokenizer
-    from kakeya_v1_3_ppl.snapshot_hook import HookState
+    from kakeya_v1_4_snapshot.snapshot_hook import HookState
 
     HookState.capture_gpu = True
 

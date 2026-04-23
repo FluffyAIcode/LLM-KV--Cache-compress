@@ -1,122 +1,32 @@
-"""In-process kakeyaturbo reference codec.
+"""v1.4 KakeyaLattice reference Python codec package.
 
-This package is a pyo3 wrapper around the `kakeyaturbo` Rust crate.
-It replaces the CLI-subprocess-over-disk-KKTV dance that the
-`benchmarks/e2e_ppl_validation_vllm*.py` harnesses used to run (one
-`kakeyaturbo-bench` fork per stream per layer per forward pass).
+Exposes a single top-level symbol:
 
-Semantic contract
------------------
+    from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
 
-`roundtrip_layer(arr, **kwargs)` produces exactly the same decoded
-tensor and exactly the same `mean_block_mse` that
-`kakeyaturbo-bench --verify --dump-decoded` would produce when given
-the same input KKTV file and the same CLI flags.  No randomness is
-introduced by this wrapper — the only entropy source in the codec
-is `rotation_seed`, which is exposed verbatim as a kwarg.
+`V14KakeyaZamirLatticeGPU(D: int, q_range: int, device: str = "cuda")`
+is the head-of-line Zamir-Feder D4 nested-lattice codec with the full
+TurboQuant-style engineering stack (Hadamard rotation + unit
+normalisation + per-vector qmax + inverse Hadamard + rescale).
 
-Typical use::
+Implementation provenance (see `v1_4_kakeya_zamir_lattice_gpu.py` for
+the full research trail that led to this codec).  The core algorithm
+lives in `bridge_b2_d4_tq_style.D4TQStyleCodebook`; `V14KakeyaZamirLatticeGPU`
+is a thin canonical-naming wrapper around it.
 
-    from kakeyaturbo_py import roundtrip_layer
-    decoded, report = roundtrip_layer(
-        arr_f32_2d,
-        metric="inner_product",
-        block_size=512, bit_width=3,
-        variance_ratio=0.95,
-        pca_method="randomized",
-        rsvd_target_rank=64, rsvd_oversample=8, rsvd_power_iters=2,
-        rotation_seed=3405691582,
-        centroids_file="reports/.../ds_K_b3_centroids.f32",
-        outlier_threshold=2.0,
-        share_basis=False,
-    )
-    # decoded has shape (M, D) with M = (N // block_size) * block_size
-    # report is a dict: mean_block_mse, ratio_vs_bf16, ...
-
-The Rust hot path releases the GIL, so multiple layers can be rolled
-through in parallel from a thread pool if the caller wishes.  In the
-in-forward vLLM harness the call is synchronous; the payoff there is
-the elimination of `subprocess.Popen` + tmpfs I/O per layer per
-forward pass.
+Streaming / online semantics: the codec has no cross-token state and
+can be invoked per-decode-step on a single new token, producing the
+same reconstruction quality as a batched call (see
+`reports/v1_4_release/streaming/V14_STREAMING_REPORT.md`).
 """
-from ._core import (
-    __version__,
-    roundtrip_layer,
-    # Primitive helpers for M4+ — byte-identical to the Rust reference
-    # implementation, no re-derivation needed on the Python side.
-    wht_sign_pattern,
-    wht_rows,
-    rotate_rows,
-    inverse_rotate_rows,
-    pack_bits,
-    unpack_bits,
-    centroids_gaussian,
-    # Block-level structured encode / decode — exposes Rust's Skeleton +
-    # Vec<Code> as numpy arrays.  The bridge that lets the PyTorch
-    # reference and (eventually) Triton kernels consume Rust-fit
-    # skeletons, so stages 2..=5 can be validated bit-exactly without
-    # dragging skeleton-fit numerical noise into the diff.
-    encode_block_codes,
-    decode_block_from_parts,
-)
+from __future__ import annotations
 
-__all__ = [
-    "__version__",
-    "roundtrip_layer",
-    "wht_sign_pattern",
-    "wht_rows",
-    "rotate_rows",
-    "inverse_rotate_rows",
-    "pack_bits",
-    "unpack_bits",
-    "centroids_gaussian",
-    "encode_block_codes",
-    "decode_block_from_parts",
-    # PyTorch reference encoder / decoder — lazy-imported to avoid
-    # pulling torch into `import kakeyaturbo_py` in environments that
-    # only need the primitives.
-    "encode_block_torch_stage2",
-    "decode_block_torch_from_parts",
-    "Skeleton",
-    "CodeBatch",
-    # Triton Phase B kernel — also lazy, requires CUDA torch + triton.
-    "encode_block_triton_stage2",
-    "fused_wht_scale_quantize",
-    "triton_is_available",
-    # M5: Triton DECODE kernel + partial-block passthrough.
-    "decode_block_triton_from_parts",
-    "fused_inverse_wht_rescale",
-    "decode_partial_block_bf16",
-    # v1.4 kakeya zamir lattice GPU — current head-of-line codec.
-    # Strictly supersedes the v1.3 PCA+K-means+WHT+Lloyd-Max codec
-    # family for Qwen3-4B deployment; see SESSION_KAKEYA_RESEARCH.md
-    # for measured head-to-head results vs TurboQuant k8v4.
-    "V14KakeyaZamirLatticeGPU",
-]
+
+__all__ = ["V14KakeyaZamirLatticeGPU"]
 
 
 def __getattr__(name):
-    if name in {
-        "encode_block_torch_stage2",
-        "decode_block_torch_from_parts",
-        "Skeleton",
-        "CodeBatch",
-    }:
-        from . import reference_torch  # noqa: F401
-        return getattr(reference_torch, name)
-    if name in {
-        "encode_block_triton_stage2",
-        "fused_wht_scale_quantize",
-        "triton_is_available",
-        "decode_block_triton_from_parts",
-        "fused_inverse_wht_rescale",
-        "decode_partial_block_bf16",
-    }:
-        from . import triton_kernels  # noqa: F401
-        if name == "triton_is_available":
-            return triton_kernels.is_available
-        return getattr(triton_kernels, name)
     if name == "V14KakeyaZamirLatticeGPU":
-        from . import v1_4_kakeya_zamir_lattice_gpu  # noqa: F401
+        from . import v1_4_kakeya_zamir_lattice_gpu
         return v1_4_kakeya_zamir_lattice_gpu.V14KakeyaZamirLatticeGPU
     raise AttributeError(f"module 'kakeyaturbo_py' has no attribute {name!r}")

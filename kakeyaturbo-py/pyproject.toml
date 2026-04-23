@@ -1,17 +1,16 @@
 [build-system]
-requires = ["maturin>=1.5,<2"]
-build-backend = "maturin"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "kakeyaturbo_py"
-version = "0.1.0"
-description = "In-process Rust codec for KV-cache compression (kakeyaturbo)"
-requires-python = ">=3.8"
-authors = [{name = "FluffyAIcode"}]
-license = {text = "Apache-2.0"}
-dependencies = ["numpy>=1.20"]
+version = "1.4.0"
+description = "v1.4 KakeyaLattice reference Python codec (Zamir-Feder D4 nested lattice + TurboQuant engineering stack) for LLM KV-cache compression"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+]
 
-[tool.maturin]
-module-name = "kakeyaturbo_py._core"
-python-source = "python"
-features = ["pyo3/extension-module"]
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["kakeyaturbo_py*"]
