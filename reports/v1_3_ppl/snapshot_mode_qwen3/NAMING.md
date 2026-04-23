@@ -77,31 +77,7 @@ Same budget as snapA (`bK64`, `bdry14`, `bit_width_k=4`,
 from RSVD (HMT 2011 Alg 4.4) to **exact PCA** via
 `torch.linalg.svd` on the centred K matrix.
 
-Motivation: snapA's K-reconstruction MSE is 0.503 — 100× worse
-than TurboQuant k8v4 at matching compression ratio.  The K-MSE
-origin is **not** the Lloyd-Max residual layer, the WHT stage,
-or Σ_q; it is the PCA skeleton.  RSVD with Gaussian Ω has a
-well-known failure mode on flat-spectrum inputs: when
-σ_{r+1} / σ_1 is close to 1, the Gaussian sketch loses angular
-discrimination and the recovered top-`r` basis drifts far from
-the true PCA subspace.  Qwen3-4B's post-qk-norm K has exactly
-that property: on a representative layer, top-96 PCA captures
-only 97 % of the variance and σ_{97..128} are ≈3 % of σ_1.
-Measured at this recipe:
-
-| PCA stage                | K-MSE   | Ratio vs TQ k8v4 (0.0048) |
-|:-------------------------|:--------|:--------------------------|
-| RSVD (snapA)             | 0.5030  | 104× worse                |
-| exact SVD (snapC ceiling)| 0.0115  | 2.4× worse                |
-
-Exact PCA removes the RSVD approximation error entirely and
-closes ~44× of the K-MSE gap, at the cost of replacing the
-O(n·d·r) sketch with an O(n·d·min(n,d)) thin-SVD.  At Qwen3-4B's
-block_size=512 and head_dim=128 this is still comfortably under
-a millisecond per block on H200 — exact SVD is the efficient
-choice whenever n ≲ 1024.
-
-**Relationship between exact SVD and exact PCA:** exact PCA on a
+**Relationship between exact SVD and exact PCA.**  Exact PCA on a
 centred design matrix A ∈ ℝ^{n×d} is defined as the eigendecomp
 of Σ = AᵀA/n.  Thin-SVD of A gives A = UΣV^⊤; the columns of V
 are the eigenvectors of AᵀA, and the PCA eigenvalues are σ_i²/n.
@@ -112,7 +88,27 @@ the same operation** — no approximation either way, just two
 ways of naming it.  The `pca_kind="exact"` code path uses the
 SVD form because it's numerically more stable than forming AᵀA.
 
-Canonical parameter set:
+**Measured outcome on Qwen3-4B (NOT adopted as an operational
+recipe).**  The earlier prediction that snapC would cut K-MSE
+~44× was wrong; it was based on a synthetic flat-spectrum probe
+that does not represent Qwen3-4B's actual K.  4-passage
+snapshot at the snapA budget (paired):
+
+| Run           | Δppl       | top-1    | K-MSE (mean non-bdry) |
+|:--------------|-----------:|---------:|----------------------:|
+| snapA (RSVD)  | +61.84 %   | 79.30 %  | 0.5030                |
+| snapC (exact) | **+74.20 %** | 79.30 % | **0.5020**           |
+
+PCA stage alone gives near-identical reconstruction error
+between RSVD (0.00572) and exact SVD (0.00564) on real
+Qwen3-4B K — RSVD with `power_iters=2` is already within ~1 %
+of the SVD floor.  See `FINDINGS_GPU.md` section "(h) Exact PCA
+instead of RSVD" for the stage-by-stage K-MSE decomposition that
+locates the dominant error downstream (the spherical K-means
+nearest-centre projection, +0.775 K-MSE on top of the PCA floor).
+
+Canonical parameter set (retained for reproducibility of the
+ablation result; **not** a recommended recipe):
 
 ```
 --bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
@@ -123,13 +119,10 @@ Canonical parameter set:
 --k-pca-kind exact
 ```
 
-Expected outcome of switching snapA → snapC: K-MSE drops from
-0.503 to ~0.012; Δppl and top-1 gated on whether that K-MSE
-reduction propagates to the attention output (pooled Δppl is
-expected to drop meaningfully, but the exact magnitude is
-measured, not predicted).  The measured row is filled in by the
-4-passage run logged in `reports/v1_3_ppl/snapshot_mode_qwen3/
-FINDINGS_GPU.md` under "pcaExact ablation".
+`v1.3-GPU-snapA` remains the Δppl-optimal operational recipe and
+`v1.3-GPU-snapB` the top-1-optimal one.  `snapC` is a recorded
+negative result.  JSON:
+`reports/v1_3_ppl/snapshot_mode_qwen3/pcaExact/qwen3_4b_snap_pcaExact_vllm_snapshot.json`.
 
 ## Historical aliases (DO NOT use in new docs)
 
