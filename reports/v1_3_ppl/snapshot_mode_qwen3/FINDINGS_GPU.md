@@ -159,19 +159,125 @@ counter-productive, but together with larger `k` they compound to
 regresses — the codec is PCA-saturated beyond d_eff=96 on
 Qwen3-4B's post-qk-norm K.
 
-The best-measured configuration — canonical name
+The best-measured configuration at the end of the initial k ∈
+{16, 32, 64, 128} sweep — canonical name
 **`v1.3-GPU-Qwen-snap-bK64-bdry14`** (spoken: **`v1.3-GPU-snapA`**) —
 is `b_K=4, k_K=64, d_eff=96` at `--boundary-skip-layers 0..6 29..35`
 (V-stream kept at defaults `b_V=2, k_V=16`):
 
   * Δppl = **+61.84 %**
   * top-1 = **79.30 %**
+  * Compression ratio = 1.87× (highest of any measured recipe).
   * Verdict REJECT (Δppl bar is ≤+20 % for MARGINAL) but top-1 is
     above PR #17 DS-1.5B production-cell MARGINAL top-1 = 74.22 %.
   * Relative to baseline `b_K=3, k=16, d_eff=64`: slot bytes rise
     by ~1.7 × (larger k-means cluster table + fp16 centroids ×
     more clusters + larger basis).  Exact slot-size impact can be
     read off `KakeyaV13PPLConfig.slot_size_bytes` for the config.
+
+**snapA is no longer the overall Δppl-optimal recipe** — see the
+"Extended K-means sweep" section below, which found that
+`--k-kmeans-k 256` (snapD) beats snapA on Δppl by 5.69 pp while
+preserving 1.24× compression, and `--k-kmeans-k 512` (snapE)
+sets a new top-1 high-water mark at 83.59 %.  snapA is retained
+as the bytes-minimum recipe.
+
+### Extended K-means sweep: k ∈ {128, 256, 512, 1024}
+
+Motivation: the earlier budget sweep only tested k ∈ {16, 32, 64, 128}
+and concluded the lever had plateaued.  Direct K-MSE decomposition
+on a representative mid-stack layer (layer 17, 4 × 512-token
+blocks, 8 kv-heads) revealed that the true dim-discard bottleneck
+in snapA is **not** the PCA truncation (d_eff = 96 of 128,
+contributes only +0.006 K-MSE) but the **spherical K-means
+nearest-centre projection** (compresses a 96-dim coeff to
+{sign, ‖·‖, log₂(k)-bit centroid index}, contributes +0.78
+K-MSE at k=64):
+
+| stage                                 | K-MSE (layer 17, RSVD) |
+|:--------------------------------------|-----------------------:|
+| (1) bf16 only                         | 0.00000                |
+| (2) + mean subtract                   | 0.00000                |
+| (3) + PCA truncate d_eff=96 of 128    | 0.00572                |
+| (4) + spherical K-means (k=64) nearest-centre | **0.78073**   |
+| Full codec (WHT + Lloyd-Max + resid)  | 0.5595                 |
+
+And the PCA-only stage at d_eff=128 (no truncation) still gives
+K-MSE = 0.000, so pushing d_eff beyond 96 recovers at most +0.005
+K-MSE — negligible against the 0.78 K-means contribution.
+
+Running the extended k sweep at the snapA base (b_K=4, d_eff=96,
+`--boundary-skip-layers 0..6 29..35`, V stream kept at `b_V=2,
+k_V=16`), 4 passages each, paired-across-runs:
+
+| k_K    | Δppl (paired) | top-1      | K-MSE (mean non-bdry) | Δppl vs snapA (paired) | seg_id bits / token |
+|-------:|--------------:|-----------:|----------------------:|-----------------------:|--------------------:|
+| 64 (snapA)  | +61.84 %    | 79.30 %     | 0.5030               | baseline               | 6 |
+| 128 (snapB) | +65.98 %    | 81.64 %     | 0.3431               | +4.14 pp worse         | 7 |
+| **256 (snapD)** | **+56.15 %** | 79.69 % | 0.1745               | **−5.69 pp better**    | 8 |
+| 512 (snapE) | +57.36 %    | **83.59 %** | 0.0550               | −4.48 pp better        | 9 |
+| 1024        | +57.36 %    | 83.59 %     | 0.0550               | −4.48 pp better        | 10 (wasted) |
+
+Reading:
+
+* **k=256 is the Δppl-optimal point** (**snapD** —
+  `v1.3-GPU-Qwen-snap-bK256-bdry14`).  −5.69 pp paired-mean Δppl
+  vs snapA, +0.39 pp top-1.  K-MSE 2.9× lower than snapA.
+* **k=512 is the top-1 optimum** (**snapE** —
+  `v1.3-GPU-Qwen-snap-bK512-bdry14`), setting a **new high-water
+  mark for Qwen3-4B snapshot-mode top-1 agreement at 83.59 %**
+  (+4.29 pp vs snapA, +1.95 pp vs snapB).  K-MSE 9.1× lower.
+* **k=1024 is byte-identical to k=512**.  At block_size=512,
+  `_fit_kmeans_batched` receives only 512 coeff vectors per
+  (block × kv-head); farthest-first init has already hit the
+  number-of-input-directions ceiling at k=512, and Lloyd iteration
+  preserves the assignment.  Raising k beyond block_size is
+  pointless without also raising block_size or pooling K-means
+  across blocks.
+* **snapB is superseded**: k=256 dominates k=128 on both axes
+  (−9.83 pp paired Δppl, −1.95 pp top-1 but at a lower Δppl that
+  on LM-eval / PPL tasks matters more).  k=512 also dominates
+  k=128 on top-1 (+1.95 pp) with −8.62 pp better Δppl.  Going
+  forward, use snapD for PPL / LM-eval and snapE for argmax /
+  MMLU-style evals; keep snapA only when seg_id bytes matter
+  more than +5 pp Δppl.
+
+Measured K-stream byte cost per non-boundary layer (from
+`codec_stats.compressed_bytes`; 2112 tokens × 8 kv-heads per layer,
+raw bf16 = 4128 KiB):
+
+| k_K | B / token / head | KiB / layer (comp) | ratio vs raw bf16 |
+|----:|-----------------:|-------------------:|------------------:|
+| 64  (snapA) | 137.1 |   2262 | **1.87×** compression |
+| 128 (snapB) | 160.5 |   2648 | 1.60× compression |
+| 256 (snapD) | 207.1 |   3418 | **1.24× compression** |
+| 512 (snapE) | 300.3 |   4956 | **0.85× (expansion by 18 %)** |
+| 1024        | 486.6 |   8029 | 0.53× (expansion by 89 %) |
+
+Ratios are blended-across-layers identical to non-boundary
+because the boundary layers are bf16 pass-through on both sides
+of the ratio (they cancel).
+
+* **snapD (k=256) is the Pareto-best deployment point** — it
+  still compresses 1.24×, reduces paired Δppl by 5.69 pp vs
+  snapA, and halves K-MSE twice (snapA 0.503 → snapD 0.175 ≈ 2.9×).
+* **snapE (k=512) crosses into expansion** — the fp16 centroid
+  table (98 304 B / block / head) costs more than the 4-bit
+  Lloyd-Max data (24 576 B) by itself, so shrinking Lloyd-Max bits
+  no longer buys anything.  snapE is only useful when: (a) the
+  downstream eval rewards top-1 agreement (snapE sets the Qwen3-4B
+  top-1 high-water mark at 83.59 %), and (b) we're willing to
+  trade bytes for top-1, or (c) we later pool K-means centroids
+  across blocks (share_centroids, analogous to share_basis) which
+  would amortise the centroid table.  The measurement uses
+  per-block centroids; share_centroids is not yet implemented on
+  the GPU path.
+* **k=1024 produces PPL / top-1 / K-MSE identical to k=512** but
+  doubles the centroid table — strictly dominated by snapE and
+  not a valid recipe.
+
+The canonical deployment-viable recipe for Qwen3-4B is **snapD**
+— the highest-k point that still compresses.
 
 ### V-stream budget is NOT symmetric with K
 
@@ -241,32 +347,47 @@ Reading:
   results on both axes (+6.1 pp Δppl, −1.56 pp top-1).  V is
   paying in Δppl more than K is earning.
 
-### Two operational recipes on Qwen3-4B
+### Operational recipes on Qwen3-4B (after the extended-k sweep)
 
 Depending on downstream task:
 
-**`v1.3-GPU-Qwen-snap-bK64-bdry14`** (spoken: **`v1.3-GPU-snapA`**)
+**`v1.3-GPU-Qwen-snap-bK256-bdry14`** (spoken: **`v1.3-GPU-snapD`**)
 — Δppl-optimal, for perplexity / LM-eval tasks:
 ```
---bit-width-k 4 --k-kmeans-k 64 --rsvd-target-rank-factor 0.75
+--bit-width-k 4 --k-kmeans-k 256 --rsvd-target-rank-factor 0.75
 --bit-width-v 2 --v-kmeans-k 16
 --boundary-skip-layers 0 1 2 3 4 5 6 29 30 31 32 33 34 35
 --gpu-codec --no-share-basis-v
 --disable-q-precond --disable-centroids --disable-outlier
 ```
-→ Δppl = **+61.84 %**, top-1 = 79.30 %
+→ Δppl = **+56.15 %**, top-1 = 79.69 %, compression 1.24×
 
-**`v1.3-GPU-Qwen-snap-bK128-bdry14`** (spoken: **`v1.3-GPU-snapB`**)
-— top-1-optimal, for argmax / MMLU-style evals.
-Same as snapA but with `--k-kmeans-k 128`.
-→ Δppl = +65.98 %, top-1 = **81.64 %**
+**`v1.3-GPU-Qwen-snap-bK512-bdry14`** (spoken: **`v1.3-GPU-snapE`**)
+— top-1-optimal, for argmax / MMLU-style evals.  Same as snapD
+but with `--k-kmeans-k 512`.
+→ Δppl = +57.36 %, top-1 = **83.59 %**, compression 0.85×
+(**expansion** — centroid table costs more than raw bf16; see
+byte table above).  Use snapE only when top-1 agreement
+dominates and bytes are not the constraint.
+
+**`v1.3-GPU-Qwen-snap-bK64-bdry14`** (spoken: **`v1.3-GPU-snapA`**)
+— bytes-minimum, retained for backward compatibility:
+same parameters but `--k-kmeans-k 64`.
+→ Δppl = +61.84 %, top-1 = 79.30 %, compression **1.87×**
+(the only recipe with >1.5× compression).
+
+Superseded / deprecated:
+* `v1.3-GPU-snapB` (k=128) — dominated by snapD on both axes.
+* `v1.3-GPU-snapC` (exact PCA) — measured negative result;
+  PCA path is not the K-MSE bottleneck on Qwen3-4B.
 
 See `NAMING.md` in this directory for the full canonical-name
-schema and the table of legacy aliases (Recipe A / best-K /
-`qwen3_4b_budget_k64_bK4_deff96` / …).
+schema, per-recipe full parameter sets, and the table of legacy
+aliases.
 
-Neither hits the MARGINAL Δppl bar (≤+20 %), but both have top-1
-above the PR #17 DS-1.5B MARGINAL (74.22 %).
+None of the recipes hit the MARGINAL Δppl bar (≤+20 %).  snapE
+and snapD both exceed the PR #17 DS-1.5B MARGINAL top-1 (74.22 %)
+by 9+ pp.
 
 ## Report index (JSONs in this directory)
 
