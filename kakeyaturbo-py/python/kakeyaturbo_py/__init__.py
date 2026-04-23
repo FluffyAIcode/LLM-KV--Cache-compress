@@ -87,6 +87,11 @@ __all__ = [
     "decode_block_triton_from_parts",
     "fused_inverse_wht_rescale",
     "decode_partial_block_bf16",
+    # v1.4 kakeya zamir lattice GPU — current head-of-line codec.
+    # Strictly supersedes the v1.3 PCA+K-means+WHT+Lloyd-Max codec
+    # family for Qwen3-4B deployment; see SESSION_KAKEYA_RESEARCH.md
+    # for measured head-to-head results vs TurboQuant k8v4.
+    "V14KakeyaZamirLatticeGPU",
 ]
 
 
@@ -111,4 +116,7 @@ def __getattr__(name):
         if name == "triton_is_available":
             return triton_kernels.is_available
         return getattr(triton_kernels, name)
+    if name == "V14KakeyaZamirLatticeGPU":
+        from . import v1_4_kakeya_zamir_lattice_gpu  # noqa: F401
+        return v1_4_kakeya_zamir_lattice_gpu.V14KakeyaZamirLatticeGPU
     raise AttributeError(f"module 'kakeyaturbo_py' has no attribute {name!r}")

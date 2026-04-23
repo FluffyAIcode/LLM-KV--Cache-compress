@@ -382,14 +382,23 @@ agent can recognise them if the user raises them:
   `FINDINGS_GPU.md` section "Three bridges from Dvir to Euclidean
   quantisation — measured on Qwen3-4B K" for full numbers.
 
-  **BUT: Bridge B2 (D4 lattice + full TQ engineering stack) IS the
-  first measured improvement over TQ.** Follow-up implementation:
-  `kakeyaturbo_py/bridge_b2_d4_tq_style.py` combines D4 (Conway-
-  Sloane 1982 closest-point on 4-dim blocks) with TQ's Hadamard +
-  per-vector qmax + unit-norm + matched bit count.  Measured:
+  **BUT: `v1.4 kakeya zamir lattice GPU` (D4 lattice + full TQ
+  engineering stack) IS the first measured improvement over TQ.**
+
+  **NAMING NOTICE**: the codec formerly prototyped as "Bridge B2"
+  has been formally renamed to **`v1.4 kakeya zamir lattice GPU`**.
+  Use this exact phrase in all future writing.  Class name:
+  `V14KakeyaZamirLatticeGPU` in
+  `kakeyaturbo_py/v1_4_kakeya_zamir_lattice_gpu.py`.
+
+  Follow-up implementation:
+  `kakeyaturbo_py/bridge_b2_d4_tq_style.py` (research-prototype
+  lineage) combines D4 (Conway-Sloane 1982 closest-point on 4-dim
+  blocks) with TQ's Hadamard + per-vector qmax + unit-norm + matched
+  bit count.  Measured:
 
     * TQ k8v4 (reference):  rel-MSE 3.5 × 10⁻⁵ at 1024 bits
-    * **Bridge B2 (Q=152):  rel-MSE 3.2 × 10⁻⁵ at 1088 bits**
+    * **v1.4 kakeya zamir lattice GPU (Q=152):  rel-MSE 3.2 × 10⁻⁵ at 1088 bits**
     * Theory prediction:   rel-MSE 3.2 × 10⁻⁵ (TQ × 0.92)
     * **8% K-MSE reduction, 6% bit overhead, FASTER encode (6.7
        ms/M vs 10 ms/M on H200)**

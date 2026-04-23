@@ -1,4 +1,16 @@
-# Session findings: Kakeya-style quantisation research on Qwen3-4B K
+# Session findings: v1.4 kakeya zamir lattice GPU — head-of-line codec for Qwen3-4B K
+
+> **Formal naming notice** (enforce strictly in all future writing):
+> the codec formerly referred to as "Bridge B2" / "D4 nested lattice
+> + TQ engineering stack" is now **officially named
+> `v1.4 kakeya zamir lattice GPU`** — this phrase is the canonical
+> short name for all writing, commit messages, discussion and
+> reporting.  The class is `V14KakeyaZamirLatticeGPU` in
+> `kakeyaturbo_py/v1_4_kakeya_zamir_lattice_gpu.py`.  Bit-identical
+> wrapper over the research prototype `D4TQStyleCodebook` in
+> `bridge_b2_d4_tq_style.py`; the research lineage name (B2) is
+> reserved for the research prototype module and this session's
+> provenance notes only.  Do NOT introduce additional aliases.
 
 > **Scope**: a single multi-day session's worth of experiments on the
 > question "Can Kakeya-style discrete constructions beat TurboQuant
@@ -6,9 +18,10 @@
 > snapshot-mode harness.  All measurements on H200, 4 passages of
 > WikiText-103 test, 22 non-boundary layers (7..28).
 >
-> **Headline**: YES — `Bridge B2` (D4 lattice + full TurboQuant
-> engineering stack) beats TurboQuant k8v4 on **all three metrics**
-> at matched 1056 bits/token/head:
+> **Headline**: YES — **`v1.4 kakeya zamir lattice GPU`** (D4 root
+> lattice + full TurboQuant engineering stack) beats TurboQuant
+> k8v4 on **all three metrics** at matched 1056 bits/token/head,
+> and across a full compression-rate Pareto sweep:
 > - **K-MSE**: 0.911× (8.9 % better, matches theory prediction of 0.92×)
 > - **top-1 pair agreement**: 99.61 % vs 98.83 % (**+0.78 pp**)
 > - **\|Δppl\| to bf16**: 0.196 % vs 0.512 % (**2.6× closer to baseline**)
@@ -32,7 +45,7 @@
 3. [Cross-validation via TurboQuant's observed K-MSE](#3-cross-validation-via-turboquants-observed-k-mse)
 4. [Three raw bridges from Dvir to Euclidean](#4-three-raw-bridges-from-dvir-to-euclidean)
 5. [Why all three raw bridges failed vs TQ](#5-why-all-three-raw-bridges-failed-vs-tq)
-6. [Bridge B2: D4 lattice + full TurboQuant engineering](#6-bridge-b2-d4-lattice--full-turboquant-engineering)
+6. [v1.4 kakeya zamir lattice GPU — the head-of-line codec](#6-v14-kakeya-zamir-lattice-gpu--the-head-of-line-codec)
 7. [What this session proves](#7-what-this-session-proves)
 8. [What this session does NOT mean](#8-what-this-session-does-not-mean)
 9. [Path forward](#9-path-forward)
@@ -196,11 +209,19 @@ TQ's engineering stack.
 **Implication**: if we ADD TQ's engineering stack to the D4 lattice,
 we should recover D4's theoretical +0.37 dB shaping gain, i.e.
 K-MSE = TQ × 0.92 ≈ 3.2 × 10⁻⁵.  This is the prediction that
-Bridge B2 tested.
+v1.4 kakeya zamir lattice GPU (research-prototype name "Bridge B2")
+tested.
 
 ---
 
-## 6. Bridge B2: D4 lattice + full TurboQuant engineering
+## 6. v1.4 kakeya zamir lattice GPU — the head-of-line codec
+
+> This section introduces the canonical codec `v1.4 kakeya zamir
+> lattice GPU`.  Its research provenance name is "Bridge B2"
+> (D4 lattice + full TurboQuant engineering stack); that research-
+> lineage name is retained in the source file
+> `bridge_b2_d4_tq_style.py` for git-blame hygiene, but all new
+> references must use the v1.4 name.
 
 ### Task definition
 
@@ -249,16 +270,16 @@ is 1056 exact.)
 | Recipe                      | bits   | rel-MSE              | cos mean | vs TQ     | encode    |
 |:----------------------------|-------:|---------------------:|---------:|:----------|:----------|
 | TurboQuant k8v4 (reference) | 1024   | **3.5 × 10⁻⁵**       | 1.0000   | baseline  | 10 ms/M   |
-| **Bridge B2 (Q=152)**       | **1088**|**3.2 × 10⁻⁵**       | **1.0000**|**8 % better**|**6.7 ms/M**|
-| Bridge B2 (Q=64)            | 928    | 1.82 × 10⁻⁴          | 0.9999   | 5.2× worse| 6.9 ms/M  |
-| Bridge B2 (Q=16)            | 672    | 2.91 × 10⁻³          | 0.9985   | —         | 89 ms/M   |
+| **v1.4 kakeya zamir lattice GPU (Q=152)** | **1088** | **3.2 × 10⁻⁵** | **1.0000** | **8 % better** | **6.7 ms/M** |
+| v1.4 kakeya zamir lattice GPU (Q=64)      |  928     | 1.82 × 10⁻⁴    | 0.9999     | 5.2× worse     | 6.9 ms/M    |
+| v1.4 kakeya zamir lattice GPU (Q=16)      |  672     | 2.91 × 10⁻³    | 0.9985     | —              | 89 ms/M     |
 | Bridge B (Q=16, naive)      | 736    | 4.95 × 10⁻²          | 0.9752   | 1414× worse|5.6 ms/M  |
 
 ### Theory-to-experiment match
 
 | Quantity                          | Predicted            | Measured            | Match  |
 |:----------------------------------|:--------------------:|:-------------------:|:------:|
-| rel-MSE (Bridge B2, Q=152)        | TQ × 0.92 ≈ 3.2×10⁻⁵ | **3.2 × 10⁻⁵**      | ~1 %   |
+| rel-MSE (v1.4 kakeya zamir lattice GPU, Q=152) | TQ × 0.92 ≈ 3.2×10⁻⁵ | **3.2 × 10⁻⁵**      | ~1 %   |
 | Improvement over TQ               | 8 %                  | **8.57 %**          | ~1 %   |
 | Bit cost (exact)                  | 1056                 | 1056 (1088 reported rounded) | ~3 % |
 | cos(K, K̂)                        | → 1.0                | 1.0000              | ✓      |
@@ -268,7 +289,7 @@ is 1056 exact.)
 
 ### Encode speed breakdown
 
-Bridge B2 Q=152 encode is **1.5× FASTER than TQ** (6.7 vs 10 ms/M
+v1.4 kakeya zamir lattice GPU Q=152 encode is **1.5× FASTER than TQ** (6.7 vs 10 ms/M
 vec on H200).  Why:
 - D4 closest-point is one branch (parity flip) + round + clamp,
   all GPU-native element-wise ops.
@@ -280,10 +301,10 @@ vec on H200).  Why:
 
 ---
 
-## 6bis. vLLM end-to-end PPL verification (Bridge B2 vs TQ on live forward)
+## 6bis. vLLM end-to-end PPL verification (v1.4 vs TQ on live forward)
 
-The offline 100k-sample head-to-head at rel-MSE level said Bridge B2
-beats TQ by 8 % K-MSE.  To confirm this survives in real-model
+The offline 100k-sample head-to-head at rel-MSE level said
+v1.4 kakeya zamir lattice GPU beats TQ by 8 % K-MSE.  To confirm this survives in real-model
 attention (and to measure the PPL implications end-to-end), we ran
 an **apples-to-apples PPL comparison through the vLLM snapshot
 harness** — identical capture + replace protocol to snapA/snapF,
@@ -299,10 +320,11 @@ eval)** on the same captured K:
   K codec can achieve.
 - **TQ k8-style**: unit-norm + Hadamard + per-vector qmax + int8
   per-coord.  Exactly the TurboQuant k8v4 algorithm.
-- **Bridge B2 (Q=152)**: same wrapper, but replaces int8 per-coord
-  with D4 closest-lattice-point on 4-dim blocks.
+- **v1.4 kakeya zamir lattice GPU (Q=152)**: same wrapper, but
+  replaces int8 per-coord with D4 closest-lattice-point on 4-dim
+  blocks.
 
-Both TQ and Bridge B2 use 1056 bits/token/head (32 lattice bits × 32
+Both TQ and v1.4 kakeya zamir lattice GPU use 1056 bits/token/head (32 lattice bits × 32
 blocks + 2 fp16 scalars for TQ; same budget with 8-bit × 128 coords
 + 2 fp16 for TQ).  Bit-exact match.
 
@@ -312,11 +334,11 @@ blocks + 2 fp16 scalars for TQ; same budget with 8-bit × 128 coords
 |:--------------------|-------------:|------------:|------------:|:-------:|
 | **bf16 baseline**   |   +0.000 %   |   100.00 %  |  0          | 1.0000  |
 | **TurboQuant k8**   | **−0.512 %** |    98.83 %  | **3.71 × 10⁻⁵** | 1.0000 |
-| **Bridge B2**       | **−0.196 %** |  **99.61 %**| **3.38 × 10⁻⁵** | 1.0000 |
+| **v1.4 kakeya zamir lattice GPU** | **−0.196 %** | **99.61 %** | **3.38 × 10⁻⁵** | 1.0000 |
 
-### Bridge B2 vs TQ head-to-head on live vLLM
+### v1.4 vs TQ head-to-head on live vLLM
 
-| Metric                        | Bridge B2 / TQ     | Winner |
+| Metric                        | v1.4 / TQ          | Winner |
 |:------------------------------|:-------------------|:-------|
 | K-MSE relative                | **0.911×** (B2 better by 8.9 %) | **B2** |
 | Absolute \|Δppl\| (closer to 0) | B2: 0.196 %, TQ: 0.512 %     | **B2 (2.6× closer to bf16)** |
@@ -324,11 +346,11 @@ blocks + 2 fp16 scalars for TQ; same budget with 8-bit × 128 coords
 
 ### Three-way interpretation
 
-1. **Bridge B2 wins on ALL THREE metrics simultaneously** — K-MSE,
+1. **v1.4 kakeya zamir lattice GPU wins on ALL THREE metrics simultaneously** — K-MSE,
    |Δppl|, top-1 pair.  Not just a K-MSE-level structural
    improvement; the downstream PPL and top-1 also benefit.
 
-2. **Both TQ and Bridge B2 show negative Δppl** (−0.512 % and
+2. **Both TQ and v1.4 kakeya zamir lattice GPU show negative Δppl** (−0.512 % and
    −0.196 %), meaning both quantised paths yield ppl *slightly
    below* the bf16 baseline.  This "de-biasing" is a known property
    of structured quantisation + Hadamard rotation on LLM attention
@@ -344,7 +366,7 @@ blocks + 2 fp16 scalars for TQ; same budget with 8-bit × 128 coords
 
 4. **top-1 pair agreement gain validates the mechanism**.  Per
    HANDOFF §5.8, attention cares about the rank-ordering of ⟨q, k⟩
-   more than the absolute magnitude.  Bridge B2's better top-1
+   more than the absolute magnitude.  v1.4's better top-1
    agreement (+0.78 pp over TQ) confirms D4 lattice preserves this
    rank-ordering slightly better than Z^4 uniform on LLM K.
 
@@ -369,7 +391,7 @@ Artefacts:
 ## 6ter. Compression-rate Pareto sweep (strict-GPU, real vLLM)
 
 The 1056-bit point in §6bis is one operating point.  The compression
-question is: **across a full bit-budget range, does Bridge B2 beat
+question is: **across a full bit-budget range, does v1.4 kakeya zamir lattice GPU beat
 TurboQuant at every compression ratio?**
 
 **Harness**: `benchmarks/bridges_b2_vs_tq_compression_sweep_gpu.py`.
@@ -514,7 +536,7 @@ Artefacts:
    improvement is ~3-5 %, not 8 %.
 
 3. **D4 parity-flip branch divergence is a real cost.**  At low
-   Q the encode slows to 89 ms/M (vs TQ's 10 ms/M).  Bridge B2's
+   Q the encode slows to 89 ms/M (vs TQ's 10 ms/M).  v1.4's
    practical regime is Q ≥ 64.
 
 4. **Leech lattice (Λ₂₄) would give +1.53 dB** (vs D4's +0.37 dB)
@@ -532,7 +554,7 @@ Artefacts:
 
 ## 9. Path forward
 
-### (a) Productionise Bridge B2 as a TurboQuant upstream PR
+### (a) Productionise v1.4 kakeya zamir lattice GPU as a TurboQuant upstream PR
 
 **Estimated effort**: 1-2 weeks.
 - Triton kernel for Conway-Sloane D4 closest-point (10 lines of
@@ -550,7 +572,7 @@ replacement.
 ### (b) Snapshot-mode port: still the project's highest-value short-term route
 
 snapF → slot-path port + absorbed-scale decode.  Independent of the
-Bridge B2 line; stacks with it if both land.
+v1.4 kakeya zamir lattice GPU line; stacks with it if both land.
 
 ### (c) Leech lattice upgrade — research only
 
@@ -566,7 +588,7 @@ workload where every 0.01 pp Δppl matters.
 ### (d) Project-wide framing
 
 The Kakeya-research line is **closed** as a deployment search.  The
-one positive result (Bridge B2) is an incremental improvement to
+one positive result (v1.4 kakeya zamir lattice GPU) is an incremental improvement to
 TurboQuant, not a differentiated Kakeya-v1.3 product.  The project's
 remaining engineering value is in the **snapshot-mode deployment
 layer** (snapF to slot, boundary-skip tuning, Σ_q refinement) —
@@ -605,7 +627,7 @@ Git commits this session (AgentMemory/v1-3-ppl-vllm-backend-102e):
 - `828e508` — Cross-validation vs TQ K-MSE
 - `fac35fc` — Phase 2 & 3 (both negative)
 - `8009b77` — Three raw bridges
-- `48e2990` — Bridge B2: first TQ win
+- `48e2990` — v1.4 kakeya zamir lattice GPU (research-prototype name "Bridge B2"): first TQ win
 - (this findings doc)
 
 ---
@@ -618,9 +640,9 @@ per-vector qmax adaptive scale, fp16 norm storage, matched bit
 count) at 1056 bits/token/head, PLUS end-to-end PPL verification on
 real vLLM forward.
 
-**Measured — THREE INDEPENDENT METRICS all point to Bridge B2**:
+**Measured — THREE INDEPENDENT METRICS all point to v1.4 kakeya zamir lattice GPU**:
 
-| Metric                       | TurboQuant | Bridge B2       | Δ         |
+| Metric                       | TurboQuant | **v1.4 kakeya zamir lattice GPU** | Δ         |
 |:-----------------------------|-----------:|----------------:|:----------|
 | K-MSE rel (offline 100k)     | 3.5 × 10⁻⁵ | **3.2 × 10⁻⁵**  | **−8.6 %** |
 | K-MSE rel (live vLLM)        | 3.71 × 10⁻⁵| **3.38 × 10⁻⁵** | **−8.9 %** |
@@ -634,6 +656,6 @@ shaping gain; measured 0.913 (offline) and 0.911 (live vLLM).
 
 **Scope**: K-MSE and top-1 improvements are consistent across
 metrics but individually within noise for 4-passage sampling.
-Deployment path: upstream Bridge B2 as a ~8 % improvement to
+Deployment path: upstream v1.4 kakeya zamir lattice GPU as a ~8 % improvement to
 TurboQuant rather than a standalone Kakeya-v1.3 product.  Closes
 the Kakeya-research line as a deployment search.

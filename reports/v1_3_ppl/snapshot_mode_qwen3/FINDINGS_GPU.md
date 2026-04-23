@@ -853,7 +853,27 @@ Artefacts: `reports/v1_3_ppl/snapshot_mode_qwen3/bridges_abc/`:
 - `bridges_abc_head_to_head.json` — full per-config numbers
 - `run.log` — capture + build + encode timings
 
-### Bridge B2: D4 lattice + full TurboQuant engineering stack — FIRST measured win over TQ
+### v1.4 kakeya zamir lattice GPU — canonical name for the new head-of-line codec
+
+The codec described below — historically prototyped as "Bridge B2"
+during the research phase — is **now formally named
+`v1.4 kakeya zamir lattice GPU`**.  This phrase is the canonical
+short name for all reports, commit messages, discussions and
+documentation going forward.  The implementation lives in
+`kakeyaturbo_py/v1_4_kakeya_zamir_lattice_gpu.py` (class
+`V14KakeyaZamirLatticeGPU`), a bit-identical wrapper over the
+research prototype `D4TQStyleCodebook` in
+`bridge_b2_d4_tq_style.py`.  Legacy names ("Bridge B2", "D4 +
+TurboQuant engineering", "D4 nested lattice codec") should only
+appear when referring to research provenance.
+
+**Status**: Strictly supersedes the v1.3 PCA+K-means+WHT+Lloyd-Max
+codec family for Qwen3-4B K codec-kernel decisions.  The v1.3
+deployment layer (snapshot-mode harness, boundary-layer skip) is
+orthogonal and remains valid; v1.4 slots in as the new codec
+kernel inside that deployment layer.
+
+### v1.4 kakeya zamir lattice GPU: D4 lattice + full TurboQuant engineering stack — FIRST measured win over TQ
 
 After measuring the three raw bridges, the decomposition in the
 previous section identified that Bridge B's 1414× gap vs TQ was

@@ -1,11 +1,76 @@
 # Qwen3-4B snapshot-mode codec config naming
 
-This document pins the canonical name for the current best
-measured Qwen3-4B + vLLM codec configuration, plus its sibling
-(top-1-optimal) variant.  All reports, commit messages, and
-follow-up conversation should use these names from now on to
-avoid the naming drift that accumulated during the PR #17 →
-Scenario A → Path D → budget sweep → head-to-head rollout.
+This document pins the canonical name for every measured codec
+configuration on Qwen3-4B.  **All reports, commit messages, and
+follow-up conversation must use these exact names** — the user
+has explicitly rejected ad-hoc naming ("snapA severely
+violates!!!!" was a historical rebuke when a renamed alias
+leaked into a report).
+
+## Active codec families
+
+### **v1.4 kakeya zamir lattice GPU** — CURRENT HEAD-OF-LINE
+
+**First measured codec to strictly dominate TurboQuant k8v4 on
+Qwen3-4B K across all seven bit levels tested.**
+
+Canonical short name: `v1.4 kakeya zamir lattice GPU`.
+Use this phrase verbatim in all new writing.  Do not abbreviate
+to "D4", "Kakeya-D4", "B2", "nested lattice", etc.  Those are
+legacy research aliases.
+
+What it is:
+  Full Zamir-Feder nested-lattice codec (D4 root lattice +
+  Conway-Sloane 1982 closest-lattice-point algorithm) combined
+  with the full TurboQuant engineering stack:
+    1. Per-vector unit normalisation (stores ‖K‖ fp16)
+    2. Sylvester Hadamard rotation (D = head_dim = 128)
+    3. Per-vector qmax adaptive scale (stores qmax fp16)
+    4. D4 closest-lattice-point on 4-dim blocks (32 blocks)
+    5. Per-block clamp to ±q_range (parity-flip edge handling)
+    6. Inverse Hadamard (self-inverse)
+    7. Rescale by stored ‖K‖
+
+Implementation:
+  `kakeyaturbo_py/bridge_b2_d4_tq_style.py::D4TQStyleCodebook`
+  (Strict GPU, zero numpy/CPU in codec hot path.)
+
+Bit budget at q_range = Q:
+  per-block = ceil(4 · log₂(2Q + 1) − 1) bits
+  32 blocks × per-block + 32 fp16 overhead = total
+
+Canonical parameter points measured (Qwen3-4B, 4 × WikiText-103
+passages, strict-GPU harness):
+
+| Q   | bits | CR     | rel-MSE     | \|Δppl\| | top-1    |
+|----:|-----:|-------:|------------:|---------:|---------:|
+|   2 |  320 | 6.40×  | 1.95 × 10⁻¹ | 30.34 %  |  83.6 %  |
+|   5 |  448 | 4.57×  | 3.12 × 10⁻² |  2.83 %  |  94.5 %  |
+|  10 |  576 | 3.56×  | 7.81 × 10⁻³ |  1.86 %  |  97.3 %  |
+|  19 |  704 | 2.91×  | 2.16 × 10⁻³ |  1.33 %  |  97.7 %  |
+|  38 |  832 | 2.46×  | 5.41 × 10⁻⁴ |  0.57 %  |  99.6 %  |
+|  76 |  960 | 2.13×  | 1.35 × 10⁻⁴ |  0.67 %  | 100.0 %  |
+| **152** | **1088** | **1.88×** | **3.38 × 10⁻⁵** | **0.37 %** | **99.6 %** |
+
+The Q=152 point is the head-to-head match against TurboQuant k8v4
+(1056 bits): **B2 beats TQ 0.911× on K-MSE, 0.552× on \|Δppl\|,
++0.78 pp on top-1, while 1.5× faster to encode**.
+
+Short-form canonical names for each point:
+  `v1.4 kakeya zamir lattice GPU Q=152`   (head-to-head with TQ k8v4)
+  `v1.4 kakeya zamir lattice GPU Q=76`    (etc.)
+
+### **v1.3 PPL codec family** — LEGACY / DEPRECATED
+
+PCA + spherical K-means + WHT + Lloyd-Max residual codec, as
+documented below.  Superseded by v1.4 for all new work.  The
+snapA / snapF recipes and their derivatives are kept for
+reference and for the snapshot-mode deployment-layer work
+(boundary-skip, snapshot harness, etc.), but the **codec kernel
+decision is now v1.4** for any Qwen3-4B deployment.
+
+Historical canonical name (kept for linking back to existing
+JSONs and commits):
 
 ## Canonical name
 
