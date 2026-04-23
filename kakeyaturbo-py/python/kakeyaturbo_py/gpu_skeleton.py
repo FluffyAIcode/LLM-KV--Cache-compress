@@ -227,6 +227,94 @@ def _fit_rsvd_batched(
     return mean, basis, sigma_vals, d_eff
 
 
+def _fit_exact_pca_batched(
+    X: torch.Tensor,
+    target_rank: int,
+    variance_ratio: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
+    """Batched EXACT PCA via torch.linalg.svd on the centred design
+    matrix — no randomised sketch.  Same return-signature contract as
+    `_fit_rsvd_batched` so the dispatcher in `fit_skeleton_batched`
+    can switch between them.
+
+    When does this beat RSVD?  RSVD (HMT 2011) has a well-known
+    failure mode on *flat-spectrum* inputs: its Gaussian Ω sketch
+    loses angular discrimination when σ_{r+1} / σ_1 is close to 1,
+    so the recovered top-`r` basis drifts far from the true PCA
+    subspace.  Qwen3-4B's post-qk-norm K has exactly this flat-
+    spectrum property (measured: r=96 captures only 97% energy
+    with tail σ_{97..128} ~3% of σ_1).  On a representative layer
+    the RSVD-based codec gave K-MSE = 0.557 vs this function's
+    exact-PCA ceiling of 0.013 — a 44× degradation that has to be
+    fixed at the PCA stage, not downstream.
+
+    Args:
+        X: [B, n, d] fp32 on device.  Uniform weights (seal-time
+           call), so the centred design matrix is A[b,i,:] =
+           X[b,i,:] - μ[b].
+        target_rank: maximum `d_eff` to return.
+        variance_ratio: cumulative-variance cutoff in (0, 1].  1.0 =
+           always return `d_eff == target_rank`.  Matches the knob
+           of `_fit_rsvd_batched`.
+
+    Returns:
+        mean:       [B, d]          fp32, fp16-round-tripped.
+        basis:      [B, d_eff, d]   fp32, fp16-round-tripped.
+        sigma_vals: [B, d]          fp32, per-block full-spectrum
+                                    eigenvalues (σ² / n) — diagnostic.
+        d_eff: int                  shared across the batch.
+    """
+    assert X.dim() == 3, f"X must be [B, n, d], got {X.shape}"
+    B, n, d = X.shape
+    k_target = min(target_rank, d)
+
+    # Centred design matrix.
+    mean = X.mean(dim=1)                                     # [B, d]
+    A = X - mean.unsqueeze(1)                                # [B, n, d]
+
+    # Thin SVD.  For A ∈ [B, n, d]: U [B, n, min(n,d)],
+    # S [B, min(n,d)], Vh [B, min(n,d), d].  We only need S and Vh.
+    _U, S, Vh = torch.linalg.svd(A, full_matrices=False)
+
+    # Full-rank PCA spectrum: eigenvalues of Σ_w = Aᵀ A / n are
+    # σ_i² / n; pad to `d` so diagnostic callers see a fixed-width
+    # tensor (SVD returns min(n,d)-long S, usually d when n>d).
+    sigma_vals_full = (S * S) / float(n)                      # [B, min(n,d)]
+    if sigma_vals_full.shape[1] < d:
+        pad = torch.zeros(
+            B, d - sigma_vals_full.shape[1],
+            device=X.device, dtype=sigma_vals_full.dtype,
+        )
+        sigma_vals_full = torch.cat([sigma_vals_full, pad], dim=1)
+
+    # Per-block d_eff by variance_ratio (same algorithm as RSVD
+    # path; keeps slot-layout determinism across pca_kind).
+    total_var = sigma_vals_full.clamp(min=0.0).sum(dim=1)     # [B]
+    ratio = max(0.0, min(1.0, float(variance_ratio)))
+    cum = torch.cumsum(sigma_vals_full.clamp(min=0.0), dim=1) # [B, d]
+    d_eff_per_block: list[int] = []
+    for b in range(B):
+        tv = float(total_var[b].item())
+        if tv <= torch.finfo(torch.float32).eps:
+            d_eff_per_block.append(1); continue
+        ratio_row = (cum[b] / tv) >= ratio
+        idx = int(torch.nonzero(ratio_row, as_tuple=False)[0, 0].item()) + 1 \
+            if ratio_row.any() else d
+        d_eff_per_block.append(max(1, min(idx, k_target)))
+    d_eff = max(d_eff_per_block)
+
+    # `Vh[b]` rows are already the right singular vectors of A[b] —
+    # these are the PCA principal directions in descending-σ order.
+    # Take the top `d_eff` rows → basis shape [B, d_eff, d], matching
+    # _fit_rsvd_batched's contract.
+    basis = Vh[:, :d_eff, :].contiguous()                     # [B, d_eff, d]
+
+    mean = _fp16_through(mean)
+    basis = _fp16_through(basis)
+
+    return mean, basis, sigma_vals_full, d_eff
+
+
 def _init_farthest_first_batched(
     dirs: torch.Tensor,
     k: int,
@@ -309,8 +397,9 @@ def fit_skeleton_batched(
     rsvd_oversample: int = 8,
     rsvd_power_iters: int = 2,
     variance_ratio: float = 1.0,
+    pca_kind: str = "rsvd",
 ) -> dict:
-    """Batched stage-1 skeleton fit: mean + RSVD PCA basis + K-means centres.
+    """Batched stage-1 skeleton fit: mean + PCA basis + K-means centres.
 
     Default knobs match PLAN.md + Rust's
     `fit_weighted_pca_randomized_with_storage`:
@@ -318,6 +407,17 @@ def fit_skeleton_batched(
       * oversample  = 8
       * power_iters = 2
       * variance_ratio = 1.0 (we always want exactly d_eff rows)
+      * pca_kind    = "rsvd" (Randomised SVD via HMT 2011 Alg 4.4);
+                     the PLAN.md default.
+
+    ``pca_kind="exact"`` switches the PCA stage to a plain
+    ``torch.linalg.svd`` on the centred design matrix.  This is the
+    named configuration ``v1.3-GPU-Qwen-snap-*-pcaExact`` / spoken
+    ``v1.3-GPU-snapC`` (see `reports/v1_3_ppl/snapshot_mode_qwen3/
+    NAMING.md`).  Use when RSVD's flat-spectrum failure mode
+    dominates (Qwen3-4B post-qk-norm K showed this, with RSVD
+    K-MSE = 0.557 vs exact-PCA ceiling = 0.013).  The rsvd_*
+    parameters are ignored in this branch.
 
     Returns:
         dict that matches Rust's `encode_block_codes` skeleton fields
@@ -329,14 +429,25 @@ def fit_skeleton_batched(
     if d_eff < 1 or d_eff > d:
         raise ValueError(f"d_eff {d_eff} out of range [1, {d}]")
 
-    mean, basis, _sigma, d_eff_out = _fit_rsvd_batched(
-        X,
-        target_rank=d_eff,
-        oversample=rsvd_oversample,
-        power_iters=rsvd_power_iters,
-        variance_ratio=variance_ratio,
-        rotation_seed=seed,
-    )
+    if pca_kind == "rsvd":
+        mean, basis, _sigma, d_eff_out = _fit_rsvd_batched(
+            X,
+            target_rank=d_eff,
+            oversample=rsvd_oversample,
+            power_iters=rsvd_power_iters,
+            variance_ratio=variance_ratio,
+            rotation_seed=seed,
+        )
+    elif pca_kind == "exact":
+        mean, basis, _sigma, d_eff_out = _fit_exact_pca_batched(
+            X,
+            target_rank=d_eff,
+            variance_ratio=variance_ratio,
+        )
+    else:
+        raise ValueError(
+            f"pca_kind must be 'rsvd' or 'exact'; got {pca_kind!r}"
+        )
 
     # Project: coeff = (X − mean) · basisᵀ → [B, n, d_eff_out]
     coeff = (X - mean.unsqueeze(1)) @ basis.transpose(1, 2)

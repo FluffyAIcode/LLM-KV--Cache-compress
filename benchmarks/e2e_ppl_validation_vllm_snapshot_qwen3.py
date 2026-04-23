@@ -203,6 +203,7 @@ def _gpu_codec_per_head(
     variance_ratio: float,
     centroids_file: str | None,
     outlier_threshold: float | None,
+    pca_kind: str = "rsvd",
 ) -> np.ndarray:
     """Run the GPU codec per kv-head on a [n, H, D] fp32 tensor and
     return the decoded [n, H, D] fp32 array.
@@ -272,6 +273,7 @@ def _gpu_codec_per_head(
             K_block, d_eff=d_eff, k=k, seed=3405691582,
             rsvd_oversample=8, rsvd_power_iters=2,
             kmeans_max_iter=8, variance_ratio=variance_ratio,
+            pca_kind=pca_kind,
         )
         sign_np = np.asarray(
             _core.wht_sign_pattern(
@@ -315,9 +317,22 @@ def gpu_roundtrip(
     centroids_file: str | None = None,
     outlier_threshold: float | None = None,
     k_centers: int = 16,
+    pca_kind: str = "rsvd",
 ) -> tuple[np.ndarray, dict]:
     """Signature-compatible stand-in for `rust_roundtrip` operating
-    on the [n, H, D] pre-flatten layout.  Returns (decoded, report)."""
+    on the [n, H, D] pre-flatten layout.  Returns (decoded, report).
+
+    `pca_kind` threads down to `gpu_skeleton.fit_skeleton_batched`:
+      * "rsvd"  → default, HMT 2011 Alg 4.4 (used by
+                  ``v1.3-GPU-Qwen-snap-bK64-bdry14`` /
+                  ``v1.3-GPU-snapA`` and
+                  ``v1.3-GPU-Qwen-snap-bK128-bdry14`` /
+                  ``v1.3-GPU-snapB``).
+      * "exact" → torch.linalg.svd on centred data, used by
+                  ``v1.3-GPU-Qwen-snap-bK64-bdry14-pcaExact`` /
+                  ``v1.3-GPU-snapC``.
+    See reports/v1_3_ppl/snapshot_mode_qwen3/NAMING.md.
+    """
     n, H, D = K_bnd.shape
     dec = _gpu_codec_per_head(
         K_bnd,
@@ -329,6 +344,7 @@ def gpu_roundtrip(
         variance_ratio=variance_ratio,
         centroids_file=centroids_file,
         outlier_threshold=outlier_threshold,
+        pca_kind=pca_kind,
     )
     # Best-effort report: mean per-block MSE + compressed-bytes
     # estimate (matching kakeyaturbo-bench's report keys).
@@ -366,6 +382,7 @@ def codec_layer(
     share_basis_v: bool = True, share_basis_k: bool = False,
     use_gpu_codec: bool = False, disable_share_basis_v: bool = False,
     k_kmeans_k: int = 16, v_kmeans_k: int = 16,
+    k_pca_kind: str = "rsvd",
 ) -> tuple[np.ndarray, dict]:
     """Per-layer codec of a captured K/V tensor.
 
@@ -428,12 +445,20 @@ def codec_layer(
             # pooled-heads layout so we have to un-pool the result.
             dec = dec.reshape(n, n_kv, hd)
         else:
+            # K-stream may request exact PCA (swaps RSVD for
+            # torch.linalg.svd on the centred data matrix); V-stream
+            # always stays on RSVD — the exact-PCA override is a
+            # K-specific knob used to build
+            # v1.3-GPU-Qwen-snap-bK64-bdry14-pcaExact (spoken:
+            # v1.3-GPU-snapC).  See
+            # reports/v1_3_ppl/snapshot_mode_qwen3/NAMING.md.
             dec, rep = gpu_roundtrip(
                 arr_enc.astype(np.float32, copy=False),
                 block_size=block_size, bit_width=bit_width,
                 rsvd_target_rank=rank, metric=metric,
                 centroids_file=centroids, outlier_threshold=outlier_thr,
                 k_centers=kmeans_k,
+                pca_kind=(k_pca_kind if not is_v else "rsvd"),
             )
     else:
         flat = arr_enc.reshape(-1, hd).astype(np.float32, copy=False)
@@ -560,6 +585,21 @@ def main() -> int:
                          "bit_width_v (V residual carries log2(k) bits "
                          "of seg_id information separately).  Ignored when "
                          "V falls back to the CPU Rust share_basis path.")
+    ap.add_argument("--k-pca-kind", type=str, default="rsvd",
+                    choices=["rsvd", "exact"],
+                    help="PCA algorithm for the K stream's stage-1 "
+                         "skeleton fit.  'rsvd' = HMT 2011 Alg 4.4 "
+                         "(PLAN.md default, used by "
+                         "v1.3-GPU-Qwen-snap-bK64-bdry14 aka "
+                         "v1.3-GPU-snapA).  'exact' = torch.linalg.svd "
+                         "on the centred design matrix; used by "
+                         "v1.3-GPU-Qwen-snap-bK64-bdry14-pcaExact aka "
+                         "v1.3-GPU-snapC.  Motivation: on Qwen3-4B's "
+                         "flat K spectrum, RSVD returns a basis that "
+                         "is 44× further from the true top-d_eff "
+                         "subspace than exact SVD (measured K-MSE "
+                         "0.557 vs 0.013).  The V stream ignores this "
+                         "flag and always uses RSVD.")
     ap.add_argument("--q-calib", type=str,
         default="reports/v1_3_ppl/vllm_backend/calibration/"
                 "qwen3_4b_sigma_q.safetensors")
@@ -663,6 +703,7 @@ def main() -> int:
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
                 k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
+                k_pca_kind=args.k_pca_kind,
             )
             v_hat, v_rep = codec_layer(
                 kv["V"], is_v=True, layer_id=lid, q_precond=qp,
@@ -675,6 +716,7 @@ def main() -> int:
                 use_gpu_codec=args.gpu_codec,
                 disable_share_basis_v=args.no_share_basis_v,
                 k_kmeans_k=args.k_kmeans_k, v_kmeans_k=args.v_kmeans_k,
+                k_pca_kind=args.k_pca_kind,
             )
             replacements[lid] = {
                 "K": torch.from_numpy(k_hat).cuda(),
