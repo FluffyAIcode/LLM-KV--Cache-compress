@@ -295,13 +295,15 @@ Interpretation — three independent effects compound:
    −9.47 pp total**), and it is a correctness improvement, not a
    structural one.
 
-2. **RVQ centroid-table shrinkage is real and large.**  All three
-   RVQ splits (16×4, 8×8, 4×16) use **3-4× less centroid storage**
-   than the flat-k=64 table.  Projecting this back onto the slot
-   format would bring the snapA compression ratio from 1.87× to
-   roughly 2.10× (9 KiB saved per block per head, amortised across
-   512 tokens) — though this would require wiring RVQ into the
-   vLLM slot path, not just the snapshot harness.
+2. **RVQ centroid-table shrinkage translates to +13 % compression
+   ratio if ported to the slot path.**  See the "Theoretical slot-port
+   compression ratio" sub-section below for the full field-by-field
+   calculation.  Net: per-token-per-head from **125.3 B → 110.8 B**
+   (−11.6 %), non-boundary ratio **2.04× → 2.31×**, blended
+   (14-layer bf16 skip) **1.45× → 1.53×**.  Half of the centroid
+   saving is spent on a doubled `t` field (RVQ carries two scalars
+   per token instead of one), which was NOT accounted for in the
+   earlier back-of-envelope "2.10×" estimate.
 
 3. **RVQ structural effect on Δppl is small and non-monotone.**
    Comparing RVQ {16×4, 8×8, 4×16} against the same-path k2=1
@@ -323,6 +325,60 @@ Interpretation — three independent effects compound:
    replacing PCA + K-means with Hadamard + per-coord Lloyd-Max,
    not just optimising the K-means step.
 
+#### Theoretical slot-port compression ratio
+
+The RVQ code path currently bypasses the vLLM slot byte layout
+(snapshot-only).  If ported to production, the slot fields would
+change as follows.  Parameters: `block_size=512`, `head_dim D=128`,
+`d_eff=96`, `b_K=4` bits, `k_eff=64` (snapA flat) or `k1=4, k2=16`
+(snapF RVQ).
+
+| slot field                        | formula                                   | snapA (flat k=64) | snapF (RVQ 4×16) | Δ        |
+|:----------------------------------|:------------------------------------------|------------------:|-----------------:|---------:|
+| header                            | constant                                  |            48 B   |            48 B  |       0  |
+| mean                              | `D · fp16`                                |           256 B   |           256 B  |       0  |
+| PCA basis                         | `d_eff · D · fp16`                        |        24 576 B   |        24 576 B  |       0  |
+| **centroid table**                | `k · d_eff · fp16` / `(k1+k2) · d_eff · fp16` |    **12 288 B** |       **3 840 B**| **−8 448 B** |
+| seg_id indices                    | `⌈log₂(k_eff)⌉ · block / 8`               |           384 B   |           384 B  |       0  |
+| **t scalars**                     | `block · fp16 · levels`                   |         1 024 B   |       **2 048 B**| **+1 024 B** |
+| norm scalar                       | `block · fp16`                            |         1 024 B   |         1 024 B  |       0  |
+| residual (Lloyd-Max)              | `b_K · d_eff · block / 8`                 |        24 576 B   |        24 576 B  |       0  |
+| outlier budget (disabled)         | 0                                         |             0 B   |             0 B  |       0  |
+| **Total / (block, head)**         |                                           |      **64 176 B** |     **56 752 B** |**−7 424 B**|
+| Per token / head                  | ÷ 512                                     |         125.3 B   |         110.8 B  |  −14.5 B |
+
+The centroid saving (8 448 B) is **partially offset** by a doubled
+`t` field (1 024 B extra).  RVQ's decode identity
+`coeff ≈ t₁·c₁[seg₁] + t₂·c₂[seg₂] + residual` carries **two**
+scalar projections per token instead of one.  Net slot saving:
+**7 424 B / block / head**, equivalent to **14.5 B / token / head**.
+
+Raw bf16 reference: `2·D = 256 B / token / head`.
+
+| compression metric                            | snapA    | snapF (hypothetical slot-port) | relative improvement |
+|:----------------------------------------------|---------:|-------------------------------:|---------------------:|
+| Non-boundary per-token ratio                  | **2.04×**|                       **2.31×**|          **+13.2 %** |
+| Blended (14-layer bf16 skip, 22 compressed)   | **1.45×**|                       **1.53×**|           **+5.5 %** |
+| Memory saved per 2 048-token prefill, non-bdry| —        |          **5.2 MiB / sequence**|                    — |
+| Memory saved at 128 K context, non-bdry       | —        |         **~328 MiB / sequence**|                    — |
+
+Caveats on this calculation:
+
+1. **No `t` compression** was assumed — both `t₁` and `t₂` stored
+   as fp16.  If `t₂` (which has smaller dynamic range because
+   level-1 already absorbed the dominant energy) can be int8-
+   or int4-quantised with a per-block scale, the slot saving
+   rises to 7 936 B / block / head (+1 % on the 2.31× figure).
+   Not explored empirically.
+
+2. **`seg_id` packing unchanged.**  snapA's 6 bits / token (k=64)
+   and snapF's 6 bits / token (k1=4 → 2 bits plus k2=16 → 4 bits)
+   happen to match exactly, so no seg_id field resizing is needed.
+
+3. The earlier back-of-envelope "2.10×" estimate ignored the
+   `t`-doubling cost; the correct value is **2.31×** on the
+   non-boundary stream (or 1.53× blended).
+
 **Operational recipe emerging from this round**:
 
 **`v1.3-GPU-Qwen-snap-rvq-4x16`** (alias **`v1.3-GPU-snapF`**) —
@@ -330,7 +386,9 @@ RVQ-4×16 with snapshot-only decode path.  Δppl = **+52.37 %**
 (the lowest Δppl we have measured on Qwen3-4B snapshot to date,
 −9.47 pp vs snapA), top-1 = **83.98 %** (**new high-water mark,
 +4.68 pp vs snapA**), centroid storage 3 840 B / (block, head)
-vs snapA's 12 288 B (**3.2× reduction**).
+vs snapA's 12 288 B (**3.2× reduction** on the centroid table
+itself; **+13.2 % on the full non-boundary compression ratio**,
+2.04× → 2.31×, once slot-ported — see calculation above).
 
 **Deployment caveat**: snapF's K-MSE and Δppl advantages are
 primarily from the snapshot-only decode path's absorbed-scale

@@ -71,8 +71,20 @@ roundtrip_residual_vq` (not in the vLLM slot path).
 * K reconstruction MSE = **0.053** (10× lower than snapA's 0.503,
   but still 10× higher than TurboQuant k8v4's 0.0048)
 * Centroid storage per (block, head): **3 840 B** vs snapA's
-  12 288 B — **3.2× reduction**.  If ported to the vLLM slot path
-  this would raise the compression ratio from 1.87× to ~2.10×.
+  12 288 B — **3.2× reduction** on the centroid table itself.
+  If ported to the vLLM slot path, the full field-by-field
+  calculation (see `FINDINGS_GPU.md`, "Theoretical slot-port
+  compression ratio") gives:
+  * Non-boundary compression: **2.04× → 2.31×** (**+13.2 %**)
+  * Blended with 14-layer bf16 boundary: 1.45× → 1.53× (+5.5 %)
+  * Net per-token-per-head: 125.3 B → 110.8 B (−14.5 B)
+  * At 128 K context: **~328 MiB saved / sequence** on the
+    non-boundary layers.
+
+  Half of the centroid saving is spent on a doubled `t` field
+  (RVQ stores `t₁` and `t₂` per token instead of snapA's single
+  `t`), which the earlier back-of-envelope "2.10×" estimate did
+  not account for; the correct projection is **2.31×**.
 
 Honest attribution: **−8.43 pp of the −9.47 pp Δppl advantage**
 vs snapA comes from the snapshot-only decode path using "absorbed"
