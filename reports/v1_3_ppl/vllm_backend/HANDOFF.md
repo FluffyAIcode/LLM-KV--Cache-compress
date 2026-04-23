@@ -13,15 +13,21 @@
 >    the project is.  The **ban list** at the top ("no simplification
 >    / no fallback / no mock / no overfit") is **in force** — do not
 >    violate it without explicit user approval.
-> 3. `reports/v1_3_ppl/snapshot_mode_qwen3/FINDINGS_GPU.md` — the full
+> 3. `reports/v1_3_ppl/snapshot_mode_qwen3/SESSION_KAKEYA_RESEARCH.md`
+>    — **single-page session summary** of the Kakeya-research line:
+>    Phase 1 non-Gaussianity measurement → three raw bridges from
+>    Dvir → Bridge B2 (first measured win over TurboQuant: 8 % K-MSE
+>    improvement at matched bits, encode 1.5× faster).  Read this
+>    FIRST for the headline Kakeya-vs-TQ story.
+> 4. `reports/v1_3_ppl/snapshot_mode_qwen3/FINDINGS_GPU.md` — the full
 >    experimental record on the snapshot-mode harness (this is where
 >    all recent algorithmic decisions live).
-> 4. `reports/v1_3_ppl/snapshot_mode_qwen3/NAMING.md` — canonical
+> 5. `reports/v1_3_ppl/snapshot_mode_qwen3/NAMING.md` — canonical
 >    naming for codec configurations.  **Use these names exclusively**
 >    in reports, commits, and conversation; the user rejects ad-hoc
 >    names ("snapA severely violates!!!!" was an actual user rebuke
 >    earlier in this branch's history — don't repeat it).
-> 5. `reports/v1_3_ppl/snapshot_mode_qwen3/HEADTOHEAD_vs_TQ.md` — how
+> 6. `reports/v1_3_ppl/snapshot_mode_qwen3/HEADTOHEAD_vs_TQ.md` — how
 >    Kakeya-v1.3 compares against TurboQuant k8v4 on the same model.
 
 ## 1. TL;DR — current state
