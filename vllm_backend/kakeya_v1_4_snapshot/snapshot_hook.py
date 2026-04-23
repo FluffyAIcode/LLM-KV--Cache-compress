@@ -48,23 +48,29 @@ class HookState:
     phase: str = "off"
     captured: dict[int, dict[str, np.ndarray]] = {}
     replacements: dict[int, dict[str, torch.Tensor]] = {}
-    # When True, captured K/V are kept on GPU as torch.Tensor fp32
-    # instead of numpy round-tripped to CPU.  Used by the compression
-    # sweep harness to keep the ENTIRE capture→recode→replace path
-    # on GPU (no CPU detour).  Default False for backward compatibility
-    # with snapA/snapF harnesses that read numpy.
     capture_gpu: bool = False
-    # Populated by the hook itself so the harness can consult them
-    # post-capture without introspecting the model.
     head_size: int = 0
     num_kv_heads: int = 0
     num_heads: int = 0
-    # Per-layer diagnostics — reset by the harness at the start of
-    # each passage.  Help localise silent "fall-through-with-live-K/V"
-    # failures in the replace phase.
     replace_fired: dict[int, int] = {}
     replace_shape_mismatch: dict[int, list[tuple[int, int]]] = {}
     replace_missing: dict[int, int] = {}
+
+    # ---- in-forward phase ----
+    # `phase == "inforward"`: each layer's K and V are encode→decode'd
+    # through `codec_fn` INSIDE the same forward pass, BEFORE RoPE.  The
+    # reconstructed K/V then propagate through RoPE + attention + the
+    # next layer's Q projection — so codec error accumulates across
+    # layers, the honest "online" deployment semantics.
+    #
+    # The codec function must accept fp32 K/V of shape [N_tok, num_kv_heads,
+    # head_dim] and return fp32 reconstructions of the same shape.  Boundary
+    # layers (first/last few) can optionally be skipped by listing their
+    # integer layer_ids in `inforward_skip_layers`.  Per-layer fire counts
+    # are recorded in `inforward_fired` — the harness checks this > 0.
+    codec_fn: "callable | None" = None
+    inforward_skip_layers: set[int] = set()
+    inforward_fired: dict[int, int] = {}
 
 
 _PATCHED = False
@@ -132,47 +138,11 @@ def install_qwen3_snapshot_patch() -> None:
         HookState.num_kv_heads = self.attn.num_kv_heads
         HookState.num_heads = self.attn.num_heads
 
-        nkv = self.attn.num_kv_heads
-        hd = self.attn.head_size
-
-        if HookState.phase == "capture":
-            k_det = k.detach().to(torch.float32).reshape(-1, nkv, hd)
-            v_det = v.detach().to(torch.float32).reshape(-1, nkv, hd)
-            if HookState.capture_gpu:
-                # Strict-GPU path: keep the fp32 tensor on device.  The
-                # harness reads it directly without CPU round-trip; the
-                # entire capture → recode → replace loop stays on GPU.
-                HookState.captured[layer_id] = {
-                    "K": k_det.clone(),
-                    "V": v_det.clone(),
-                }
-            else:
-                # Legacy numpy path (snapA/snapF harness compatibility).
-                HookState.captured[layer_id] = {
-                    "K": k_det.cpu().numpy(),
-                    "V": v_det.cpu().numpy(),
-                }
-            # Unmodified k / v continue to RoPE + attention.
-        elif HookState.phase == "replace":
-            repl = HookState.replacements.get(layer_id)
-            if repl is not None:
-                k_new = repl["K"]
-                v_new = repl["V"]
-                n_tokens = k.shape[0]
-                if k_new.shape[0] == n_tokens:
-                    k = k_new.reshape(n_tokens, -1).to(k.dtype)
-                    v = v_new.reshape(n_tokens, -1).to(v.dtype)
-                    HookState.replace_fired.setdefault(
-                        layer_id, 0,
-                    )
-                    HookState.replace_fired[layer_id] += 1
-                else:
-                    HookState.replace_shape_mismatch.setdefault(
-                        layer_id, []
-                    ).append((k_new.shape[0], n_tokens))
-            else:
-                HookState.replace_missing.setdefault(layer_id, 0)
-                HookState.replace_missing[layer_id] += 1
+        k, v = _snapshot_capture_replace(
+            layer_id, k, v,
+            nkv=self.attn.num_kv_heads,
+            hd=self.attn.head_size,
+        )
 
         q, k = self.rotary_emb(positions, q, k)
         attn_output = self.attn(q, k, v)
@@ -244,6 +214,31 @@ def _snapshot_capture_replace(
         else:
             HookState.replace_missing.setdefault(layer_id, 0)
             HookState.replace_missing[layer_id] += 1
+    elif HookState.phase == "inforward":
+        # Honest online semantics: encode→decode K AND V here, before
+        # RoPE + attention; the reconstructions then propagate to the
+        # next layer.  Boundary layers (first/last N) optionally skip
+        # the codec and pass K/V through unchanged.
+        if layer_id in HookState.inforward_skip_layers:
+            return k, v
+        if HookState.codec_fn is None:
+            raise RuntimeError(
+                "HookState.phase=='inforward' requires HookState.codec_fn "
+                "to be set by the harness before vLLM prefill starts. "
+                "No fallback — refusing to silently pass K/V through."
+            )
+        N = k.shape[0]
+        # Reshape to [N_tok, nkv, hd] for the codec, detach-cast to fp32.
+        k_fp32 = k.detach().to(torch.float32).reshape(N, nkv, hd)
+        v_fp32 = v.detach().to(torch.float32).reshape(N, nkv, hd)
+        k_hat = HookState.codec_fn(k_fp32)
+        v_hat = HookState.codec_fn(v_fp32)
+        # Cast back to the layer's native dtype (bf16) and flatten to the
+        # shape the downstream ops expect.
+        k = k_hat.reshape(N, -1).to(k.dtype)
+        v = v_hat.reshape(N, -1).to(v.dtype)
+        HookState.inforward_fired.setdefault(layer_id, 0)
+        HookState.inforward_fired[layer_id] += 1
     return k, v
 
 
