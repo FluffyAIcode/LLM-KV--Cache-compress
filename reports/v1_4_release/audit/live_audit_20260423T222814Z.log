@@ -1,0 +1,122 @@
+=== AUDIT RUN 2026-04-23T22:28:14Z ===
+=== host: a4f707ab4189 ===
+=== nvidia-smi pre-run ===
+name, driver_version, utilization.gpu [%], memory.used [MiB]
+NVIDIA H200, 580.95.05, 0 %, 0 MiB
+
+=== LAUNCHING vLLM + snapshot harness 2026-04-23T22:28:14Z ===
+[config] v1.4 Q sweep: [38]
+[config] TQ b sweep:   [6]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-23 22:28:22 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-23 22:28:22 [nixl_utils.py:34] NIXL is not available
+WARNING 04-23 22:28:22 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-23 22:28:22 [utils.py:233] non-default args: {'trust_remote_code': True, 'max_model_len': 1041, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.6, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'zai-org/GLM-4-9B-Chat'}
+WARNING 04-23 22:28:22 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 04-23 22:28:23 [model.py:554] Resolved architecture: ChatGLMModel
+INFO 04-23 22:28:23 [model.py:1685] Using max model len 1041
+INFO 04-23 22:28:23 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-23 22:28:23 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-23 22:28:23 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-23 22:28:23 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-23 22:28:23 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-23 22:28:23 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-23 22:28:23 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+WARNING 04-23 22:28:24 [registry.py:245] Using a slow tokenizer. This might cause a significant slowdown. Consider using a fast tokenizer instead.
+INFO 04-23 22:28:25 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='zai-org/GLM-4-9B-Chat', speculative_config=None, tokenizer='zai-org/GLM-4-9B-Chat', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=1041, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=zai-org/GLM-4-9B-Chat, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-23 22:28:25 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:34399 backend=nccl
+INFO 04-23 22:28:25 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-23 22:28:26 [gpu_model_runner.py:4752] Starting to load model zai-org/GLM-4-9B-Chat...
+INFO 04-23 22:28:26 [cuda.py:368] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+INFO 04-23 22:28:26 [flash_attn.py:637] Using FlashAttention version 3
+INFO 04-23 22:28:27 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 17.51 GiB. Available RAM: 1636.11 GiB.
+INFO 04-23 22:28:27 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/10 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards:  10% Completed | 1/10 [00:00<00:03,  2.49it/s]
+Loading safetensors checkpoint shards:  20% Completed | 2/10 [00:00<00:03,  2.30it/s]
+Loading safetensors checkpoint shards:  30% Completed | 3/10 [00:01<00:03,  2.19it/s]
+Loading safetensors checkpoint shards:  40% Completed | 4/10 [00:01<00:02,  2.22it/s]
+Loading safetensors checkpoint shards:  50% Completed | 5/10 [00:02<00:02,  2.20it/s]
+Loading safetensors checkpoint shards:  60% Completed | 6/10 [00:02<00:01,  2.14it/s]
+Loading safetensors checkpoint shards:  70% Completed | 7/10 [00:03<00:01,  2.13it/s]
+Loading safetensors checkpoint shards:  80% Completed | 8/10 [00:03<00:00,  2.26it/s]
+Loading safetensors checkpoint shards:  90% Completed | 9/10 [00:03<00:00,  2.37it/s]
+Loading safetensors checkpoint shards: 100% Completed | 10/10 [00:04<00:00,  2.47it/s]
+Loading safetensors checkpoint shards: 100% Completed | 10/10 [00:04<00:00,  2.30it/s]
+
+INFO 04-23 22:28:32 [default_loader.py:384] Loading weights took 4.40 seconds
+INFO 04-23 22:28:32 [gpu_model_runner.py:4854] Model loading took 17.56 GiB memory and 5.711085 seconds
+INFO 04-23 22:28:34 [gpu_worker.py:440] Available KV cache memory: 63.82 GiB
+INFO 04-23 22:28:34 [kv_cache_utils.py:1337] GPU KV cache size: 1,673,040 tokens
+INFO 04-23 22:28:34 [kv_cache_utils.py:1342] Maximum concurrency for 1,041 tokens per request: 1584.32x
+2026-04-23 22:28:34,397 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-23 22:28:34,411 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-23 22:28:34 [core.py:307] init engine (profile, create kv cache, warmup model) took 2.17 s
+[model] zai-org/GLM-4-9B-Chat
+[model] L=40 hd=128 kv_h=2
+
+=== passage 1/2 ===
+  [capture] layers=40 tokens=1040 ref_ppl=7.685 in 0.05s
+  [bf16_pass   ] K2048b V2048b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=40
+  [v14_Q38_K+V ] K832b V832b  Δppl= -1.159%  top1= 93.75%  K-MSE=5.47e-04  V-MSE=6.08e-04  CR=2.15×  fires=40
+  [tq_b6_K+V   ] K800b V800b  Δppl= +0.028%  top1=100.00%  K-MSE=6.31e-04  V-MSE=7.01e-04  CR=2.21×  fires=40
+
+=== passage 2/2 ===
+  [capture] layers=40 tokens=1040 ref_ppl=22.109 in 0.04s
+  [bf16_pass   ] K2048b V2048b  Δppl= +0.000%  top1=100.00%  K-MSE=0.00e+00  V-MSE=0.00e+00  CR=1.00×  fires=40
+  [v14_Q38_K+V ] K832b V832b  Δppl= +0.050%  top1= 93.75%  K-MSE=5.45e-04  V-MSE=6.05e-04  CR=2.15×  fires=40
+  [tq_b6_K+V   ] K800b V800b  Δppl= +4.956%  top1= 93.75%  K-MSE=6.28e-04  V-MSE=6.97e-04  CR=2.21×  fires=40
+
+====================================================================================================
+v1.4 KakeyaLattice — 128k KV storage report
+Model: zai-org/GLM-4-9B-Chat  (L=40, hd=128, kv_h=2)
+Boundary skip: [0, 1, 38, 39]  (bf16-kept layers; codec applied to the other 36)
+====================================================================================================
+Channel            128k Baseline KV       128k Kakeya KV   Total ratio    |Δppl|   top-1      K-MSE      V-MSE
+-----------------------------------------------------------------------------------------------------------------
+bf16_pass                  5.00 GiB             5.00 GiB        1.00×    0.000% 100.00%  0.000e+00  0.000e+00
+v14_Q38_K+V                5.00 GiB             2.33 GiB        2.15×    0.605%  93.75%  5.464e-04  6.067e-04
+tq_b6_K+V                  5.00 GiB             2.26 GiB        2.21×    2.492%  96.88%  6.292e-04  6.987e-04
+
+[done] → /tmp/audit_out/audit_glm_kv_128k.json
+[rank0]:[W423 22:28:37.680776732 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+
+=== nvidia-smi post-run ===
+name, utilization.gpu [%], memory.used [MiB]
+NVIDIA H200, 0 %, 0 MiB
+
+=== GPU trace excerpts (peak utilization) ===
+First 3 samples:
+timestamp, utilization.gpu [%], memory.used [MiB]
+2026/04/23 22:28:14.286, 0 %, 0 MiB
+2026/04/23 22:28:15.291, 0 %, 0 MiB
+2026/04/23 22:28:16.291, 0 %, 0 MiB
+...
+Lines where utilization > 50%:
+2026/04/23 22:28:33.297, 100 %, 21271 MiB
+...
+Peak memory usage observed in trace:
+2026/04/23 22:28:36.298, 0 %, 87945 MiB
+2026/04/23 22:28:35.297, 0 %, 87945 MiB
+2026/04/23 22:28:37.298, 49 %, 84505 MiB
+
+=== Result JSON sha256 ===
+fe69502d0095011f265c758b7e3210057c9e4720db99e2eb9a9c70c2bf6f676a  /tmp/audit_out/audit_glm_kv_128k.json
+
+=== Key result fields from JSON ===
+model:        zai-org/GLM-4-9B-Chat
+num_layers:   40
+head_dim:     128
+num_kv_heads: 2
+n_passages:   2
+per_passage raw entries:
+  passage=0 ch=bf16_pass       fires=40  ppl_ref=7.6852327491878745 ppl_alt=7.6852327491878745 delta_ppl=0.0 t_alt=0.04086530581116676
+  passage=0 ch=v14_Q38_K+V     fires=40  ppl_ref=7.6852327491878745 ppl_alt=7.596168737208173 delta_ppl=-0.011588980436423733 t_alt=0.04124257527291775
+  passage=0 ch=tq_b6_K+V       fires=40  ppl_ref=7.6852327491878745 ppl_alt=7.687377109910481 delta_ppl=0.0002790235237616482 t_alt=0.04090959578752518
+  passage=1 ch=bf16_pass       fires=40  ppl_ref=22.108750661213783 ppl_alt=22.108750661213783 delta_ppl=0.0 t_alt=0.040280554443597794
+  passage=1 ch=v14_Q38_K+V     fires=40  ppl_ref=22.108750661213783 ppl_alt=22.119895705028622 delta_ppl=0.0005041010225146281 t_alt=0.03961632773280144
+  passage=1 ch=tq_b6_K+V       fires=40  ppl_ref=22.108750661213783 ppl_alt=23.2044692993337 delta_ppl=0.0495604050590781 t_alt=0.040075913071632385
