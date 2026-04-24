@@ -22,8 +22,16 @@ Public API:
     * `D4LatticeCodebook`  — v1.4 lattice (4-D, G(Λ)=0.0766, +0.37 dB vs Z^4)
     * `E8LatticeCodebook`  — v1.5 lattice (8-D, G(Λ)=0.0717, +0.66 dB vs Z^8)
 
-Both preserve the `D4TQStyleCodebook.roundtrip(x)` contract, so any
-harness that accepts a `SphericalCodebook` works with either.
+Both preserve the `SphericalCodebook` interface (`.roundtrip(x)`) so
+any harness accepting a `SphericalCodebook` works with either lattice.
+
+Historical note: `D4LatticeCodebook` replaces the pre-v1.5 class
+`D4TQStyleCodebook` which lived in `bridge_b2_d4_tq_style.py`.  The
+two produce bit-identical output (verified by
+`benchmarks/e8_parity_and_smoke.py`), but the old name carried
+misleading "TQStyle" baggage (the Hadamard + per-vector-qmax stack
+is standard quantisation preprocessing, not specific to TurboQuant).
+The old module and class are removed in the v1.5 cleanup.
 """
 from __future__ import annotations
 
@@ -39,11 +47,7 @@ from .spherical_codebooks import SphericalCodebook
 # ---------------------------------------------------------------------------
 
 def _sylvester_hadamard_normalised(D: int, device) -> torch.Tensor:
-    """Sylvester Hadamard H_D / √D (self-inverse at orthonormal normalisation).
-
-    Same definition as the D4TQStyleCodebook implementation; kept local here
-    so the E8 codebook does not import from the research-lineage module.
-    """
+    """Sylvester Hadamard H_D / √D (self-inverse at orthonormal normalisation)."""
     assert (D & (D - 1)) == 0, f"D must be power of 2, got {D}"
     H = torch.tensor([[1.0]], device=device, dtype=torch.float32)
     while H.shape[0] < D:

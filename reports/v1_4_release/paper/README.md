@@ -77,9 +77,12 @@ report file on the `main` branch at tag `v1.4`:
   (+ `*_kv_128k.json` per model)
 - **Codec implementation**:
   `kakeyaturbo-py/python/kakeyaturbo_py/v1_4_kakeya_zamir_lattice_gpu.py`
-  (canonical class) and
-  `kakeyaturbo-py/python/kakeyaturbo_py/bridge_b2_d4_tq_style.py`
-  (implementation core)
+  (canonical class) delegates to
+  `kakeyaturbo-py/python/kakeyaturbo_py/lattice_codebooks.py::D4LatticeCodebook`
+  (implementation core).  In the v1.4 release tag this was
+  `bridge_b2_d4_tq_style.py::D4TQStyleCodebook`; the two produce
+  bit-identical output (verified by `benchmarks/e8_parity_and_smoke.py`
+  against a frozen sha256 snapshot).
 
 ## Reproducibility
 

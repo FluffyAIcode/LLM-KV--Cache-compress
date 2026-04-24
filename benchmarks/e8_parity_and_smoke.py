@@ -14,7 +14,10 @@
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import pathlib
 
 import torch
 
@@ -25,8 +28,108 @@ from kakeyaturbo_py.lattice_codebooks import (
 )
 
 
+# Frozen reference sha256s generated with the pre-cleanup code (when
+# V14KakeyaZamirLatticeGPU still inherited from D4TQStyleCodebook).
+# Any future refactor of lattice_codebooks.py that breaks bit-identity
+# with v1.4 deployed measurements will fail these assertions loudly.
+FROZEN_PATH = pathlib.Path(__file__).parent / "frozen_parity.json"
+
+
+def _load_frozen() -> dict:
+    return json.loads(FROZEN_PATH.read_text()) if FROZEN_PATH.exists() else {}
+
+
+def _sha256_fp32(t: torch.Tensor) -> str:
+    return hashlib.sha256(t.detach().cpu().numpy().tobytes()).hexdigest()
+
+
+def parity_v14_against_frozen() -> None:
+    """V14KakeyaZamirLatticeGPU output must match the frozen sha256 snapshot.
+
+    The snapshot was generated with the pre-rename D4TQStyleCodebook code
+    (verified bit-identical to D4LatticeCodebook in PR #32) and saved to
+    frozen_parity.json.  This is THE regression gate for the v1.4 release:
+    if any lattice_codebooks.py change breaks bit-identity with the
+    deployed v1.4 numbers, this assertion catches it.
+    """
+    frozen = _load_frozen()
+    if not frozen:
+        print("\n[parity]  frozen_parity.json missing — skipping")
+        return
+    meta = frozen.get("_meta", {})
+    seed = meta.get("seed", 20260424)
+    shape = meta.get("shape", [2048, 8, 128])
+    scale = meta.get("scale", 0.3)
+    torch.manual_seed(seed)
+    X = torch.randn(*shape, device="cuda", dtype=torch.float32) * scale
+
+    print(f"\n[parity] V14KakeyaZamirLatticeGPU vs FROZEN sha256 "
+          f"(seed={seed}, shape={shape})")
+    ok_all = True
+    for Q in [4, 10, 38, 152]:
+        key = f"V14KakeyaZamirLatticeGPU_Q{Q}_D128_N2048_H8"
+        if key not in frozen:
+            continue
+        cb = V14KakeyaZamirLatticeGPU(D=128, q_range=Q, device="cuda")
+        X_hat = cb.roundtrip(X)
+        got = _sha256_fp32(X_hat)
+        want = frozen[key]["sha256"]
+        want_bits = frozen[key]["bits"]
+        assert cb.bits_per_token_per_head == want_bits, (
+            f"v1.4 Q={Q} bits changed: expected {want_bits}, got "
+            f"{cb.bits_per_token_per_head}"
+        )
+        if got != want:
+            print(f"  Q={Q}: ✗ MISMATCH  got={got[:16]}  want={want[:16]}")
+            ok_all = False
+        else:
+            print(f"  Q={Q}: ✓ match (sha={got[:16]}, bits={want_bits})")
+    assert ok_all, "v1.4 output regression vs frozen snapshot"
+    print("  ✓ v1.4 FROZEN PARITY OK")
+
+
+def parity_v15_against_frozen() -> None:
+    """V15KakeyaZamirE8GPU output must match the frozen sha256 snapshot.
+
+    Protects the v1.5 scaffold from unintended behavior change.
+    """
+    frozen = _load_frozen()
+    if not frozen:
+        return
+    meta = frozen.get("_meta", {})
+    seed = meta.get("seed", 20260424)
+    shape = meta.get("shape", [2048, 8, 128])
+    scale = meta.get("scale", 0.3)
+    torch.manual_seed(seed)
+    X = torch.randn(*shape, device="cuda", dtype=torch.float32) * scale
+
+    print(f"\n[parity] V15KakeyaZamirE8GPU vs FROZEN sha256")
+    ok_all = True
+    for Q in [4, 10, 38, 152]:
+        key = f"V15KakeyaZamirE8GPU_Q{Q}_D128_N2048_H8"
+        if key not in frozen:
+            continue
+        cb = V15KakeyaZamirE8GPU(D=128, q_range=Q, device="cuda")
+        X_hat = cb.roundtrip(X)
+        got = _sha256_fp32(X_hat)
+        want = frozen[key]["sha256"]
+        want_bits = frozen[key]["bits"]
+        assert cb.bits_per_token_per_head == want_bits, (
+            f"v1.5 Q={Q} bits changed: expected {want_bits}, got "
+            f"{cb.bits_per_token_per_head}"
+        )
+        if got != want:
+            print(f"  Q={Q}: ✗ MISMATCH  got={got[:16]}  want={want[:16]}")
+            ok_all = False
+        else:
+            print(f"  Q={Q}: ✓ match (sha={got[:16]}, bits={want_bits})")
+    assert ok_all, "v1.5 output regression vs frozen snapshot"
+    print("  ✓ v1.5 FROZEN PARITY OK")
+
+
 def parity_v14_d4() -> None:
-    """D4LatticeCodebook bit-identical to V14KakeyaZamirLatticeGPU."""
+    """D4LatticeCodebook bit-identical to V14KakeyaZamirLatticeGPU
+    (trivially true since V14 subclasses D4Lattice — sanity check only)."""
     torch.manual_seed(42)
     D, Q = 128, 38
     N = 2048
@@ -139,8 +242,10 @@ def bits_sanity() -> None:
 
 
 if __name__ == "__main__":
-    parity_v14_d4()
-    parity_v15_e8()
+    parity_v14_against_frozen()   # v1.4 regression gate (sha256 pinned)
+    parity_v15_against_frozen()   # v1.5 regression gate (sha256 pinned)
+    parity_v14_d4()               # trivial sanity
+    parity_v15_e8()               # trivial sanity
     bits_sanity()
     smoke_e8()
     print("\n[ALL CHECKS PASSED]")
