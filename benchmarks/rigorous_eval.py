@@ -52,7 +52,7 @@ def _sylvester_hadamard_normalised(D: int, device) -> torch.Tensor:
 
 
 def make_v14_codec_fn(D: int, q_range: int, device: str = "cuda"):
-    """Canonical v1.4 KakeyaLattice codec_fn."""
+    """Canonical v1.4 KakeyaLattice (D4) codec_fn."""
     from kakeyalattice import V14KakeyaZamirLatticeGPU
     if D % 4 != 0:
         raise ValueError(
@@ -67,6 +67,30 @@ def make_v14_codec_fn(D: int, q_range: int, device: str = "cuda"):
     codec_fn.bits_per_token_per_head = cb.bits_per_token_per_head
     codec_fn.label = f"v1.4 Q={q_range}"
     codec_fn.channel_id = f"v14_Q{q_range}"
+    return codec_fn
+
+
+def make_v15_codec_fn(D: int, q_range: int, device: str = "cuda"):
+    """Canonical v1.5 KakeyaLattice (E8) codec_fn.
+
+    Same Hadamard + per-vector-qmax + unit-norm wrapper as v1.4, but
+    block_dim=8 with E8 nested lattice (Conway-Sloane 1982 Alg 5) instead
+    of D4.  Theoretical shaping gain +0.29 dB over v1.4 at matched rate.
+    """
+    from kakeyalattice import V15KakeyaZamirE8GPU
+    if D % 8 != 0:
+        raise ValueError(
+            f"v1.5 E8 requires head_dim % 8 == 0, got {D}. No fallback.",
+        )
+    cb = V15KakeyaZamirE8GPU(D=D, q_range=q_range, device=device)
+
+    def codec_fn(X: torch.Tensor) -> torch.Tensor:
+        assert X.is_cuda and X.dtype == torch.float32
+        return cb.roundtrip(X)
+
+    codec_fn.bits_per_token_per_head = cb.bits_per_token_per_head
+    codec_fn.label = f"v1.5 Q={q_range}"
+    codec_fn.channel_id = f"v15_Q{q_range}"
     return codec_fn
 
 
@@ -267,7 +291,10 @@ def main() -> int:
     ap.add_argument("--model-name", required=True)
     ap.add_argument("--mode", choices=["inforward", "snapshot"], default="inforward")
     ap.add_argument("--q-values", type=str, default="10,38,152",
-                    help="v1.4 Q_range sweep values (comma-sep)")
+                    help="v1.4 D4 Q_range sweep values (comma-sep)")
+    ap.add_argument("--v15-q-values", type=str, default="",
+                    help="v1.5 E8 Q_range sweep values (comma-sep). "
+                         "Empty = skip v1.5 channels.")
     ap.add_argument("--tq-b-values", type=str, default="4,6,8",
                     help="TQ bits_per_coord sweep (comma-sep)")
     ap.add_argument("--kv-modes", type=str, default="KV,K,V",
@@ -288,13 +315,15 @@ def main() -> int:
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    Q_VALUES  = [int(x) for x in args.q_values.split(",")    if x.strip()]
-    TQ_VALUES = [int(x) for x in args.tq_b_values.split(",") if x.strip()]
+    Q_VALUES   = [int(x) for x in args.q_values.split(",")     if x.strip()]
+    Q15_VALUES = [int(x) for x in args.v15_q_values.split(",") if x.strip()]
+    TQ_VALUES  = [int(x) for x in args.tq_b_values.split(",")  if x.strip()]
     KV_MODES  = [m.strip() for m in args.kv_modes.split(",") if m.strip()]
     ABL_VARIANTS = [v.strip() for v in args.ablation_variants.split(",")
                     if v.strip()]
     print(f"[config] mode: {args.mode}", flush=True)
-    print(f"[config] v1.4 Q:        {Q_VALUES}", flush=True)
+    print(f"[config] v1.4 D4 Q:     {Q_VALUES}", flush=True)
+    print(f"[config] v1.5 E8 Q:     {Q15_VALUES or '(none)'}", flush=True)
     print(f"[config] TQ   b:        {TQ_VALUES}", flush=True)
     print(f"[config] KV modes:      {KV_MODES}", flush=True)
     print(f"[config] ablations:     {ABL_VARIANTS or '(none)'}", flush=True)
@@ -456,6 +485,22 @@ def main() -> int:
             out.append(("v14",
                         _make_per_layer_codec(
                             per_hd, f"v14_Q{Q}", f"v1.4 Q={Q}",
+                        )))
+        for Q in Q15_VALUES:
+            # v1.5 requires head_dim % 8 == 0.  If some head_dim in the
+            # model is divisible by 4 but not 8, we can't build a v1.5
+            # codec for it — fail loudly, no fallback by design.
+            for hd in distinct_hds:
+                if hd % 8 != 0:
+                    raise ValueError(
+                        f"v1.5 E8 requires all head_dims % 8 == 0. "
+                        f"Model has head_dim={hd} ∉ 8Z. Aborting "
+                        f"(no fallback).",
+                    )
+            per_hd = {hd: make_v15_codec_fn(hd, Q) for hd in distinct_hds}
+            out.append(("v15",
+                        _make_per_layer_codec(
+                            per_hd, f"v15_Q{Q}", f"v1.5 Q={Q}",
                         )))
         for b in TQ_VALUES:
             per_hd = {hd: make_tq_codec_fn(hd, b) for hd in distinct_hds}
@@ -864,6 +909,7 @@ def main() -> int:
         "n_eval": args.n_eval,
         "n_passages": len(passages_ids),
         "q_values": Q_VALUES,
+        "v15_q_values": Q15_VALUES,
         "tq_b_values": TQ_VALUES,
         "kv_modes": KV_MODES,
         "ablation_variants": ABL_VARIANTS,
