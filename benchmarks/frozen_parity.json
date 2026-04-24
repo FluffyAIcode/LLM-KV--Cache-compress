@@ -1,0 +1,44 @@
+{
+  "V14KakeyaZamirLatticeGPU_Q4_D128_N2048_H8": {
+    "sha256": "8c88057a7d1fd4f1ca9bbbd1794c586926f4644c5f4bd2af468d8dd780230e5d",
+    "bits": 416
+  },
+  "V14KakeyaZamirLatticeGPU_Q10_D128_N2048_H8": {
+    "sha256": "1331d90b16f94865421d0ec0cc9b25f124ecb4b05a814ae7f55eed55a08b2a4a",
+    "bits": 576
+  },
+  "V14KakeyaZamirLatticeGPU_Q38_D128_N2048_H8": {
+    "sha256": "b3f3be283621f1ab16b6c9e574bd2e8d888ba72825a02aaa60594af568192d5c",
+    "bits": 832
+  },
+  "V14KakeyaZamirLatticeGPU_Q152_D128_N2048_H8": {
+    "sha256": "9940a29706d82db943aa833262455f81f21677abd513059ac072cf53d663456f",
+    "bits": 1088
+  },
+  "V15KakeyaZamirE8GPU_Q4_D128_N2048_H8": {
+    "sha256": "5e5ffa38fd386b6230e517fdd1c3251700882754bb0ff7f1b93c02817007ae27",
+    "bits": 448
+  },
+  "V15KakeyaZamirE8GPU_Q10_D128_N2048_H8": {
+    "sha256": "86ce5d12bc733cb30896b997ec624a14d3a4bd1146329e5958994ddc0391d839",
+    "bits": 608
+  },
+  "V15KakeyaZamirE8GPU_Q38_D128_N2048_H8": {
+    "sha256": "b0246d4e7e10f9a50a5b133df46b5493bda986a55fb36dca41a69e7765abf579",
+    "bits": 848
+  },
+  "V15KakeyaZamirE8GPU_Q152_D128_N2048_H8": {
+    "sha256": "4f8fd8cf08624e58201bca235aa53ae07a30990f4e23401a27454dccf4daf12c",
+    "bits": 1104
+  },
+  "_meta": {
+    "seed": 20260424,
+    "shape": [
+      2048,
+      8,
+      128
+    ],
+    "dtype": "float32",
+    "scale": 0.3
+  }
+}

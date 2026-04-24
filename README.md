@@ -14,11 +14,13 @@ are on the v1.4 Release page.](https://github.com/FluffyAIcode/LLM-KV--Cache-com
 
 ```
 kakeyaturbo-py/python/kakeyaturbo_py/
-  v1_4_kakeya_zamir_lattice_gpu.py   — canonical V14KakeyaZamirLatticeGPU class
-  bridge_b2_d4_tq_style.py           — core D4 + TurboQuant-style codec
-  bridge_b_nested_lattice.py         — Conway-Sloane D4 closest-lattice-point
+  v1_4_kakeya_zamir_lattice_gpu.py   — canonical V14KakeyaZamirLatticeGPU class (D4)
+  v1_5_kakeya_zamir_e8_gpu.py        — canonical V15KakeyaZamirE8GPU class (E8)
+  lattice_codebooks.py               — shared Hadamard/qmax wrapper +
+                                       D4LatticeCodebook + E8LatticeCodebook
+                                       + Conway-Sloane closest-point algs
   spherical_codebooks.py             — codec interface
-  __init__.py                        — re-exports V14KakeyaZamirLatticeGPU
+  __init__.py                        — re-exports V14 + V15
 
 vllm_backend/kakeya_v1_4_snapshot/
   snapshot_hook.py                   — Attention monkey-patches (Qwen3 / Qwen2
