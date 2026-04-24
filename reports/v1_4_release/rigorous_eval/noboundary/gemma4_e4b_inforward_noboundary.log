@@ -1,0 +1,398 @@
+[config] mode: inforward
+[config] v1.4 Q:        [10, 38, 152]
+[config] TQ   b:        [4, 6, 8]
+[config] KV modes:      ['KV']
+[config] ablations:     (none)
+[config] no_boundary:   True
+[config] n_passages:    32
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-24 01:33:38 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-24 01:33:38 [nixl_utils.py:34] NIXL is not available
+WARNING 04-24 01:33:38 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-24 01:33:38 [utils.py:233] non-default args: {'max_model_len': 2113, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.5, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'google/gemma-4-E4B'}
+WARNING 04-24 01:33:38 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 04-24 01:33:39 [model.py:554] Resolved architecture: Gemma4ForConditionalGeneration
+INFO 04-24 01:33:39 [model.py:1685] Using max model len 2113
+INFO 04-24 01:33:39 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-24 01:33:39 [config.py:101] Gemma4 model has heterogeneous head dimensions (head_dim=256, global_head_dim=512). Forcing TRITON_ATTN backend to prevent mixed-backend numerical divergence.
+INFO 04-24 01:33:39 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-24 01:33:39 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-24 01:33:39 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-24 01:33:39 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-24 01:33:39 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-24 01:33:39 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+INFO 04-24 01:34:19 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='google/gemma-4-E4B', speculative_config=None, tokenizer='google/gemma-4-E4B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=2113, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=google/gemma-4-E4B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-24 01:34:20 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:45891 backend=nccl
+INFO 04-24 01:34:20 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-24 01:34:20 [gpu_model_runner.py:4752] Starting to load model google/gemma-4-E4B...
+WARNING 04-24 01:34:21 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-24 01:34:21 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-24 01:34:21 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-24 01:34:21 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-24 01:34:21 [cuda.py:308] Using AttentionBackendEnum.TRITON_ATTN backend.
+INFO 04-24 01:34:21 [cuda.py:308] Using AttentionBackendEnum.TRITON_ATTN backend.
+INFO 04-24 01:34:22 [weight_utils.py:659] No model.safetensors.index.json found in remote.
+INFO 04-24 01:34:22 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 14.89 GiB. Available RAM: 1635.04 GiB.
+INFO 04-24 01:34:22 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:03<00:00,  3.40s/it]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:03<00:00,  3.40s/it]
+
+INFO 04-24 01:34:26 [default_loader.py:384] Loading weights took 3.99 seconds
+INFO 04-24 01:34:26 [gpu_model_runner.py:4854] Model loading took 15.44 GiB memory and 4.977574 seconds
+INFO 04-24 01:34:27 [gpu_model_runner.py:5798] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 6 video items of the maximum feature size.
+WARNING 04-24 01:34:27 [op.py:241] Priority not set for op rms_norm, using native implementation.
+INFO 04-24 01:34:31 [gpu_worker.py:440] Available KV cache memory: 50.25 GiB
+INFO 04-24 01:34:31 [kv_cache_utils.py:1337] GPU KV cache size: 548,864 tokens
+INFO 04-24 01:34:31 [kv_cache_utils.py:1342] Maximum concurrency for 2,113 tokens per request: 435.15x
+2026-04-24 01:34:31,794 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-24 01:34:31,838 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-24 01:34:32 [core.py:307] init engine (profile, create kv cache, warmup model) took 5.27 s
+[data] loaded 32 passages
+[model] google/gemma-4-E4B
+[model] L=24  captured=24  distinct_hds=[256, 512]  distinct_kvh=[2]
+[model] VARIABLE head_dim across layers — per-layer codec dispatch active
+[model]   hd=256: 20 layer(s)
+[model]   hd=512: 4 layer(s)
+[channels] 7 total
+
+=== passage 1/32 ===
+  [ref] ppl=6.720  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +3.525% top1= 96.88% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +0.205% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.588% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +3.221% top1= 96.88% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.277% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.777% top1= 96.88% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 2/32 ===
+  [ref] ppl=4.205  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +1.236% top1= 92.19% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.663% top1=100.00% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -0.235% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +1.271% top1=100.00% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.015% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.681% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 3/32 ===
+  [ref] ppl=4.429  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +0.736% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.651% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +2.290% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +9.497% top1= 95.31% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.075% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.443% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 4/32 ===
+  [ref] ppl=7.558  (0.07s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -0.865% top1=100.00% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.481% top1=100.00% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.295% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +0.876% top1= 96.88% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.069% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.131% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 5/32 ===
+  [ref] ppl=5.334  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +0.601% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -1.044% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.901% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +0.811% top1= 90.62% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -1.151% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.675% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 6/32 ===
+  [ref] ppl=8.418  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -0.610% top1= 98.44% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.402% top1= 93.75% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.020% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +0.883% top1= 92.19% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.303% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.520% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 7/32 ===
+  [ref] ppl=2.753  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +3.894% top1= 98.44% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +3.064% top1=100.00% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.077% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +3.110% top1= 98.44% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +1.176% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.152% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 8/32 ===
+  [ref] ppl=7.467  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -4.814% top1= 90.62% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -1.197% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -0.519% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +4.521% top1= 89.06% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.166% top1= 95.31% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.313% top1= 96.88% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 9/32 ===
+  [ref] ppl=6.873  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +4.300% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +1.489% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.653% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +9.815% top1= 95.31% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +2.533% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.961% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 10/32 ===
+  [ref] ppl=5.717  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +2.973% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.839% top1= 93.75% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +1.323% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +4.169% top1= 92.19% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.506% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.583% top1= 96.88% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 11/32 ===
+  [ref] ppl=5.071  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -1.195% top1= 98.44% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.580% top1=100.00% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.460% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +4.522% top1= 93.75% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +1.739% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.360% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 12/32 ===
+  [ref] ppl=3.647  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -0.068% top1= 96.88% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +0.479% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.824% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +2.980% top1= 98.44% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.800% top1= 93.75% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.858% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 13/32 ===
+  [ref] ppl=3.800  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -0.063% top1= 92.19% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +1.677% top1= 96.88% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.263% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +5.135% top1= 87.50% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.490% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +1.770% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 14/32 ===
+  [ref] ppl=9.878  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +2.605% top1= 84.38% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -1.656% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.487% top1= 95.31% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +3.530% top1= 84.38% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.623% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.252% top1= 96.88% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 15/32 ===
+  [ref] ppl=5.451  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +3.119% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.783% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.957% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -1.545% top1= 90.62% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.040% top1= 95.31% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.444% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 16/32 ===
+  [ref] ppl=2.980  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +2.292% top1= 96.88% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +1.120% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.703% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +3.563% top1= 96.88% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +1.301% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.254% top1= 95.31% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 17/32 ===
+  [ref] ppl=3.055  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +3.902% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -2.101% top1=100.00% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -1.276% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +3.595% top1= 96.88% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.048% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.206% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 18/32 ===
+  [ref] ppl=5.124  (0.07s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +6.316% top1= 82.81% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.078% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -0.203% top1= 89.06% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -0.602% top1= 90.62% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +1.488% top1= 89.06% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.304% top1= 92.19% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 19/32 ===
+  [ref] ppl=2.473  (0.07s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +2.620% top1= 92.19% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.268% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.002% top1= 95.31% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +1.210% top1= 90.62% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.176% top1= 93.75% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.998% top1= 95.31% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 20/32 ===
+  [ref] ppl=3.667  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +0.859% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.057% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -0.532% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -1.609% top1= 93.75% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.024% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.099% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 21/32 ===
+  [ref] ppl=11.817  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +1.204% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -1.062% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.182% top1= 95.31% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -1.281% top1= 95.31% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.212% top1= 95.31% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.527% top1= 96.88% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 22/32 ===
+  [ref] ppl=7.714  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -1.559% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +0.039% top1= 96.88% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.018% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +6.350% top1= 90.62% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.104% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.690% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 23/32 ===
+  [ref] ppl=12.795  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +4.565% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +1.146% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.379% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -0.690% top1= 89.06% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.505% top1= 98.44% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.081% top1= 96.88% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 24/32 ===
+  [ref] ppl=3.632  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +0.467% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +0.556% top1=100.00% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +1.569% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -0.528% top1= 93.75% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.398% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.060% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 25/32 ===
+  [ref] ppl=6.215  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +1.175% top1= 92.19% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.233% top1= 96.88% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -1.567% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -1.359% top1= 89.06% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.488% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.341% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 26/32 ===
+  [ref] ppl=7.245  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -0.353% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +0.406% top1= 95.31% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -0.042% top1= 96.88% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +1.957% top1= 92.19% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -1.721% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.530% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 27/32 ===
+  [ref] ppl=7.237  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +1.415% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.181% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.040% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +4.106% top1= 93.75% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.311% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.944% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 28/32 ===
+  [ref] ppl=4.427  (0.09s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -3.978% top1= 89.06% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -1.291% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.355% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +1.612% top1= 87.50% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.090% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +1.098% top1= 98.44% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 29/32 ===
+  [ref] ppl=13.611  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +1.411% top1= 93.75% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +3.082% top1= 93.75% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -0.148% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +0.051% top1= 92.19% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +2.915% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.356% top1= 95.31% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 30/32 ===
+  [ref] ppl=11.579  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= -2.892% top1= 96.88% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.522% top1= 96.88% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +1.915% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= +5.936% top1= 95.31% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +0.654% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= -0.316% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 31/32 ===
+  [ref] ppl=13.078  (0.07s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +1.178% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= +0.486% top1= 98.44% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= +0.204% top1= 98.44% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -4.186% top1= 95.31% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= +1.482% top1=100.00% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.285% top1= 95.31% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+=== passage 32/32 ===
+  [ref] ppl=5.534  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [v14_Q10_KV                      ] Δppl= +4.389% top1= 95.31% K-MSE(l0)=1.08e-02 V-MSE(l0)=1.08e-02 fires=24
+  [v14_Q38_KV                      ] Δppl= -0.011% top1= 96.88% K-MSE(l0)=7.48e-04 V-MSE(l0)=7.49e-04 fires=24
+  [v14_Q152_KV                     ] Δppl= -1.175% top1=100.00% K-MSE(l0)=4.67e-05 V-MSE(l0)=4.71e-05 fires=24
+  [tq_b4_KV                        ] Δppl= -1.199% top1= 95.31% K-MSE(l0)=1.69e-02 V-MSE(l0)=1.70e-02 fires=24
+  [tq_b6_KV                        ] Δppl= -0.899% top1= 96.88% K-MSE(l0)=8.63e-04 V-MSE(l0)=8.65e-04 fires=24
+  [tq_b8_KV                        ] Δppl= +0.184% top1=100.00% K-MSE(l0)=5.15e-05 V-MSE(l0)=5.16e-05 fires=24
+
+================================================================================================================================
+v1.4 KakeyaLattice rigorous eval — model=google/gemma-4-E4B  mode=inforward  n=32
+Boundary skip: (none)  (codec on 24/24 layers; uncaptured-by-arch: (none))
+================================================================================================================================
+Channel                          KV   n     CR       |Δppl|±95%CI         Δppl±95%CI   top1%    K-MSE(l0)    V-MSE(l0)
+--------------------------------------------------------------------------------------------------------------------------------
+bf16_ref                          -  32  1.00×  0.000%±0.000% +0.000%±0.000% 100.00%    0.000e+00    0.000e+00
+v14_Q10_KV                       KV  32  3.67×  2.224%±0.596% +1.200%±0.910%  94.14%    1.077e-02    1.083e-02
+v14_Q38_KV                       KV  32  2.52×  0.870%±0.283% -0.011%±0.427%  97.36%    7.475e-04    7.492e-04
+v14_Q152_KV                      KV  32  1.91×  0.631%±0.216% +0.275%±0.300%  98.05%    4.666e-05    4.707e-05
+tq_b4_KV                         KV  32  3.90×  2.991%±0.881% +2.179%±1.158%  93.12%    1.685e-02    1.696e-02
+tq_b6_KV                         KV  32  2.62×  0.712%±0.270% +0.322%±0.356%  97.46%    8.633e-04    8.650e-04
+tq_b8_KV                         KV  32  1.97×  0.506%±0.134% +0.194%±0.218%  98.00%    5.151e-05    5.161e-05
+
+[done] → reports/v1_4_release/rigorous_eval/noboundary/gemma4_e4b_inforward.json
+[rank0]:[W424 01:34:56.846262514 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
