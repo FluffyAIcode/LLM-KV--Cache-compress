@@ -659,7 +659,7 @@ $D/4 - 1$ blocks of the same vector. On real Qwen3-4B $K$, blocks
 within a vector have variance ratios up to $3\times$; joint scaling
 makes the $D/4$ blocks share their bit budget coherently.
 
-\paragraph{Matched bit budget (step 7 clamp + \eqref{eq:bits}) ---
+\paragraph{Matched bit budget (step 7 clamp + \eqref{eq:bits-d4}) ---
 addresses grid-boundary interaction.}
 At parameter $q_\mathrm{range}$, the $D_4$ lattice in
 $[-q_\mathrm{range}, q_\mathrm{range}]^4$ has
@@ -1157,7 +1157,7 @@ We measure v1.5 vs v1.4 in the harshest-for-the-codec regime: live
 vLLM in-forward (codec applied \emph{inside} every attention step,
 cross-layer error allowed to compound), no-boundary protection (all
 $L$ layers codec-compressed), $n = 32$ passages with $95\%$ CI
-(Student-$t$). Protocol matches \cite[\S 7]{rigorous_eval_report}
+(Student-$t$). Protocol matches the rigorous-evaluation report in \texttt{reports/v1\_4\_release/rigorous\_eval/RIGOROUS\_EVAL\_REPORT.md} \S 7
 on the four-model set.
 
 \begin{table}[H]
