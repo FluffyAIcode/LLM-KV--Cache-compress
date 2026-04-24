@@ -47,16 +47,12 @@
 \DeclareMathOperator{\sign}{sign}
 
 % ----------------------------------------------------------------------
-\title{\textbf{KakeyaLattice: D4 / E8 Nested-Lattice KV-Cache
-Compression}\\
-  \textbf{with Kakeya-Style Discrete Codebooks}\\
-  \large{Extended: v1.4 (D4) + v1.5 (E8) Joint Release}}
+\title{\textbf{KakeyaLattice: Nested-Lattice KV-Cache Compression
+with Kakeya-Style Discrete Codebooks}}
 \author{Allen Li \\[2pt]
   \small Individual researcher \\
   \small Email: \href{mailto:AllenL329@gmail.com}{AllenL329@gmail.com}}
-\date{April 24, 2026 \\[2pt]
-  \small v1.4 released 2026-04-23 (tag \texttt{v1.4}),
-  v1.5 released 2026-04-24 (tag \texttt{v1.5})}
+\date{April 24, 2026}
 % ----------------------------------------------------------------------
 
 \begin{document}
@@ -66,70 +62,73 @@ Compression}\\
 We introduce \textsc{KakeyaLattice}, a KV-cache compression codec
 for transformer-based large language models that constructs a
 \emph{discrete Kakeya set} over the direction sphere via a
-Zamir--Feder nested-lattice quantiser~\cite{zamir-feder}. This
-paper covers two releases: \textsc{v1.4} (released 2026-04-23,
-tag \texttt{v1.4}) uses the $D_4$ root lattice; \textsc{v1.5}
-(released 2026-04-24, tag \texttt{v1.5}) substitutes $E_8$ as the
-shaping lattice while keeping the rest of the pipeline unchanged.
-In the classical continuous setting a Kakeya set contains a unit
-segment in every direction; we replace ``continuous unit segments''
-by ``lattice Voronoi cells scaled by a per-vector adaptive range'',
-so the codebook is an \emph{explicit discrete covering of $S^{D-1}$}
-rather than a scalar-quantisation grid.
+Zamir--Feder nested-lattice quantiser~\cite{zamir-feder}. The paper
+covers two concrete lattice instantiations of a single codec
+family: a \emph{$D_4$ nested lattice} variant and an \emph{$E_8$
+nested lattice} variant. Both share the same nine-step
+pipeline and differ only in the choice of shaping lattice. In the
+classical continuous setting a Kakeya set contains a unit segment
+in every direction; we replace ``continuous unit segments'' by
+``lattice Voronoi cells scaled by a per-vector adaptive range'',
+so the codebook is an \emph{explicit discrete covering of
+$S^{D-1}$} rather than a scalar-quantisation grid.
 
-The central innovation of the v1.4 design is adaptation to the
-non-Gaussian distribution of real LLM KV activations. Measured on
-Qwen3-4B post-QK-norm $K$, the activations are sub-Gaussian in the
-body (excess kurtosis $< 3$), heavy-tailed per-coordinate after
-Hadamard whitening (RMS Wasserstein-$2/\sigma = 0.65$), and
-anisotropic (variance ratio up to $4.71\times$ across coordinates)
---- a distribution for which the implicit i.i.d.\ Gaussian
-assumption of every scalar quantiser is a poor fit.
-\textsc{KakeyaLattice}~v1.4 addresses each of these structural
-mismatches explicitly: unit-norm factorisation removes the
-per-vector magnitude spread; a Sylvester--Hadamard rotation whitens
-coordinate anisotropy; a per-vector adaptive $q_\mathrm{max}$
-absorbs the heavy per-vector tail; and the $D_4$ Voronoi cells
-replace the cube cells of $\Z^4$, trading $G(\Z^4)=1/12$ for the
-unique second-moment optimum $G(D_4)\approx 0.0766$ in
-$\R^4$~\cite{conway-sloane-book}. v1.5 takes the same pipeline and
+The central innovation of the $D_4$ nested lattice design is
+adaptation to the non-Gaussian distribution of real LLM KV
+activations. Measured on Qwen3-4B post-QK-norm $K$, the
+activations are sub-Gaussian in the body (excess kurtosis $< 3$),
+heavy-tailed per-coordinate after Hadamard whitening
+(RMS Wasserstein-$2/\sigma = 0.65$), and anisotropic (variance
+ratio up to $4.71\times$ across coordinates) --- a distribution
+for which the implicit i.i.d.\ Gaussian assumption of every scalar
+quantiser is a poor fit. The $D_4$ nested lattice variant
+addresses each of these structural mismatches explicitly:
+unit-norm factorisation removes the per-vector magnitude spread; a
+Sylvester--Hadamard rotation whitens coordinate anisotropy; a
+per-vector adaptive $q_\mathrm{max}$ absorbs the heavy per-vector
+tail; and the $D_4$ Voronoi cells replace the cube cells of
+$\Z^4$, trading $G(\Z^4)=1/12$ for the unique second-moment
+optimum $G(D_4)\approx 0.0766$ in $\R^4$~\cite{conway-sloane-book}.
+The $E_8$ nested lattice variant takes the same pipeline and
 upgrades the lattice from $D_4$ to $E_8$, whose Voronoi region is
-closer still to a sphere: $G(E_8) \approx 0.0717$, giving a further
-$+0.29\,$dB of shaping gain over $D_4$ at matched rate.
+closer still to a sphere: $G(E_8) \approx 0.0717$, giving a
+further $+0.29\,$dB of shaping gain over $D_4$ at matched rate.
 
-The v1.4 effect is measured directly: on 12 head-to-head pairs
-(four open-source models $\times$ three matched bit points)
-\textsc{KakeyaLattice}~v1.4 wins universally on K-MSE ($12/12$,
-$10$--$36\%$ better) and $9/12$ on $\abs{\Delta\mathrm{ppl}}$
-($4/4$ at the aggressive $\sim\!3.6\times$ compression point with
-$1.8$--$5.3\times$ improvement). The v1.5 $E_8$ upgrade adds a
-further $+1.3$ to $+2.0\,$dB per-layer K-MSE gain across
-Qwen3-4B, DeepSeek-R1-Distill-Qwen-1.5B, Gemma-4-E4B, and
-GLM-4-9B-Chat --- $4$--$6\times$ the $+0.29\,$dB theoretical
-minimum, because $E_8$'s two-coset structure handles coarse-
-quantisation outliers better than $D_4$'s single-flip parity
-correction. In real vLLM in-forward no-boundary
-$\abs{\Delta\mathrm{ppl}}$ at $n=32$ passages with $95\%$ CI, v1.5
-reduces \mbox{$\abs{\Delta\mathrm{ppl}}$} by $28$--$53\%$ across
-three deployable models at both $Q=4$ (aggressive) and $Q=10$
-(balanced) operating points. The cost is a fixed $+32$ bits per
-vector ($-5$--$7\%$ compression ratio vs v1.4 at iso-$Q$) and
-$1.56$--$1.80\times$ encode latency (two $D_8$ candidate cosets +
-distance compare instead of one parity flip). Long-context
-retrieval (Needle-in-a-Haystack at $16$k context) is preserved on
-Qwen3-4B and Gemma-4-E4B; GLM-4-9B shows a mild v1.5 regression
-($89\%$ vs v1.4's $100\%$) at $Q=10$ attributable to a RoPE/Voronoi
-interaction discussed in the caveats.
+The $D_4$ nested lattice effect is measured directly: on 12
+head-to-head pairs (four open-source models $\times$ three matched
+bit points) the $D_4$ nested lattice variant wins universally on
+K-MSE ($12/12$, $10$--$36\%$ better) and $9/12$ on
+$\abs{\Delta\mathrm{ppl}}$ ($4/4$ at the aggressive
+$\sim\!3.6\times$ compression point with $1.8$--$5.3\times$
+improvement). The $E_8$ nested lattice upgrade adds a further
+$+1.3$ to $+2.0\,$dB per-layer K-MSE gain across Qwen3-4B,
+DeepSeek-R1-Distill-Qwen-1.5B, Gemma-4-E4B, and GLM-4-9B-Chat ---
+$4$--$6\times$ the $+0.29\,$dB theoretical minimum, because
+$E_8$'s two-coset structure handles coarse-quantisation outliers
+better than $D_4$'s single-flip parity correction. In real vLLM
+in-forward no-boundary $\abs{\Delta\mathrm{ppl}}$ at $n=32$
+passages with $95\%$ CI, the $E_8$ nested lattice variant reduces
+\mbox{$\abs{\Delta\mathrm{ppl}}$} by $28$--$53\%$ across three
+deployable models at both $Q=4$ (aggressive) and $Q=10$ (balanced)
+operating points. The cost is a fixed $+32$ bits per vector
+($-5$--$7\%$ compression ratio vs the $D_4$ nested lattice variant
+at iso-$Q$) and $1.56$--$1.80\times$ encode latency (two $D_8$
+candidate cosets + distance compare instead of one parity flip).
+Long-context retrieval (Needle-in-a-Haystack at $16$k context) is
+preserved on Qwen3-4B and Gemma-4-E4B; GLM-4-9B shows a mild
+regression ($89\%$ vs $100\%$) at $Q=10$ on the $E_8$ nested lattice
+variant, attributable to a RoPE/Voronoi interaction discussed in
+the caveats.
 
 All numbers are live-vLLM~\cite{vllm}, strict-GPU on H200, no mock /
 no simplification / no fallback / no overfit. Bit-level regression
 protection is enforced by a pinned \texttt{sha256} frozen-parity
-test: $8$ hashes (v1.4 + v1.5 at four $Q$ values each) assert
-byte-identical codec output against the release tag snapshots.
-Code, per-passage JSON, four per-architecture attention hooks
-(Qwen3Attention, Qwen2Attention, Gemma4Attention, GLMAttention),
-and the multi-model / NIAH / latency harnesses are released under
-Apache-2.0 at tags \texttt{v1.4} and \texttt{v1.5}.
+test: $8$ hashes ($D_4$ and $E_8$ nested lattice variants at four
+$Q$ values each) assert byte-identical codec output against the
+release-tag snapshots. Code, per-passage JSON, four
+per-architecture attention hooks (Qwen3Attention, Qwen2Attention,
+Gemma4Attention, GLMAttention), and the multi-model / NIAH /
+latency harnesses are released under Apache-2.0.
 \end{abstract}
 
 \section{Introduction}
@@ -320,12 +319,15 @@ real KV activations and the i.i.d.\ isotropic model assumed by the
 shaping-gain bound. Section~\ref{sec:methodology} describes the
 snapshot-mode harness and the four test models.
 Section~\ref{sec:benchmarks} reports the measured
-compression-rate Pareto, the multi-model head-to-head, the
-theory--experiment match, and the $128$k KV storage.
-Section~\ref{sec:limits} lists caveats.
+compression-rate Pareto of the $D_4$ nested lattice variant, the
+multi-model head-to-head, the theory--experiment match, and the
+$128$k KV storage. Section~\ref{sec:v15} reports the additional
+shaping gain, $\abs{\Delta\mathrm{ppl}}$ reduction, encode
+latency, and long-context retrieval performance of the $E_8$
+nested lattice variant. Section~\ref{sec:limits} lists caveats.
 Section~\ref{sec:tq-comparison} compares the codec directly with
-the strongest deployed KV-cache quantiser and frames v1.4 as a
-drop-in upstream PR.  Section~\ref{sec:related} situates the work
+the strongest deployed KV-cache quantiser and frames the $D_4$
+nested lattice variant as a drop-in upstream PR.  Section~\ref{sec:related} situates the work
 against the broader Kakeya, lattice-coding, and KV-compression
 literatures.
 
@@ -506,14 +508,14 @@ instance} of the same toolchain Wang and Zahl use at its deep end.
 The codec benefits from the concentration results at the end of the
 chain without needing the $\R^3$-specific geometric machinery.
 
-\section{The \textsc{KakeyaLattice} codec (v1.4 and v1.5)}
+\section{The \textsc{KakeyaLattice} codec}
 \label{sec:codec}
 
 \subsection{Nine-step pipeline, parameterised by lattice choice}
 
-Both v1.4 (with $D_4$) and v1.5 (with $E_8$) share the same nine-step
-pipeline. Only the choice of lattice $\Lambda$ and its block
-dimension $\dim\Lambda$ differ.
+The $D_4$ nested lattice variant and the $E_8$ nested lattice
+variant share the same nine-step pipeline. Only the choice of
+lattice $\Lambda$ and its block dimension $\dim\Lambda$ differ.
 
 \begin{algorithm}[H]
 \caption{\textsc{KakeyaLattice} encode/decode (single vector), parametric in $\Lambda \in \{D_4, E_8\}$}
@@ -529,9 +531,9 @@ dimension $\dim\Lambda$ differ.
 \State $\tilde y \gets y \cdot q_\mathrm{range}/q_\mathrm{max}$ \Comment{scale onto lattice grid}
 \For{each block $b = 1,\dots,D/\dim\Lambda$ of $\dim\Lambda$ coords}
   \If{$\Lambda = D_4$}
-    \State $z_b \gets \mathrm{ClosestPoint}_{D_4}(\tilde y_b)$ \Comment{v1.4: Conway--Sloane Alg.\ 4~\cite{conway-sloane-d4}}
+    \State $z_b \gets \mathrm{ClosestPoint}_{D_4}(\tilde y_b)$ \Comment{Conway--Sloane Alg.\ 4~\cite{conway-sloane-d4}}
   \ElsIf{$\Lambda = E_8$}
-    \State $z_b \gets \mathrm{ClosestPoint}_{E_8}(\tilde y_b)$ \Comment{v1.5: Conway--Sloane Alg.\ 5~\cite{conway-sloane-d4}}
+    \State $z_b \gets \mathrm{ClosestPoint}_{E_8}(\tilde y_b)$ \Comment{Conway--Sloane Alg.\ 5~\cite{conway-sloane-d4}}
   \EndIf
   \State $z_b \gets \mathrm{clamp}(z_b, -q_\mathrm{range}, +q_\mathrm{range})$
 \EndFor
@@ -544,7 +546,7 @@ dimension $\dim\Lambda$ differ.
 \end{algorithmic}
 \end{algorithm}
 
-\paragraph{$D_4$ closest-point (v1.4).}
+\paragraph{$D_4$ closest-point.}
 $D_4 = \{z \in \Z^4 : \sum_i z_i \equiv 0 \pmod 2\}$. Given
 $\tilde y \in \R^4$, round to $f = \mathrm{round}(\tilde y)$. If
 $\sum_i f_i$ is even, $f \in D_4$. Otherwise flip the coordinate
@@ -552,7 +554,7 @@ with largest $\abs{\tilde y_i - f_i}$ by $\pm 1$ in the sign of
 $\tilde y_i - f_i$. Cost: $O(1)$ per block; warp-uniform except for
 a single parity-flip branch.
 
-\paragraph{$E_8$ closest-point (v1.5).}
+\paragraph{$E_8$ closest-point.}
 $E_8 = D_8 \cup (D_8 + \tfrac{1}{2}\mathbf{1})$ where
 $D_8 = \{z \in \Z^8 : \sum_i z_i \equiv 0 \pmod 2\}$. Compute two
 candidates: the closest $D_8$ point to $\tilde y$, and the closest
@@ -576,7 +578,7 @@ absorbed into the clamp step. The rate is
 multiplied by $K = D/4$ blocks plus two fp16 overhead scalars per
 vector.
 
-For v1.5's $E_8$ lattice: the two cosets (integer and
+For the $E_8$ nested lattice variant: the two cosets (integer and
 half-integer) recover the full $\Z^8$ density within a parity
 constraint, so $E_8 \cap [-q_\mathrm{range},+q_\mathrm{range}]^8$
 has $\approx (2q_\mathrm{range}+1)^8$ points at large
@@ -586,10 +588,11 @@ $q_\mathrm{range}$:
 \text{bits per }E_8\text{ block} \;=\; 8\log_2(2q_\mathrm{range}+1),
 \end{equation}
 multiplied by $K = D/8$ blocks plus the same two fp16 scalars. For
-$D=128$ this is a fixed $+32$ bits per vector vs v1.4 at the same
-$q_\mathrm{range}$, arising from $D_4$'s parity saving that $E_8$'s
-two-coset union does not inherit. Canonical operating points for
-both codecs are listed in Appendix~\ref{app:ops}.
+$D=128$ this is a fixed $+32$ bits per vector vs the $D_4$ nested
+lattice variant at the same $q_\mathrm{range}$, arising from
+$D_4$'s parity saving that $E_8$'s two-coset union does not
+inherit. Canonical operating points for both codec variants are
+listed in Appendix~\ref{app:ops}.
 
 \subsection{The design role of each step}
 \label{sec:codec-why}
@@ -605,13 +608,14 @@ magnitude spread, coordinate-wise heavy tail after rotation,
 per-vector envelope variability, coordinate-wise anisotropy);
 against each, one of the five levers is the mechanism that closes
 it. The sixth ingredient is the \emph{structural lever}: the lattice.
-v1.4 uses $D_4$, giving the fixed $+0.367\,$dB shaping gain on top
-of an already-normalised input. v1.5 substitutes $E_8$, which is
-the $\R^8$ second-moment optimum (as $D_4$ is for $\R^4$) and brings
-an additional $+0.29\,$dB of theoretical shaping gain. The lattice
-upgrade is strictly modular: none of the five engineering levers
-changes, so v1.5 inherits every non-Gaussian-source correction v1.4
-made, and the $E_8$ benefit stacks on top.
+The $D_4$ nested lattice variant gives the fixed $+0.367\,$dB
+shaping gain on top of an already-normalised input. The $E_8$ nested
+lattice variant substitutes $E_8$, which is the $\R^8$ second-moment
+optimum (as $D_4$ is for $\R^4$) and brings an additional
+$+0.29\,$dB of theoretical shaping gain. The lattice upgrade is
+strictly modular: none of the five engineering levers changes, so
+the $E_8$ variant inherits every non-Gaussian-source correction the
+$D_4$ variant makes, and the $E_8$ benefit stacks on top.
 
 \paragraph{Unit-norm factorisation (steps 2, 12) --- addresses
 per-vector magnitude spread.}
@@ -693,10 +697,11 @@ improved further.
 
 \subsection{Implementation}
 
-The canonical implementation is the Python class
-\texttt{V14KakeyaZamirLatticeGPU}, released under Apache-2.0 in the
-\texttt{kakeyaturbo\_py} package at the project's
-\texttt{v1.4} tag~\cite{kakeya-v14-release}. The codec is
+The canonical implementations are released as Python classes
+\texttt{V14KakeyaZamirLatticeGPU} (the $D_4$ nested lattice variant)
+and \texttt{V15KakeyaZamirE8GPU} (the $E_8$ nested lattice variant)
+under Apache-2.0 in the \texttt{kakeyalattice}
+package~\cite{kakeya-v14-release}. The codec is
 strict-GPU: the Sylvester--Hadamard matrix, the per-vector
 $q_\mathrm{max}$ reduction, the $D_4$ closest-point search, and the
 clamp step are all element-wise PyTorch CUDA operations with no CPU
@@ -862,19 +867,19 @@ ratio vs.\ bf16.}
   bits & CR & Config & $\Delta$ppl & $\abs{\Delta\text{ppl}}$ & top-1 & K rel-MSE \\
   \midrule
    288 & 7.11$\times$ & TQ $b=2$    & $+150.5\%$ & $150.5\%$ & $66.4\%$ & $5.6\times10^{-1}$ \\
-   \textbf{320} & \textbf{6.40}$\times$ & \textbf{v1.4 Q=2}   & $+30.3\%$  & $30.3\%$  & $\mathbf{83.6\%}$ & $\mathbf{1.9\times10^{-1}}$ \\
+   \textbf{320} & \textbf{6.40}$\times$ & \textbf{$D_4$ Q=2}   & $+30.3\%$  & $30.3\%$  & $\mathbf{83.6\%}$ & $\mathbf{1.9\times10^{-1}}$ \\
    416 & 4.92$\times$ & TQ $b=3$    & $+2.22\%$  & $5.91\%$  & $90.6\%$ & $6.7\times10^{-2}$ \\
-   448 & 4.57$\times$ & v1.4 Q=5    & $+2.83\%$  & $2.83\%$  & $94.5\%$ & $3.1\times10^{-2}$ \\
+   448 & 4.57$\times$ & $D_4$ Q=5    & $+2.83\%$  & $2.83\%$  & $94.5\%$ & $3.1\times10^{-2}$ \\
    544 & 3.76$\times$ & TQ $b=4$    & $+3.51\%$  & $4.22\%$  & $97.7\%$ & $1.2\times10^{-2}$ \\
-   \textbf{576} & \textbf{3.56}$\times$ & \textbf{v1.4 Q=10}  & $+1.01\%$  & $1.86\%$  & $97.3\%$ & $\mathbf{7.8\times10^{-3}}$ \\
+   \textbf{576} & \textbf{3.56}$\times$ & \textbf{$D_4$ Q=10}  & $+1.01\%$  & $1.86\%$  & $97.3\%$ & $\mathbf{7.8\times10^{-3}}$ \\
    672 & 3.05$\times$ & TQ $b=5$    & $+1.24\%$  & $1.24\%$  & $98.4\%$ & $2.7\times10^{-3}$ \\
-   704 & 2.91$\times$ & v1.4 Q=19   & $-0.52\%$  & $1.33\%$  & $97.7\%$ & $2.2\times10^{-3}$ \\
+   704 & 2.91$\times$ & $D_4$ Q=19   & $-0.52\%$  & $1.33\%$  & $97.7\%$ & $2.2\times10^{-3}$ \\
    800 & 2.56$\times$ & TQ $b=6$    & $-0.37\%$  & $0.96\%$  & $98.4\%$ & $6.2\times10^{-4}$ \\
-   \textbf{832} & \textbf{2.46}$\times$ & \textbf{v1.4 Q=38}  & $+0.41\%$  & $0.57\%$  & $\mathbf{99.6\%}$ & $\mathbf{5.4\times10^{-4}}$ \\
+   \textbf{832} & \textbf{2.46}$\times$ & \textbf{$D_4$ Q=38}  & $+0.41\%$  & $0.57\%$  & $\mathbf{99.6\%}$ & $\mathbf{5.4\times10^{-4}}$ \\
    928 & 2.21$\times$ & TQ $b=7$    & $+0.51\%$  & $0.51\%$  & $100.00\%$ & $1.5\times10^{-4}$ \\
-   960 & 2.13$\times$ & v1.4 Q=76   & $-0.50\%$  & $0.67\%$  & $100.00\%$ & $1.4\times10^{-4}$ \\
+   960 & 2.13$\times$ & $D_4$ Q=76   & $-0.50\%$  & $0.67\%$  & $100.00\%$ & $1.4\times10^{-4}$ \\
   1056 & 1.94$\times$ & TQ $b=8$    & $-0.51\%$  & $0.66\%$  & $98.83\%$ & $3.7\times10^{-5}$ \\
-  \textbf{1088} & \textbf{1.88}$\times$ & \textbf{v1.4 Q=152} & $-0.20\%$  & $0.37\%$  & $\mathbf{99.6\%}$ & $\mathbf{3.4\times10^{-5}}$ \\
+  \textbf{1088} & \textbf{1.88}$\times$ & \textbf{$D_4$ Q=152} & $-0.20\%$  & $0.37\%$  & $\mathbf{99.6\%}$ & $\mathbf{3.4\times10^{-5}}$ \\
   \bottomrule
 \end{tabular}
 \end{table}
@@ -925,7 +930,7 @@ reconstruction; $\abs{\Delta\text{ppl}}$ ratio $<\!1$ means
 \label{tab:multimodel}
 \begin{tabular}{lrrrrrr}
   \toprule
-  Model & TQ $b$ & v1.4 Q & CR & \textbf{K-MSE ratio} & $\boldsymbol{\abs{\Delta\text{ppl}}}$ \textbf{ratio} & \textbf{top-1 $\Delta$pp} \\
+  Model & TQ $b$ & $D_4$ Q & CR & \textbf{K-MSE ratio} & $\boldsymbol{\abs{\Delta\text{ppl}}}$ \textbf{ratio} & \textbf{top-1 $\Delta$pp} \\
   \midrule
   \multirow{3}{*}{Qwen3-4B}
     & $4$ & $10$  & $3.56\times$ & $\mathbf{0.639}$ & $\mathbf{0.385}$ & $-0.78$ \\
@@ -1071,7 +1076,7 @@ on Qwen3-4B and DeepSeek ($1.45\%$, $2.22\%$).
 \begin{table}[H]
 \centering
 \small
-\caption{Encode time ratio v1.4 / TQ $k8v4$, per $2112$-token passage
+\caption{Encode time ratio $D_4$ nested lattice variant / TQ $k8v4$, per $2112$-token passage
 on H200. Values $<1.0$ mean \textsc{KakeyaLattice} is faster.}
 \label{tab:speed}
 \begin{tabular}{lrrrr|r}
@@ -1094,16 +1099,22 @@ $0.02$--$0.04\,$s per $2112$-token passage --- negligible against the
 $\sim\!10\,$s of bf16 prefill at this ctx length.  Speed is not a
 deployment blocker.
 
-\section{v1.5: the $E_8$ extension}
+\section{Measured performance of the $E_8$ nested lattice variant}
 \label{sec:v15}
 
-v1.5 substitutes $E_8$ for $D_4$ in the single ``structural lever''
-step of Algorithm~\ref{alg:pipeline}, keeping every other step
-unchanged. The substitution is bit-for-bit independent of the five
-engineering levers, so v1.5 inherits every non-Gaussian correction
-that v1.4 makes and adds one fresh gain of its own: the $E_8$
-Voronoi cell is closer to a sphere than $D_4$'s, for an additional
-$+0.29\,$dB of theoretical shaping gain
+Section~\ref{sec:codec} introduced both lattice variants of the
+\textsc{KakeyaLattice} codec: the algorithm is parametric in
+$\Lambda \in \{D_4, E_8\}$, and the only difference is the
+closest-point subroutine inside the for-loop. This section reports
+the four empirical consequences of substituting $E_8$ for $D_4$:
+reconstruction MSE gain, $\abs{\Delta\mathrm{ppl}}$ reduction in
+live vLLM in-forward, encode/decode latency on H200, and
+long-context retrieval preservation. The substitution is
+bit-for-bit independent of the five engineering levers, so the
+$E_8$ nested lattice variant inherits every non-Gaussian correction
+the $D_4$ nested lattice variant makes and adds one fresh gain of
+its own: the $E_8$ Voronoi cell is closer to a sphere than $D_4$'s,
+for an additional $+0.29\,$dB of theoretical shaping gain
 ($G(E_8)/G(D_4) \approx 0.936$).
 
 Two $E_8$ design facts matter for the upgrade:
@@ -1120,21 +1131,20 @@ Two $E_8$ design facts matter for the upgrade:
     $\sum_i z_i \equiv 0 \pmod 2$ halves its point count inside
     $[-q_\mathrm{range}, q_\mathrm{range}]^4$, saving $1$ bit per
     $4$ coordinates. $E_8$'s two-coset union recovers full $\Z^8$
-    density, so there is no analogous saving; v1.5 pays a fixed
-    $+32$ bits per vector vs v1.4 at the same $q_\mathrm{range}$.
-    The CR cost is therefore $-5$--$7\%$ at iso-$Q$ (Table~\ref{tab:v15-bits}).
+    density, so there is no analogous saving; the $E_8$ nested lattice variant pays a fixed
+    $+32$ bits per vector vs the $D_4$ nested lattice variant at the same $q_\mathrm{range}$. The CR cost is therefore $-5$--$7\%$ at iso-$Q$ (Table~\ref{tab:v15-bits}).
 \end{enumerate}
 
 \begin{table}[H]
 \centering
 \small
-\caption{Canonical operating points: v1.4 ($D_4$) vs v1.5 ($E_8$)
+\caption{Canonical operating points: $D_4$ nested lattice variant vs the $E_8$ nested lattice variant ($E_8$)
 at $D = 128$. bits/tok/head includes $32$ bits fp16 overhead
 ($\norm{x}$ + $q_\mathrm{max}$). CR is vs bf16.}
 \label{tab:v15-bits}
 \begin{tabular}{rrrrrr}
   \toprule
-  $q_\mathrm{range}$ & v1.4 bits & v1.4 CR & v1.5 bits & v1.5 CR & $\Delta$ bits \\
+  $q_\mathrm{range}$ & $D_4$ bits & $D_4$ CR & $E_8$ bits & $E_8$ CR & $\Delta$ bits \\
   \midrule
   $4$   & $416$  & $4.92\times$ & $448$  & $4.57\times$ & $+32$ \\
   $10$  & $576$  & $3.56\times$ & $608$  & $3.37\times$ & $+32$ \\
@@ -1150,10 +1160,10 @@ integer per-block bits; at fine quantisation $D_4$'s $-1$-bit parity
 saving is the only asymmetry, while $E_8$'s coset-union density
 bonus compensates.)
 
-\subsection{v1.5 measured shaping gain}
+\subsection{$E_8$ measured shaping gain}
 \label{sec:v15-shaping-gain}
 
-We measure v1.5 vs v1.4 in the harshest-for-the-codec regime: live
+We measure the $E_8$ nested lattice variant against the $D_4$ nested lattice variant in the harshest-for-the-codec regime: live
 vLLM in-forward (codec applied \emph{inside} every attention step,
 cross-layer error allowed to compound), no-boundary protection (all
 $L$ layers codec-compressed), $n = 32$ passages with $95\%$ CI
@@ -1163,7 +1173,7 @@ on the four-model set.
 \begin{table}[H]
 \centering
 \small
-\caption{v1.5 vs v1.4 per-layer $K$ rel-MSE at matched $Q$, measured
+\caption{$E_8$ vs $D_4$ nested lattice variant per-layer $K$ rel-MSE at matched $Q$, measured
 at layer 0 before cross-layer accumulation. Averaged across four
 models. Theoretical $E_8$/$D_4$ ratio is $0.936$ ($+0.29\,$dB); the
 empirical ratio is $\approx 0.65$ ($+1.87\,$dB at $Q=10$), a
@@ -1175,7 +1185,7 @@ $D_4$'s single-flip parity correction.}
   \toprule
    & \multicolumn{2}{c}{$Q=4$ (aggressive)} & \multicolumn{2}{c}{$Q=10$ (moderate)} & \multicolumn{2}{c}{mean gain} \\
   \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-  Model & v1.4 K-MSE & v1.5 K-MSE & v1.4 K-MSE & v1.5 K-MSE & ratio & dB \\
+  Model & $D_4$ K-MSE & $E_8$ K-MSE & $D_4$ K-MSE & $E_8$ K-MSE & ratio & dB \\
   \midrule
   Qwen3-4B        & $1.25\times 10^{-2}$ & $8.02\times 10^{-3}$ & $1.94\times 10^{-3}$ & $1.27\times 10^{-3}$ & $0.65$ & $+1.87$ \\
   DeepSeek-1.5B   & $2.63\times 10^{-2}$ & $1.94\times 10^{-2}$ & $5.36\times 10^{-3}$ & $3.40\times 10^{-3}$ & $0.69$ & $+1.65$ \\
@@ -1190,7 +1200,7 @@ $D_4$'s single-flip parity correction.}
 \begin{table}[H]
 \centering
 \small
-\caption{v1.5 vs v1.4 $\abs{\Delta\mathrm{ppl}}$ at matched $Q$ (in-forward,
+\caption{$E_8$ vs $D_4$ nested lattice variant $\abs{\Delta\mathrm{ppl}}$ at matched $Q$ (in-forward,
 no-boundary, $n=32$, mean $\pm 95\%$ CI via Student-$t$). DeepSeek-R1-Distill-1.5B
 in-forward no-boundary is structurally undeployable for every
 codec; numbers listed for completeness, not for deployment.}
@@ -1199,7 +1209,7 @@ codec; numbers listed for completeness, not for deployment.}
   \toprule
    & \multicolumn{3}{c}{$Q = 10$} & \multicolumn{3}{c}{$Q = 4$} \\
   \cmidrule(lr){2-4}\cmidrule(lr){5-7}
-  Model & v1.4 & v1.5 & reduction & v1.4 & v1.5 & reduction \\
+  Model & $D_4$ & $E_8$ & reduction & $D_4$ & $E_8$ & reduction \\
   \midrule
   Qwen3-4B      & $5.62\%\pm1.78\%$  & $\mathbf{3.85\%\pm1.25\%}$  & $\mathbf{-31.5\%}$ & $36.5\%\pm 13.8\%$  & $\mathbf{17.0\%\pm 5.3\%}$  & $\mathbf{-53.4\%}$ \\
   Gemma-4-E4B   & $2.22\%\pm0.60\%$  & $\mathbf{1.56\%\pm0.49\%}$  & $\mathbf{-29.7\%}$ & $11.2\%\pm 2.5\%$   & $\mathbf{5.79\%\pm 1.43\%}$ & $\mathbf{-48.3\%}$ \\
@@ -1218,12 +1228,12 @@ $0.70$ --- essentially linear. At $Q=4$ the per-layer MSE ratio is
 $0.66$, but the empirical $\abs{\Delta\mathrm{ppl}}$ ratio is
 $0.47$ ($-53\%$), well below what linear propagation would predict.
 Cross-layer error compounding is \emph{super-linear} in per-layer
-error magnitude at aggressive bit budgets: v1.5's lower per-layer
+error magnitude at aggressive bit budgets: the $E_8$ nested lattice variant's lower per-layer
 error therefore has a super-linear advantage in in-forward
 deployment, where error accumulates unchecked across all
 $L$ transformer layers.
 
-\subsection{v1.5 latency}
+\subsection{$E_8$ latency}
 \label{sec:results-latency}
 
 \begin{table}[H]
@@ -1236,31 +1246,31 @@ baseline (raw cast to bf16 and back).}
 \label{tab:latency}
 \begin{tabular}{lrrrrr}
   \toprule
-  Codec & $Q / b$ & bits/head/tok & mean $\mu$s & p99 $\mu$s & ratio vs v1.4 at same $Q$ \\
+  Codec & $Q / b$ & bits/head/tok & mean $\mu$s & p99 $\mu$s & ratio vs the $D_4$ nested lattice variant at same $Q$ \\
   \midrule
-  v1.4 $D_4$  & $4$   & $416$  & $354$ & $2733$ & $1.00\times$ \\
-  v1.5 $E_8$  & $4$   & $448$  & $551$ & $808$  & $\mathbf{1.56\times}$ \\
-  v1.4 $D_4$  & $10$  & $576$  & $331$ & $476$  & $1.00\times$ \\
-  v1.5 $E_8$  & $10$  & $608$  & $596$ & $988$  & $\mathbf{1.80\times}$ \\
-  v1.4 $D_4$  & $38$  & $832$  & $342$ & $463$  & $1.00\times$ \\
-  v1.5 $E_8$  & $38$  & $848$  & $613$ & $1170$ & $1.79\times$ \\
-  v1.4 $D_4$  & $152$ & $1088$ & $348$ & $723$  & $1.00\times$ \\
-  v1.5 $E_8$  & $152$ & $1104$ & $588$ & $1168$ & $1.69\times$ \\
+  $D_4$  & $4$   & $416$  & $354$ & $2733$ & $1.00\times$ \\
+  $E_8$  & $4$   & $448$  & $551$ & $808$  & $\mathbf{1.56\times}$ \\
+  $D_4$  & $10$  & $576$  & $331$ & $476$  & $1.00\times$ \\
+  $E_8$  & $10$  & $608$  & $596$ & $988$  & $\mathbf{1.80\times}$ \\
+  $D_4$  & $38$  & $832$  & $342$ & $463$  & $1.00\times$ \\
+  $E_8$  & $38$  & $848$  & $613$ & $1170$ & $1.79\times$ \\
+  $D_4$  & $152$ & $1088$ & $348$ & $723$  & $1.00\times$ \\
+  $E_8$  & $152$ & $1104$ & $588$ & $1168$ & $1.69\times$ \\
   \midrule
-  TQ scalar    & $2$--$8$  & $288$--$1056$ & $140$--$144$ & $\leq 210$ & $0.42\times$ (vs v1.4) \\
+  TQ scalar    & $2$--$8$  & $288$--$1056$ & $140$--$144$ & $\leq 210$ & $0.42\times$ (vs the $D_4$ nested lattice variant) \\
   \bottomrule
 \end{tabular}
 \end{table}
 
-The $1.56$--$1.80\times$ v1.5/v1.4 ratio is consistent across
-operating points (p50 stable at $540$--$560\,\mu$s for v1.5),
+The $1.56$--$1.80\times$ $E_8$/$D_4$ ratio is consistent across
+operating points (p50 stable at $540$--$560\,\mu$s for the $E_8$ nested lattice variant),
 driven by the two-coset computation. Absolute wall time
 ($< 0.6\,$ms per $2048$-token slice) remains below $5\%$ of a
-typical $10$--$30\,$ms H200 vLLM decode step, so v1.5's latency
+typical $10$--$30\,$ms H200 vLLM decode step, so the $E_8$ nested lattice variant's latency
 cost is not a deployment blocker even with the $1.8\times$
 increase.
 
-\subsection{v1.5 long-context retrieval (NIAH)}
+\subsection{$E_8$ long-context retrieval (NIAH)}
 \label{sec:v15-niah}
 
 We test long-context retrieval under the same conditions (live vLLM
@@ -1281,7 +1291,7 @@ preserved.}
 \label{tab:v15-niah}
 \begin{tabular}{lrrrrrr}
   \toprule
-  Model & bf16 & v1.4 Q=10 & v1.5 Q=10 & v1.4 Q=4 & v1.5 Q=4 & TQ $b=3$ \\
+  Model & bf16 & $D_4$ Q=10 & $E_8$ Q=10 & $D_4$ Q=4 & $E_8$ Q=4 & TQ $b=3$ \\
   \midrule
   Qwen3-4B      & $100\%$ & $\mathbf{100\%}$ & $\mathbf{100\%}$ & $\mathbf{100\%}$ & $\mathbf{100\%}$ & $100\%$ \\
   Gemma-4-E4B   & $100\%$ & $\mathbf{100\%}$ & $\mathbf{100\%}$ & $\mathbf{100\%}$ & $\mathbf{100\%}$ & $100\%$ \\
@@ -1297,22 +1307,22 @@ by the base model); codec numbers are interpretable only relative
 to that ceiling.
 
 Long-context retrieval is preserved on Qwen3-4B and Gemma-4-E4B at
-every v1.5 operating point. On GLM-4-9B-Chat we observe a mild v1.5
-regression at $Q=10$ ($89\%$ vs v1.4's $100\%$) --- one cell of 27
+every $E_8$ operating point. On GLM-4-9B-Chat we observe a mild $E_8$ nested lattice variant
+regression at $Q=10$ ($89\%$ vs the $D_4$ nested lattice variant's $100\%$) --- one cell of 27
 failed (ctx $=16$k, depth $0.9$). This is attributable to GLM-4's
 partial-rotary RoPE (factor $0.5$) interacting with the $E_8$
 Voronoi pattern: in the cells that fail, the reconstructed $K$'s
 error concentrates in the rotated half of the head dimension, and
 the question-token query's attention pattern at long context is
 particularly sensitive to that half's fidelity. We recommend
-v1.5~Q=$152$ (near-lossless, $100\%$ NIAH on all tested cells) for
+$E_8$ Q=$152$ (near-lossless, $100\%$ NIAH on all tested cells) for
 GLM-4 long-context workloads until a RoPE-aware $E_8$ ordering is
 investigated.
 
 \emph{TurboQuant $b=2$ is structurally unusable for long-context
 retrieval} on all four models even with boundary $k=2$: $0/27$
 cells pass on every model. This is the aggressive-edge regime
-where v1.5's $E_8$ shaping gain translates most directly into
+where the $E_8$ nested lattice variant's $E_8$ shaping gain translates most directly into
 deployment value.
 
 \section{Caveats and known limits}
@@ -1333,7 +1343,7 @@ deployment value.
     intrinsic error. In-forward integration (codec inside every
     attention step) adds correlated per-layer noise that is not
     intrinsic to the codec; measuring that accurately needs a
-    paged-attention-native v1.4 kernel, which is out of scope for
+    paged-attention-native \textsc{KakeyaLattice} kernel, which is out of scope for
     this paper.
 
   \item \textbf{Head\_dim $\nmid 4$.}
@@ -1472,7 +1482,7 @@ an alt forward, so the decode-pass FlashAttention kernel operates on
 reconstructed bf16 tensors at native speed. Only the codec itself
 costs wall time (Table~\ref{tab:speed}: 0.02--0.04\,s per
 2112-token passage at the balanced point). A production throughput
-comparison requires a paged-cache backend that embeds the v1.4
+comparison requires a paged-cache backend that embeds the $D_4$ nested lattice variant of the
 codec directly into the attention kernel; that engineering is the
 scope of the upstream PR proposed above and is out of scope for this
 paper.
@@ -1549,7 +1559,7 @@ rotation, per-vector adaptive scale, and $D_4$ closest-point.
 The Halko--Martinsson--Tropp randomised
 SVD~\cite{halko-martinsson-tropp} closes the Brascamp--Lieb to
 matrix-concentration arc in numerical form. It does not appear in
-the v1.4 codec (the RSVD-based v1.3 codec used it
+the $D_4$ nested lattice variant (the RSVD-based v1.3 codec used it
 extensively~\cite{kakeya-v13-paper}), but it is cited because the
 proof of
 Proposition~\ref{prop:d4-kakeya} rests on matrix-concentration
@@ -1605,7 +1615,7 @@ default attention kernel in all forward passes reported here.
 
 \section{Conclusion}
 
-We have presented \textsc{KakeyaLattice}~v1.4, a Zamir--Feder $D_4$
+We have presented \textsc{KakeyaLattice}, a Zamir--Feder $D_4$
 nested-lattice codec whose shaping gain over scalar quantisation is
 bounded unconditionally by $G(\Z^4)/G(D_4) \approx 0.919$ via
 lattice density. Placing the construction inside the
@@ -1622,16 +1632,31 @@ codec's $4$-dimensional block structure, in contrast to the
 conditional lower bound of our prior
 work~\cite{kakeya-v13-paper}.
 
-The measured results are consistent across four transformer
-families. On twelve head-to-head pairs at three matched bit points
-the codec wins universally on K-MSE ($12/12$), at nine of twelve
-pairs on $\abs{\Delta\mathrm{ppl}}$, and at all four models at the
+The measured results for the $D_4$ nested lattice variant are
+consistent across four transformer families. On twelve
+head-to-head pairs at three matched bit points the codec wins
+universally on K-MSE ($12/12$), at nine of twelve pairs on
+$\abs{\Delta\mathrm{ppl}}$, and at all four models at the
 aggressive $\sim\!3.6\times$ compression point. The theoretical
-shaping-gain prediction of $0.919$ is recovered to within $\sim\!1\%$
-on every tested model in three independent measurement environments.
-At $128$k context the codec reduces the combined KV cache by
-$2.5\times$--$2.8\times$ at a balanced operating point and
-$1.66\times$--$1.73\times$ at a near-lossless operating point.
+shaping-gain prediction of $0.919$ is recovered to within
+$\sim\!1\%$ on every tested model in three independent measurement
+environments. At $128$k context the codec reduces the combined KV
+cache by $2.5\times$--$2.8\times$ at a balanced operating point
+and $1.66\times$--$1.73\times$ at a near-lossless operating point.
+
+The $E_8$ nested lattice variant extends these measured results
+by a further $+1.3$ to $+2.0\,$dB per-layer K-MSE gain and a
+$28$--$53\,\%$ $\abs{\Delta\mathrm{ppl}}$ reduction across the
+same four model families in live vLLM in-forward no-boundary at
+$n=32$ passages with $95\%$ CI. The $E_8$ empirical gain exceeds
+the $+0.29\,$dB theoretical minimum $4$--$6\times$: the two-coset
+structure of $E_8$ handles coarse-quantisation outliers better
+than $D_4$'s single-flip parity correction, so the advantage
+grows super-linearly under cross-layer error accumulation.
+Long-context retrieval (Needle-in-a-Haystack at $16$k context) is
+preserved on Qwen3-4B and Gemma-4-E4B at every $E_8$ operating
+point. The cost is a fixed $+32$ bits per vector ($-5$ to $-7\,\%$
+CR at iso-$Q$) and $1.56$--$1.80\,\times$ encode latency.
 
 Our positioning (\S\ref{sec:tq-comparison}) is as an unconditional
 $\approx 8\%$ improvement to an existing production-deployed KV
@@ -1644,13 +1669,17 @@ across four open-source model families.
 \paragraph{Reproducibility.}
 All code, unit tests, per-model JSON measurements, the four
 per-architecture attention hooks, and the multi-model head-to-head
-harness are released under Apache-2.0 at tag \texttt{v1.4}. The
-canonical codec class is
-\texttt{kakeyaturbo\_py.V14KakeyaZamirLatticeGPU}; the multi-model
-report is at
-\texttt{reports/v1\_3\_ppl/snapshot\_mode\_qwen3/multimodel/FINDINGS\_MULTIMODEL.md};
-and the $128$k storage report is at
-\texttt{reports/v1\_4\_release/kv\_128k\_report/V14\_KV\_128K\_REPORT.md}.
+harness are released under Apache-2.0 in the
+\texttt{kakeyalattice} package. The canonical codec classes are
+\texttt{kakeyalattice.V14KakeyaZamirLatticeGPU} ($D_4$ nested
+lattice variant) and \texttt{kakeyalattice.V15KakeyaZamirE8GPU}
+($E_8$ nested lattice variant); both implement the same
+\texttt{.roundtrip(x)} interface parameterised on the lattice
+choice. The full reproducibility manifest is in
+Appendix~\ref{app:repro}; the $128$k storage report is at
+\texttt{reports/v1\_4\_release/kv\_128k\_report/V14\_KV\_128K\_REPORT.md},
+and the $E_8$ four-model evaluation is at
+\texttt{reports/v1\_5\_release/V15\_FULL\_4MODEL\_REPORT.md}.
 
 \paragraph*{A note on the distortion metric.}
 \label{sec:mse-discussion}
@@ -2033,15 +2062,15 @@ GLM-4-9B-Chat):
 \begin{center}
 \begin{tabular}{rrrrrl}
   \toprule
-   & \multicolumn{2}{c}{v1.4 ($D_4$)} & \multicolumn{2}{c}{v1.5 ($E_8$)} & \\
+   & \multicolumn{2}{c}{$D_4$ nested lattice variant} & \multicolumn{2}{c}{$E_8$ nested lattice variant} & \\
   \cmidrule(lr){2-3}\cmidrule(lr){4-5}
   $q_\mathrm{range}$ & bits & CR & bits & CR & Role \\
   \midrule
   $152$ & $1088$ & $1.88\times$ & $1104$ & $1.86\times$ & Near-lossless \\
   $\phantom{0}76$ & $\phantom{0}960$ & $2.13\times$ & $\phantom{0}976$ & $2.10\times$ & \\
-  $\phantom{0}38$ & $\phantom{0}832$ & $2.46\times$ & $\phantom{0}848$ & $2.41\times$ & \textbf{v1.4 balanced} \\
+  $\phantom{0}38$ & $\phantom{0}832$ & $2.46\times$ & $\phantom{0}848$ & $2.41\times$ & \textbf{$D_4$ balanced} \\
   $\phantom{0}19$ & $\phantom{0}704$ & $2.91\times$ & $\phantom{0}720$ & $2.84\times$ & \\
-  $\phantom{0}10$ & $\phantom{0}576$ & $3.56\times$ & $\phantom{0}608$ & $3.37\times$ & \textbf{v1.5 balanced} \\
+  $\phantom{0}10$ & $\phantom{0}576$ & $3.56\times$ & $\phantom{0}608$ & $3.37\times$ & \textbf{$E_8$ balanced} \\
   $\phantom{00}5$ & $\phantom{0}448$ & $4.57\times$ & $\phantom{0}464$ & $4.41\times$ & \\
   $\phantom{00}4$ & $\phantom{0}416$ & $4.92\times$ & $\phantom{0}448$ & $4.57\times$ & Aggressive compression \\
   $\phantom{00}2$ & $\phantom{0}320$ & $6.40\times$ & $\phantom{0}336$ & $6.10\times$ & Extreme compression \\
@@ -2057,13 +2086,14 @@ both codecs emit per-layer bit budgets via the
 storage figures in Table~\ref{tab:128k} use those per-layer values.
 
 \paragraph{Deployment recommendation.} Use
-\textbf{v1.5 Q=$10$} (CR $3.37\times$, $|\Delta\mathrm{ppl}|$
+\textbf{$E_8$ Q=$10$} (CR $3.37\times$, $|\Delta\mathrm{ppl}|$
 typically $1.6$--$6.9\%$) as the default head-of-line operating
-point. Use v1.5 Q=$4$ (CR $4.57\times$) when aggressive compression
+point. Use $E_8$ Q=$4$ (CR $4.57\times$) when aggressive compression
 is non-negotiable and $|\Delta\mathrm{ppl}|$ of $6$--$32\%$ is
-acceptable on the target model family. Use v1.5 Q=$152$
+acceptable on the target model family. Use $E_8$ Q=$152$
 (CR $1.86\times$, $|\Delta\mathrm{ppl}| < 1\%$) when near-lossless
-is required. Stay on v1.4 for latency-critical paths where the
-$1.56$--$1.80\times$ v1.5 encode cost is unacceptable.
+is required. Stay on the $D_4$ nested lattice variant for latency-critical
+paths where the $1.56$--$1.80\times$ $E_8$ encode cost is
+unacceptable.
 
 \end{document}
