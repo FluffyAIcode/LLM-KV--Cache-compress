@@ -341,19 +341,59 @@ def main() -> int:
         print(f"[ERROR] Snapshot hook didn't fire for {args.model_path}.",
               flush=True)
         return 1
-    head_dim = cap_dry[0]['K'].shape[-1]
-    num_kv_heads = cap_dry[0]['K'].shape[1]
+
+    # Per-layer head_dim discovery.  Gemma-4 MatFormer alternates
+    # sliding-attention (hd=256) and full-attention (hd=512) layers,
+    # so we can't assume a single hd for the whole model.  Build an
+    # integer→(hd, num_kv_heads) map from the capture pass.  Layers
+    # that were NOT captured (e.g. kv_shared layers) are handled by
+    # being skipped in the sweep (they pass through bf16 unchanged).
+    per_layer_shape: dict[int, tuple[int, int]] = {}
+    for lid, kv in cap_dry.items():
+        hd = kv['K'].shape[-1]
+        nkv = kv['K'].shape[1]
+        per_layer_shape[lid] = (hd, nkv)
+
+    distinct_hds = sorted({hd for hd, _ in per_layer_shape.values()})
+    distinct_nkvs = sorted({nkv for _, nkv in per_layer_shape.values()})
     print(f"[model] {args.model_path}", flush=True)
-    print(f"[model] L={num_layers}  hd={head_dim}  kv_h={num_kv_heads}",
+    print(f"[model] L={num_layers}  captured={len(per_layer_shape)}  "
+          f"distinct_hds={distinct_hds}  distinct_kvh={distinct_nkvs}",
           flush=True)
+    if len(distinct_hds) > 1:
+        print(f"[model] VARIABLE head_dim across layers — per-layer "
+              f"codec dispatch active", flush=True)
+        hd_counts = {}
+        for hd, _ in per_layer_shape.values():
+            hd_counts[hd] = hd_counts.get(hd, 0) + 1
+        for hd, cnt in sorted(hd_counts.items()):
+            print(f"[model]   hd={hd}: {cnt} layer(s)", flush=True)
 
-    if head_dim % 4 != 0:
-        print(f"[FAIL] head_dim {head_dim} not divisible by 4.", flush=True)
-        return 2
+    for hd in distinct_hds:
+        if hd % 4 != 0:
+            print(f"[FAIL] head_dim {hd} not divisible by 4.", flush=True)
+            return 2
 
-    # Save layer-0 reference for pure-codec rel-MSE measurement.
-    ref_K0 = cap_dry[0]['K'].clone()
-    ref_V0 = cap_dry[0]['V'].clone()
+    # Legacy scalars for reporting: use the MAJORITY head_dim (largest
+    # number of layers) as the "representative" for the aggregate
+    # byte counts.  Per-channel bookkeeping uses per-layer hd below.
+    majority_hd = max(distinct_hds, key=lambda h:
+                      sum(1 for lhd, _ in per_layer_shape.values() if lhd == h))
+    majority_nkv = max(distinct_nkvs, key=lambda n:
+                       sum(1 for _, lnkv in per_layer_shape.values() if lnkv == n))
+    head_dim = majority_hd
+    num_kv_heads = majority_nkv
+
+    # Save one reference K/V per distinct head_dim for pure-codec
+    # rel-MSE (instead of a single layer-0 reference, which would
+    # mean rel-MSE only covers one head_dim on a heterogeneous model).
+    ref_K_by_hd: dict[int, torch.Tensor] = {}
+    ref_V_by_hd: dict[int, torch.Tensor] = {}
+    for lid, kv in cap_dry.items():
+        hd = kv['K'].shape[-1]
+        if hd not in ref_K_by_hd:
+            ref_K_by_hd[hd] = kv['K'].clone()
+            ref_V_by_hd[hd] = kv['V'].clone()
     del cap_dry
     HookState.captured = {}
     torch.cuda.empty_cache()
@@ -362,24 +402,76 @@ def main() -> int:
         boundary = set()
     else:
         boundary = default_boundary_for_model(num_layers)
-    n_boundary = len(boundary)
-    n_compressed = num_layers - n_boundary
+    # Layers that weren't captured (e.g. Gemma-4 kv_shared) are always
+    # skipped by the hook naturally; we also add them to boundary for
+    # bookkeeping so the "expected fires" count below is correct.
+    uncaptured = set(range(num_layers)) - set(per_layer_shape.keys())
+    if uncaptured:
+        print(f"[model] uncaptured layers (kv_shared/other): "
+              f"{sorted(uncaptured)}", flush=True)
+    effective_boundary = boundary | uncaptured
+    n_boundary_like = len(effective_boundary)
+    n_compressed = num_layers - n_boundary_like
 
     raw_bits_per_h = raw_bits_per_token_per_head(head_dim)
     raw_bytes_per_h = raw_bits_per_h // 8
 
-    # ---- Build channel list ----
+    # ---- Build channel list — PER-head_dim codec registry ----
+    # For each (kind, Q/b) we build one codec_fn per distinct hd in the
+    # model.  The per-layer dispatch wrapper (_make_per_layer_codec)
+    # picks the right one at call time based on the input tensor shape.
+    def _make_per_layer_codec(
+        per_hd_fns: dict[int, Any], channel_id: str, label: str,
+    ):
+        """Wrap per-hd codec_fns into a single fn that dispatches on D.
+
+        All wrapped fns must share the same per-token bit budget at a
+        given (variant, Q/b).  Per-layer bit-budget variation is
+        accounted for in the storage calculation (uses per_layer_shape).
+        """
+        # Representative bit budget for display (picked on majority hd).
+        rep_fn = per_hd_fns[majority_hd]
+        def fn(X: torch.Tensor) -> torch.Tensor:
+            D = X.shape[-1]
+            hd_fn = per_hd_fns.get(D)
+            if hd_fn is None:
+                raise RuntimeError(
+                    f"per-layer codec dispatch: no codec for head_dim={D}; "
+                    f"available: {sorted(per_hd_fns.keys())}. "
+                    f"No fallback by design."
+                )
+            return hd_fn(X)
+        # Use the majority hd's bit budget for the summary reporting.
+        fn.bits_per_token_per_head = rep_fn.bits_per_token_per_head
+        fn.channel_id = channel_id
+        fn.label = label
+        fn.per_hd_bits = {hd: f.bits_per_token_per_head
+                          for hd, f in per_hd_fns.items()}
+        return fn
+
     def make_base_codec_fns():
         out: list[tuple[str, Any]] = []
         for Q in Q_VALUES:
-            out.append(("v14", make_v14_codec_fn(head_dim, Q)))
+            per_hd = {hd: make_v14_codec_fn(hd, Q) for hd in distinct_hds}
+            out.append(("v14",
+                        _make_per_layer_codec(
+                            per_hd, f"v14_Q{Q}", f"v1.4 Q={Q}",
+                        )))
         for b in TQ_VALUES:
-            out.append(("tq", make_tq_codec_fn(head_dim, b)))
+            per_hd = {hd: make_tq_codec_fn(hd, b) for hd in distinct_hds}
+            out.append(("tq",
+                        _make_per_layer_codec(
+                            per_hd, f"tq_b{b}", f"TQ b={b}",
+                        )))
         for variant in ABL_VARIANTS:
-            # Ablation uses the first Q value by convention.
             Q = Q_VALUES[0] if Q_VALUES else 38
+            per_hd = {hd: make_ablation_codec_fn(variant, hd, Q)
+                      for hd in distinct_hds}
             out.append(("ablation",
-                        make_ablation_codec_fn(variant, head_dim, Q)))
+                        _make_per_layer_codec(
+                            per_hd, f"{variant}_Q{Q}",
+                            f"{variant} Q={Q}",
+                        )))
         return out
 
     base_codecs = make_base_codec_fns()
@@ -451,7 +543,10 @@ def main() -> int:
 
             HookState.phase = "inforward"
             HookState.codec_fn = tagged_codec
-            HookState.inforward_skip_layers = set(boundary)
+            # Skip both user-configured boundary layers AND layers that
+            # weren't captured (e.g. Gemma-4 kv_shared layers that reuse
+            # another layer's K/V cache; see gemma4.py is_kv_shared_layer).
+            HookState.inforward_skip_layers = set(effective_boundary)
             HookState.inforward_fired = {}
 
             t0 = time.perf_counter()
@@ -483,7 +578,9 @@ def main() -> int:
             replacements: dict[int, dict[str, torch.Tensor]] = {}
             for lid, kv in captured.items():
                 K_g, V_g = kv["K"], kv["V"]
-                if lid in boundary:
+                # Skip boundary layers (keep bf16) AND uncaptured-by-design
+                # layers (Gemma-4 kv_shared re-use earlier layer's cache).
+                if lid in effective_boundary:
                     replacements[lid] = {"K": K_g, "V": V_g}
                     continue
                 if kv_mode in ("K", "KV"):
@@ -531,26 +628,36 @@ def main() -> int:
         )
         delta_ppl = (ppl_alt - ppl_ref) / max(ppl_ref, 1e-9)
 
-        # Layer-0 pure-codec rel-MSE (before cross-layer amplification).
+        # Pure-codec rel-MSE: average across distinct head_dims (not just
+        # layer 0), so Gemma-4 sliding (hd=256) and full (hd=512) both
+        # contribute. Weighted by the number of layers at each hd.
+        def _compute_rel_mse(refs_by_hd: dict) -> float:
+            if not refs_by_hd:
+                return 0.0
+            num, den = 0.0, 0.0
+            for hd, X_ref in refs_by_hd.items():
+                n_layers_at_hd = sum(1 for lhd, _ in per_layer_shape.values()
+                                     if lhd == hd)
+                X_hat = codec_fn(X_ref)
+                diff_sq = ((X_hat - X_ref) ** 2).sum(-1).mean()
+                norm_sq = (X_ref ** 2).sum(-1).mean().clamp(min=1e-12)
+                num += float(diff_sq.item()) * n_layers_at_hd
+                den += float(norm_sq.item()) * n_layers_at_hd
+            return num / max(den, 1e-20)
+
         if kv_mode in ("K", "KV"):
-            K0_hat = codec_fn(ref_K0)
-            diff_K = K0_hat - ref_K0
-            k_mse = float(
-                ((diff_K ** 2).sum(-1).mean() /
-                 (ref_K0 ** 2).sum(-1).mean().clamp(min=1e-12)).item()
-            )
+            k_mse = _compute_rel_mse(ref_K_by_hd)
         else:
             k_mse = 0.0
         if kv_mode in ("V", "KV"):
-            V0_hat = codec_fn(ref_V0)
-            diff_V = V0_hat - ref_V0
-            v_mse = float(
-                ((diff_V ** 2).sum(-1).mean() /
-                 (ref_V0 ** 2).sum(-1).mean().clamp(min=1e-12)).item()
-            )
+            v_mse = _compute_rel_mse(ref_V_by_hd)
         else:
             v_mse = 0.0
 
+        # Per-hd bit accounting: for each layer, its K (and V) bit budget
+        # depends on that layer's head_dim.  We report the MAJORITY hd's
+        # bit count as the scalar `k_bits` / `v_bits` for the summary
+        # table, but the storage (kakeya_bytes_128k) below sums per-layer.
         k_bits = codec_fn.bits_per_token_per_head if kv_mode in ("K", "KV") else raw_bits_per_h
         v_bits = codec_fn.bits_per_token_per_head if kv_mode in ("V", "KV") else raw_bits_per_h
 
@@ -654,13 +761,42 @@ def main() -> int:
         sample = rs[0]
         k_bits = sample["k_bits"]
         v_bits = sample["v_bits"]
-        baseline_per_tok = num_layers * num_kv_heads * (raw_bytes_per_h * 2)
-        kakeya_per_tok   = (
-            n_boundary * num_kv_heads * (raw_bytes_per_h * 2)
-            + n_compressed * num_kv_heads * (k_bits // 8 + v_bits // 8)
-        )
+
+        # Per-layer storage accounting (handles heterogeneous head_dim
+        # across layers for Gemma-4 MatFormer).  For each layer:
+        #   baseline = num_kv_heads × (raw_K + raw_V)  with that layer's hd
+        #   kakeya:
+        #     if layer is boundary OR uncaptured → keep bf16
+        #     else → use the codec's per-hd bit budget (K and/or V
+        #            depending on kv_mode)
+        kv_mode_for_ch = sample.get("kv_mode")
+        k_bits_bf16 = raw_bits_per_h  # legacy — but we need per-layer
+        # Find the channel's codec_fn to look up per_hd_bits.
+        ch_codec_fn = None
+        for _k, _cf in base_codecs:
+            if _cf.channel_id == ch.replace(
+                    f"_{kv_mode_for_ch}" if kv_mode_for_ch else "", ""):
+                ch_codec_fn = _cf
+                break
+        per_hd_bits = getattr(ch_codec_fn, "per_hd_bits",
+                              {hd: 16 * hd for hd in distinct_hds}) \
+            if ch_codec_fn else {hd: 16 * hd for hd in distinct_hds}
+
+        baseline_per_tok = 0
+        kakeya_per_tok = 0
+        for lid in range(num_layers):
+            hd_lid, nkv_lid = per_layer_shape.get(lid, (majority_hd, majority_nkv))
+            raw_bytes_this = 16 * hd_lid // 8  # bf16 per-head per-token
+            baseline_per_tok += nkv_lid * (raw_bytes_this * 2)  # K + V
+            if ch == "bf16_ref" or lid in effective_boundary or lid not in per_layer_shape:
+                kakeya_per_tok += nkv_lid * (raw_bytes_this * 2)
+            else:
+                codec_bits = per_hd_bits.get(hd_lid, 16 * hd_lid)
+                kbytes = codec_bits // 8 if kv_mode_for_ch in ("K", "KV") else raw_bytes_this
+                vbytes = codec_bits // 8 if kv_mode_for_ch in ("V", "KV") else raw_bytes_this
+                kakeya_per_tok += nkv_lid * (kbytes + vbytes)
         baseline_128k = baseline_per_tok * args.report_ctx_tokens
-        kakeya_128k   = kakeya_per_tok * args.report_ctx_tokens
+        kakeya_128k   = kakeya_per_tok   * args.report_ctx_tokens
 
         agg_rows.append({
             "channel": ch,
@@ -686,7 +822,8 @@ def main() -> int:
     print(f"v1.4 KakeyaLattice rigorous eval — model={args.model_path}  "
           f"mode={args.mode}  n={args.n_passages}")
     print(f"Boundary skip: {sorted(boundary) if boundary else '(none)'}  "
-          f"(codec on {n_compressed}/{num_layers} layers)")
+          f"(codec on {n_compressed}/{num_layers} layers; "
+          f"uncaptured-by-arch: {sorted(uncaptured) if uncaptured else '(none)'})")
     print("=" * 128)
     print(f"{'Channel':<30} {'KV':>4} {'n':>3} "
           f"{'CR':>6} {'|Δppl|±95%CI':>18} {'Δppl±95%CI':>18} "
@@ -713,6 +850,12 @@ def main() -> int:
         "num_layers": num_layers,
         "head_dim": head_dim,
         "num_kv_heads": num_kv_heads,
+        "distinct_head_dims": distinct_hds,
+        "distinct_num_kv_heads": distinct_nkvs,
+        "per_layer_shape": {str(lid): {"hd": hd, "kvh": nkvh}
+                            for lid, (hd, nkvh) in per_layer_shape.items()},
+        "uncaptured_layers": sorted(uncaptured),
+        "effective_boundary_layers": sorted(effective_boundary),
         "boundary_skip_layers": sorted(boundary),
         "no_boundary": args.no_boundary,
         "raw_bits_per_token_per_head": raw_bits_per_h,
