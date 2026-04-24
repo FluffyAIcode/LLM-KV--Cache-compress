@@ -4,6 +4,13 @@
 **Source**: vast.ai H200 instance, `/workspace/LLM-KV--Cache-compress/reports/v1_4_release/` + `/tmp/`
 **Integrity**: see `MANIFEST.sha256` — 103 files, 5.15 MiB, all sha256-verified against vast at pull time
 
+> **Note**: v1.5 evaluation data is in a separate directory at
+> [`reports/v1_5_release/`](../v1_5_release/).  Earlier staging at
+> `reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/` was promoted
+> out to match the two-release structure.  This inventory documents
+> the v1.4-era data only (tagged `v1.4`, commit `6b02711`).  v1.4 data
+> is frozen.
+
 All files in this tree are raw outputs of real vLLM + real H200 GPU runs.  No mocks, no simulations.  Every log is the full stdout+stderr of an actual `llm.generate(...)` call chain, plus the vLLM engine startup banner + weight loading + FlashAttention version + snapshot-patch install lines + per-channel fires-count + per-passage PPL values.
 
 ## Directory structure

@@ -4,7 +4,7 @@
 **Branch**: `AgentMemory/v1-5-full-4model-eval-c478`
 **Scope**: PPL + MSE + CR + Latency + NIAH on 4 open-source models, v1.5 (E8) vs v1.4 (D4) vs TurboQuant
 **Environment**: vast.ai H200 · vLLM `0.19.2rc1.dev100` · FlashAttention v3
-**Raw data**: `reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/`
+**Raw data**: `reports/v1_5_release/`
 
 ## Scope
 
@@ -293,7 +293,7 @@ python benchmarks/rigorous_eval.py \
     --kv-modes KV --no-boundary \
     --ctx-len 2048 --n-eval 64 --n-passages 32 \
     --gpu-mem-util 0.40 \
-    --out-dir reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq
+    --out-dir reports/v1_5_release
 
 # TQ b=2 guardrail (boundary=2 required)
 python benchmarks/rigorous_eval.py \
@@ -302,11 +302,11 @@ python benchmarks/rigorous_eval.py \
     --q-values "" --v15-q-values "" --tq-b-values 2 \
     --kv-modes KV --boundary-size 2 \
     --ctx-len 2048 --n-eval 64 --n-passages 32 \
-    --out-dir reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq
+    --out-dir reports/v1_5_release
 
 # Latency (no model needed)
 python benchmarks/e8_latency_benchmark.py --n-iters 500 \
-    --out-dir reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq
+    --out-dir reports/v1_5_release
 
 # NIAH (per model)
 python benchmarks/niah_eval.py \
@@ -314,5 +314,5 @@ python benchmarks/niah_eval.py \
     --mode inforward --boundary-size 2 --n-trials 3 \
     --ctx-lengths 4096,8192,16384 --depths 0.1,0.5,0.9 \
     --q-values 4,10 --v15-q-values 4,10 --tq-b-values 2,3 \
-    --out-dir reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/niah
+    --out-dir reports/v1_5_release/niah
 ```

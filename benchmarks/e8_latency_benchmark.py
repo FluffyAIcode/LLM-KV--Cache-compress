@@ -156,7 +156,7 @@ def main() -> int:
                     help="KV heads (Qwen3-4B=8, others=2)")
     ap.add_argument("--head-dim", type=int, default=128)
     ap.add_argument("--out-dir", type=Path,
-                    default=Path("reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq"))
+                    default=Path("reports/v1_5_release"))
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
