@@ -1,0 +1,697 @@
+{
+  "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+  "model_name": "deepseek_1p5b",
+  "mode": "inforward",
+  "num_layers": 28,
+  "head_dim": 128,
+  "num_kv_heads": 2,
+  "boundary_skip_layers": [
+    0,
+    1,
+    26,
+    27
+  ],
+  "ctx_lengths": [
+    4096,
+    8192,
+    16384
+  ],
+  "depths": [
+    0.1,
+    0.5,
+    0.9
+  ],
+  "q_values": [
+    38,
+    152
+  ],
+  "tq_b_values": [
+    6,
+    8
+  ],
+  "n_trials": 3,
+  "records": [
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor and director. He",
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor and director. He"
+      ],
+      "t_gen_last": 0.23161577247083187
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor, and he's",
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor, and he's"
+      ],
+      "t_gen_last": 0.8773725125938654
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should go to the city of San Francisco, but he is a writer, so he needs to find a way to get there. He can take a taxi",
+        "He should go to the city of San Francisco, but he is a writer, so he needs to find a way to get there. He can take a taxi"
+      ],
+      "t_gen_last": 0.8423785138875246
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor, and he's",
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor, and he's"
+      ],
+      "t_gen_last": 0.5135974604636431
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor, and he's",
+        "He should stay in San Francisco and not go to the city.\n\nBut wait, the text says that Robert Boulter is an English actor, and he's"
+      ],
+      "t_gen_last": 0.5124610029160976
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he is a writer and is interested in the city.",
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he is a writer and is interested in the city."
+      ],
+      "t_gen_last": 0.2336937803775072
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he was in San Francisco for a few days, but",
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he was in San Francisco for a few days, but"
+      ],
+      "t_gen_last": 0.8550208210945129
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he is a writer and is in San Francisco. So",
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he is a writer and is in San Francisco. So"
+      ],
+      "t_gen_last": 0.8609114661812782
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the bus to the city center and then walk around.\n\nBut wait, the text says that San Francisco is",
+        "The best thing to do in San Francisco is to take the bus to the city center and then walk around.\n\nBut wait, the text says that San Francisco is"
+      ],
+      "t_gen_last": 0.5157456062734127
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he is a writer and is in San Francisco. So",
+        "He should go to San Francisco and stay there for a few days.\n\nBut wait, the text says that he is a writer and is in San Francisco. So"
+      ],
+      "t_gen_last": 0.5103512909263372
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense"
+      ],
+      "t_gen_last": 0.23125920072197914
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense"
+      ],
+      "t_gen_last": 0.865034569054842
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense"
+      ],
+      "t_gen_last": 0.863751195371151
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense,",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense,"
+      ],
+      "t_gen_last": 0.5496439058333635
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. 400 poems in his dense"
+      ],
+      "t_gen_last": 0.577630914747715
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "Based on the information provided, the best thing to do in San Francisco would be to attend the concert by The Blue L Inferno, as it is a significant",
+        "Based on the information provided, the best thing to do in San Francisco would be to attend the concert by The Blue L Inferno, as it is a significant"
+      ],
+      "t_gen_last": 0.25818171724677086
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to attend the concert by The 13th December 2005, which is a significant event in",
+        "The best thing to do in San Francisco is to attend the concert by The 13th December 2005, which is a significant event in"
+      ],
+      "t_gen_last": 0.8872591555118561
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to go to the beach and enjoy the beautiful weather.\n\nExplanation: The text mentions that San Francisco is a city in",
+        "The best thing to do in San Francisco is to go to the beach and enjoy the beautiful weather.\n\nExplanation: The text mentions that San Francisco is a city in"
+      ],
+      "t_gen_last": 0.8849786445498466
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "I should travel to San Francisco to see the movie \" The Rock at the Bottom \" and watch it on a big screen.\n\nWait, but the user is asking",
+        "I should travel to San Francisco to see the movie \" The Rock at the Bottom \" and watch it on a big screen.\n\nWait, but the user is asking"
+      ],
+      "t_gen_last": 0.5584474485367537
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "Based on the information provided, the best thing to do in San Francisco would be to attend the concert by The Song of the Weavers, which is a major",
+        "Based on the information provided, the best thing to do in San Francisco would be to attend the concert by The Song of the Weavers, which is a major"
+      ],
+      "t_gen_last": 0.5411415789276361
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to go to the Golden Gate Bridge and cross over to the Bay Bridge.\n\nNow, let's analyze the text to",
+        "The best thing to do in San Francisco is to go to the Golden Gate Bridge and cross over to the Bay Bridge.\n\nNow, let's analyze the text to"
+      ],
+      "t_gen_last": 0.2928179018199444
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "He should take a break from the news and listen to a podcast or listen to a live stream of a band or artist he's been into.\n\nBut I need",
+        "He should take a break from the news and listen to a podcast or listen to a live stream of a band or artist he's been into.\n\nBut I need"
+      ],
+      "t_gen_last": 0.8786402437835932
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to go to the movies and watch a good one.\n\nExplanation: The text discusses the popularity of San Francisco's entertainment",
+        "The best thing to do in San Francisco is to go to the movies and watch a good one.\n\nExplanation: The text discusses the popularity of San Francisco's entertainment"
+      ],
+      "t_gen_last": 0.8930659852921963
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to go to the beach.\n\nExplanation: The text mentions that San Francisco is a tourist city, and the author,",
+        "The best thing to do in San Francisco is to go to the beach.\n\nExplanation: The text mentions that San Francisco is a tourist city, and the author,"
+      ],
+      "t_gen_last": 0.5396308153867722
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to go to the Golden Gate Bridge and cross over to the Bay Bridge.\n\nBut I need to make sure I'm",
+        "The best thing to do in San Francisco is to go to the Golden Gate Bridge and cross over to the Bay Bridge.\n\nBut I need to make sure I'm"
+      ],
+      "t_gen_last": 0.5274643059819937
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in"
+      ],
+      "t_gen_last": 0.2562689781188965
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nNow, let's analyze the text to",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nNow, let's analyze the text to"
+      ],
+      "t_gen_last": 0.8701455742120743
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in"
+      ],
+      "t_gen_last": 0.8843735288828611
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in"
+      ],
+      "t_gen_last": 0.5317434538155794
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n</think>\n\nThe best thing to do in"
+      ],
+      "t_gen_last": 0.5381474755704403
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has",
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has"
+      ],
+      "t_gen_last": 0.33712138794362545
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the bus to San Francisco. The bus is the best option because it is faster, cheaper, and more",
+        "The best thing to do in San Francisco is to take the bus to San Francisco. The bus is the best option because it is faster, cheaper, and more"
+      ],
+      "t_gen_last": 1.0191438421607018
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has",
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has"
+      ],
+      "t_gen_last": 0.9846112858504057
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the bus to San Francisco. The bus is the best option because it is faster, cheaper, and more",
+        "The best thing to do in San Francisco is to take the bus to San Francisco. The bus is the best option because it is faster, cheaper, and more"
+      ],
+      "t_gen_last": 0.6192046049982309
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do is to take the bus to San Francisco.\n\nBut according to the text, the Ise class battleships were converted to carriers in",
+        "The best thing to do is to take the bus to San Francisco.\n\nBut according to the text, the Ise class battleships were converted to carriers in"
+      ],
+      "t_gen_last": 0.6176405046135187
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has",
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has"
+      ],
+      "t_gen_last": 0.3311924785375595
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the bus to San Francisco. The bus is the most reliable and has the least chance of being delayed.",
+        "The best thing to do in San Francisco is to take the bus to San Francisco. The bus is the most reliable and has the least chance of being delayed."
+      ],
+      "t_gen_last": 0.9681974798440933
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has",
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has"
+      ],
+      "t_gen_last": 0.9791568983346224
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most powerful and has",
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most powerful and has"
+      ],
+      "t_gen_last": 0.625155484303832
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has",
+        "The best thing to do in San Francisco is to take the best available options, which is the Ise class battleship. It is the most advanced and has"
+      ],
+      "t_gen_last": 0.6242521554231644
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nBut according to the text, the answer",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nBut according to the text, the answer"
+      ],
+      "t_gen_last": 0.33528835512697697
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take a flight to the Ise class battleships and engage in a direct engagement with the Ise class battles",
+        "The best thing to do in San Francisco is to take a flight to the Ise class battleships and engage in a direct engagement with the Ise class battles"
+      ],
+      "t_gen_last": 0.9744818825274706
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v14_Q152",
+      "codec_bits_per_token_per_head": 1088,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nBut according to the text, the answer",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nBut according to the text, the answer"
+      ],
+      "t_gen_last": 0.9705809354782104
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take a flight to the Ise class battleship and then return to San Francisco.\n\nBut according to the text",
+        "The best thing to do in San Francisco is to take a flight to the Ise class battleship and then return to San Francisco.\n\nBut according to the text"
+      ],
+      "t_gen_last": 0.6448667999356985
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "tq_b8",
+      "codec_bits_per_token_per_head": 1056,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to take a flight to New York City and stay there for a few days. This is because New York City is",
+        "The best thing to do in San Francisco is to take a flight to New York City and stay there for a few days. This is because New York City is"
+      ],
+      "t_gen_last": 0.6190257668495178
+    }
+  ],
+  "by_channel": {
+    "bf16": {
+      "channel": "bf16",
+      "bits_per_token_per_head": 2048,
+      "n_correct": 9,
+      "n_trials": 27
+    },
+    "v14_Q38": {
+      "channel": "v14_Q38",
+      "bits_per_token_per_head": 832,
+      "n_correct": 6,
+      "n_trials": 27
+    },
+    "v14_Q152": {
+      "channel": "v14_Q152",
+      "bits_per_token_per_head": 1088,
+      "n_correct": 9,
+      "n_trials": 27
+    },
+    "tq_b6": {
+      "channel": "tq_b6",
+      "bits_per_token_per_head": 800,
+      "n_correct": 6,
+      "n_trials": 27
+    },
+    "tq_b8": {
+      "channel": "tq_b8",
+      "bits_per_token_per_head": 1056,
+      "n_correct": 6,
+      "n_trials": 27
+    }
+  }
+}
