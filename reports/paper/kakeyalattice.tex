@@ -1346,18 +1346,22 @@ Tseng, A., Chee, J., Sun, Q., Kuleshov, V., De~Sa, C.
 
 \bibitem{kakeya-v14-release}
 Li, A.
-\newblock \textsc{KakeyaLattice}~v1.4: the canonical implementation.
-\newblock Open-source release, \emph{LLM-KV--Cache-compress}, tag \texttt{v1.4}, April 2026.
-\newblock Python class \texttt{kakeyaturbo\_py.V14KakeyaZamirLatticeGPU}; multi-model
-  measurement harness \texttt{benchmarks/multimodel\_v14\_vs\_tq.py}; four
-  per-architecture snapshot hooks in
-  \texttt{vllm\_backend/kakeya\_v1\_3\_ppl/snapshot\_hook.py}.
+\newblock \textsc{KakeyaLattice}: the canonical implementation.
+\newblock Open-source release, \emph{LLM-KV--Cache-compress},
+  April 2026.
+\newblock Python package \texttt{kakeyalattice} (classes
+  \texttt{V14KakeyaZamirLatticeGPU} and
+  \texttt{V15KakeyaZamirE8GPU}); multi-model measurement harness
+  \texttt{benchmarks/rigorous\_eval.py}; four per-architecture
+  attention-module patches in
+  \texttt{vllm\_backend/kakeya\_v1\_4\_snapshot/snapshot\_hook.py}.
+  Release tags: \texttt{v1.4} (first $D_4$ release, commit
+  \texttt{6b02711}) and \texttt{v1.5} (first $E_8$ release).
 
 \bibitem{kakeya-v13-paper}
 Li, A.
 \newblock {Randomized Kakeya Skeletons for LLM KV Cache Compression: Algorithm and Rate--Distortion Boundary.}
-\newblock \emph{LLM-KV--Cache-compress v1.3 paper}, April 2026.
-\newblock (Superseded by this paper at tag \texttt{v1.4}.)
+\newblock Prior unpublished draft, superseded by this paper.
 
 \bibitem{turboquant-vllm}
 vibhavagarwal5 \emph{et al.}
@@ -1457,23 +1461,27 @@ Dao, T., Fu, D.~Y., Ermon, S., Rudra, A., R\'e, C.
 \section{Reproducibility manifest}
 \label{app:repro}
 
-The full multi-model benchmark for \emph{both codecs} is
-reproducible via the rigorous evaluation harness introduced with
-the v1.5 release:
+The full multi-model benchmark for both lattice variants uses the
+in-forward rigorous evaluation harness
+(\S\ref{sec:methodology-rigorous}). The snapshot-protocol $D_4$
+tables in \S\ref{sec:benchmarks} are reproducible by the same
+harness with \texttt{--mode snapshot --boundary-size 2 --n-passages 4}:
 \begin{verbatim}
 cd LLM-KV--Cache-compress
 pip install -e kakeyalattice
 pip install -e vllm_backend
 export VLLM_ENABLE_V1_MULTIPROCESSING=0 KAKEYA_SNAPSHOT_QWEN3=1
 
-# PPL / MSE / CR (v1.4 + v1.5 + TurboQuant at matched Q / b):
+# In-forward rigorous (n=32, 95% CI): D4, E8, and TurboQuant, same run.
+# --q-values selects D4 operating points; --v15-q-values selects E8
+# operating points; --tq-b-values selects TurboQuant bit widths.
 python benchmarks/rigorous_eval.py \
     --model-path <HF-id> --model-name <short>_nobdry \
     --mode inforward --no-boundary \
     --q-values 4,10 --v15-q-values 4,10 --tq-b-values 3 \
     --kv-modes KV \
     --ctx-len 2048 --n-eval 64 --n-passages 32 \
-    --out-dir reports/v1_5_release
+    --out-dir reports/rigorous_eval
 
 # TurboQuant b=2 guardrail (requires boundary=2 to boot):
 python benchmarks/rigorous_eval.py \
@@ -1482,7 +1490,7 @@ python benchmarks/rigorous_eval.py \
     --q-values "" --v15-q-values "" --tq-b-values 2 \
     --kv-modes KV \
     --ctx-len 2048 --n-eval 64 --n-passages 32 \
-    --out-dir reports/v1_5_release
+    --out-dir reports/rigorous_eval
 
 # Pure codec latency (no model needed):
 python benchmarks/e8_latency_benchmark.py --n-iters 500
@@ -1493,7 +1501,7 @@ python benchmarks/niah_eval.py \
     --mode inforward --boundary-size 2 --n-trials 3 \
     --ctx-lengths 4096,8192,16384 --depths 0.1,0.5,0.9 \
     --q-values 4,10 --v15-q-values 4,10 --tq-b-values 2,3 \
-    --out-dir reports/v1_5_release/niah
+    --out-dir reports/rigorous_eval/niah
 
 # Frozen sha256 parity (bit-level regression gate):
 python benchmarks/e8_parity_and_smoke.py
@@ -1503,34 +1511,42 @@ Replace \texttt{<HF-id>} with one of
 \texttt{deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B},
 \texttt{google/gemma-4-E4B}, or
 \texttt{zai-org/GLM-4-9B-Chat} (add \texttt{--trust-remote-code}
-for the last). Raw per-passage JSON and full stdout logs are
-committed under
-\texttt{reports/v1\_5\_release/} (v1.5 data) and
-\texttt{reports/v1\_4\_release/} (v1.4 frozen data).
+for the last). Raw per-passage JSON, full stdout logs, and frozen
+codec-output hashes are committed under
+\texttt{reports/} at the release tags listed in
+Appendix~\ref{app:naming}. The CLI flag names
+\texttt{--v15-q-values} are verbatim repository identifiers of the
+$E_8$-variant codec registered at release tag \texttt{v1.5};
+similarly, directory names \texttt{reports/v1\_4\_release/} and
+\texttt{reports/v1\_5\_release/} are on-disk paths that match the
+corresponding release tags.
 
-\section{Canonical naming}
+\section{Implementation identifiers}
 \label{app:naming}
 
+The paper is agnostic to version labelling: the two codec variants
+are the \emph{$D_4$ nested lattice} and the \emph{$E_8$ nested
+lattice}, and every result table cites its protocol. This appendix
+lists only the repository-level identifiers needed to reproduce the
+bit-identical codec output.
+
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Project name}: \textsc{KakeyaLattice}
-  \item \textbf{Python package}: \texttt{kakeyalattice}
-  \item \textbf{v1.4 codec ($D_4$)}:
-    \begin{itemize}
-      \item spoken / written: ``v1.4 kakeya zamir lattice GPU''
-      \item with parameter: e.g.\ ``v1.4 $Q=152$''
-      \item class: \texttt{V14KakeyaZamirLatticeGPU}
-      \item module: \texttt{kakeyalattice.v1\_4\_kakeya\_zamir\_lattice\_gpu}
-      \item release tag: \texttt{v1.4} (commit \texttt{6b02711})
-    \end{itemize}
-  \item \textbf{v1.5 codec ($E_8$)}:
-    \begin{itemize}
-      \item spoken / written: ``v1.5 kakeya zamir E8 GPU''
-      \item with parameter: e.g.\ ``v1.5 $Q=10$''
-      \item class: \texttt{V15KakeyaZamirE8GPU}
-      \item module: \texttt{kakeyalattice.v1\_5\_kakeya\_zamir\_e8\_gpu}
-      \item release tag: \texttt{v1.5} (commit at the time of paper release)
-    \end{itemize}
+  \item Project name: \textsc{KakeyaLattice}.
+  \item Python package: \texttt{kakeyalattice}.
+  \item $D_4$ variant: class
+    \texttt{V14KakeyaZamirLatticeGPU}, module
+    \texttt{kakeyalattice.v1\_4\_kakeya\_zamir\_lattice\_gpu},
+    release tag \texttt{v1.4} (commit \texttt{6b02711}).
+  \item $E_8$ variant: class
+    \texttt{V15KakeyaZamirE8GPU}, module
+    \texttt{kakeyalattice.v1\_5\_kakeya\_zamir\_e8\_gpu},
+    release tag \texttt{v1.5}.
 \end{itemize}
+
+The \texttt{v1.4} / \texttt{v1.5} strings appear only as git release
+tags and as the \texttt{V14}/\texttt{V15} class-name prefixes chosen
+by the repository authors; the paper itself references the codec
+variants exclusively by their lattice names.
 
 \section{Canonical operating points}
 \label{app:ops}
