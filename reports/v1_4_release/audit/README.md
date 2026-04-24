@@ -140,7 +140,7 @@ On any H200 (or comparable Hopper/Ampere GPU) with the repo checked out:
 
 ```bash
 # 1. Environment (vast.ai image — or any CUDA 13 image with FA3).
-pip install -e kakeyaturbo-py
+pip install -e kakeyalattice
 pip install -e vllm_backend   # installs the vllm.general_plugins entry point
 
 # 2. Run the audit.

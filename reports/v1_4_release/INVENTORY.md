@@ -126,7 +126,7 @@ Each log can be independently reproduced on any H200 (or comparable Hopper/Amper
 ```bash
 git clone FluffyAIcode/LLM-KV--Cache-compress
 cd LLM-KV--Cache-compress
-pip install -e kakeyaturbo-py
+pip install -e kakeyalattice
 pip install -e vllm_backend
 export VLLM_ENABLE_V1_MULTIPROCESSING=0 KAKEYA_SNAPSHOT_QWEN3=1
 ```

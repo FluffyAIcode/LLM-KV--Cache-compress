@@ -2,8 +2,8 @@
 
 Exposes:
 
-    from kakeyaturbo_py import V14KakeyaZamirLatticeGPU  # v1.4, D4 lattice
-    from kakeyaturbo_py import V15KakeyaZamirE8GPU       # v1.5, E8 lattice
+    from kakeyalattice import V14KakeyaZamirLatticeGPU  # v1.4, D4 lattice
+    from kakeyalattice import V15KakeyaZamirE8GPU       # v1.5, E8 lattice
 
 Both are Hadamard-rotated, per-vector-qmax nested-lattice codecs with
 unit-normalisation + inverse rotation + rescale.  Only the lattice
@@ -42,4 +42,4 @@ def __getattr__(name):
     if name == "V15KakeyaZamirE8GPU":
         from . import v1_5_kakeya_zamir_e8_gpu
         return v1_5_kakeya_zamir_e8_gpu.V15KakeyaZamirE8GPU
-    raise AttributeError(f"module 'kakeyaturbo_py' has no attribute {name!r}")
+    raise AttributeError(f"module 'kakeyalattice' has no attribute {name!r}")

@@ -93,7 +93,7 @@ def recode_tq_gpu(K: torch.Tensor, bits_per_coord: int) -> tuple[torch.Tensor, i
 def recode_v14_gpu(K: torch.Tensor, q_range: int) -> tuple[torch.Tensor, int]:
     """v1.4 kakeya zamir lattice GPU."""
     assert K.is_cuda and K.dtype == torch.float32
-    from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
+    from kakeyalattice import V14KakeyaZamirLatticeGPU
     D = K.shape[-1]
     # Only D divisible by 4 is supported.  If the model's head_dim isn't
     # divisible by 4, we cannot run v1.4 on it — RAISE so the harness

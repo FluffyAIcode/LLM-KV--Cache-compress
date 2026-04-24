@@ -57,7 +57,7 @@ def recode_v14_gpu(
     Returns (reconstructed_tensor, bits_per_token_per_head).
     """
     assert X.is_cuda and X.dtype == torch.float32
-    from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
+    from kakeyalattice import V14KakeyaZamirLatticeGPU
     D = X.shape[-1]
     if D % 4 != 0:
         raise ValueError(

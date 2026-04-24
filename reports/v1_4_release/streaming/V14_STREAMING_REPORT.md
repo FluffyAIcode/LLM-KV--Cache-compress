@@ -28,7 +28,7 @@ all Hadamard-based codecs — not a v1.4 limitation.
 ## Why v1.4 is streaming-capable by construction
 
 The full `V14KakeyaZamirLatticeGPU.roundtrip(x)` pipeline (see
-`kakeyaturbo-py/python/kakeyaturbo_py/lattice_codebooks.py::LatticeCodebook`
+`kakeyalattice/python/kakeyalattice/lattice_codebooks.py::LatticeCodebook`
 and `::D4LatticeCodebook`; in the v1.4 release tag this was the
 deprecated `bridge_b2_d4_tq_style.py::D4TQStyleCodebook` —
 bit-identical output, verified by frozen-sha256 parity test):

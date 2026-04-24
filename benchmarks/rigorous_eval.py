@@ -53,7 +53,7 @@ def _sylvester_hadamard_normalised(D: int, device) -> torch.Tensor:
 
 def make_v14_codec_fn(D: int, q_range: int, device: str = "cuda"):
     """Canonical v1.4 KakeyaLattice codec_fn."""
-    from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
+    from kakeyalattice import V14KakeyaZamirLatticeGPU
     if D % 4 != 0:
         raise ValueError(
             f"v1.4 requires head_dim % 4 == 0, got {D}. No fallback.",
@@ -103,8 +103,8 @@ def make_tq_codec_fn(D: int, bits_per_coord: int, device: str = "cuda"):
 
 def make_ablation_codec_fn(variant: str, D: int, q_range: int,
                            device: str = "cuda"):
-    """Ablation variant codec_fn (from kakeyaturbo_py.ablation_codecs)."""
-    from kakeyaturbo_py.ablation_codecs import make_ablation_codec
+    """Ablation variant codec_fn (from kakeyalattice.ablation_codecs)."""
+    from kakeyalattice.ablation_codecs import make_ablation_codec
     fn = make_ablation_codec(variant, D=D, q_range=q_range, device=device)
     return fn
 
