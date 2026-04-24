@@ -1,0 +1,309 @@
+{
+  "mode": "snapshot",
+  "model": "google/gemma-4-E4B",
+  "model_name": "smoke_gemma",
+  "num_layers": 24,
+  "head_dim": 256,
+  "num_kv_heads": 2,
+  "distinct_head_dims": [
+    256,
+    512
+  ],
+  "distinct_num_kv_heads": [
+    2
+  ],
+  "per_layer_shape": {
+    "0": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "1": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "2": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "3": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "4": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "5": {
+      "hd": 512,
+      "kvh": 2
+    },
+    "6": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "7": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "8": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "9": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "10": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "11": {
+      "hd": 512,
+      "kvh": 2
+    },
+    "12": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "13": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "14": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "15": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "16": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "17": {
+      "hd": 512,
+      "kvh": 2
+    },
+    "18": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "19": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "20": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "21": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "22": {
+      "hd": 256,
+      "kvh": 2
+    },
+    "23": {
+      "hd": 512,
+      "kvh": 2
+    }
+  },
+  "uncaptured_layers": [],
+  "effective_boundary_layers": [
+    0,
+    1,
+    22,
+    23
+  ],
+  "boundary_skip_layers": [
+    0,
+    1,
+    22,
+    23
+  ],
+  "no_boundary": false,
+  "raw_bits_per_token_per_head": 4096,
+  "report_ctx_tokens": 131072,
+  "ctx_len": 1024,
+  "n_eval": 16,
+  "n_passages": 2,
+  "q_values": [
+    38
+  ],
+  "tq_b_values": [
+    6
+  ],
+  "kv_modes": [
+    "KV"
+  ],
+  "ablation_variants": [],
+  "per_passage": [
+    {
+      "passage": 0,
+      "channel": "bf16_ref",
+      "kind": "bf16",
+      "kv_mode": null,
+      "k_bits": 4096,
+      "v_bits": 4096,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "k_mse_layer0": 0.0,
+      "v_mse_layer0": 0.0,
+      "ppl_ref": 4.485732449264131,
+      "ppl_alt": 4.485732449264131,
+      "fire_count": 0
+    },
+    {
+      "passage": 0,
+      "channel": "v14_Q38_KV",
+      "kind": "v14",
+      "kv_mode": "KV",
+      "k_bits": 1632,
+      "v_bits": 1632,
+      "delta_ppl": -0.002987446758650276,
+      "top1_pair": 1.0,
+      "k_mse_layer0": 0.0007596226747786977,
+      "v_mse_layer0": 0.0007433577037128106,
+      "ppl_ref": 4.485732449264131,
+      "ppl_alt": 4.472331562398405,
+      "t_alt": 0.041196487843990326,
+      "fire_count": 24
+    },
+    {
+      "passage": 0,
+      "channel": "tq_b6_KV",
+      "kind": "tq",
+      "kv_mode": "KV",
+      "k_bits": 1568,
+      "v_bits": 1568,
+      "delta_ppl": -0.008887795017436145,
+      "top1_pair": 1.0,
+      "k_mse_layer0": 0.0008797948128116129,
+      "v_mse_layer0": 0.000864412153976696,
+      "ppl_ref": 4.485732449264131,
+      "ppl_alt": 4.44586417875201,
+      "t_alt": 0.03990677557885647,
+      "fire_count": 24
+    },
+    {
+      "passage": 1,
+      "channel": "bf16_ref",
+      "kind": "bf16",
+      "kv_mode": null,
+      "k_bits": 4096,
+      "v_bits": 4096,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "k_mse_layer0": 0.0,
+      "v_mse_layer0": 0.0,
+      "ppl_ref": 19.635656709771567,
+      "ppl_alt": 19.635656709771567,
+      "fire_count": 0
+    },
+    {
+      "passage": 1,
+      "channel": "v14_Q38_KV",
+      "kind": "v14",
+      "kv_mode": "KV",
+      "k_bits": 1632,
+      "v_bits": 1632,
+      "delta_ppl": 0.019913919551688662,
+      "top1_pair": 1.0,
+      "k_mse_layer0": 0.0007596226747786977,
+      "v_mse_layer0": 0.0007433577037128106,
+      "ppl_ref": 19.635656709771567,
+      "ppl_alt": 20.026679597834534,
+      "t_alt": 0.04022836685180664,
+      "fire_count": 24
+    },
+    {
+      "passage": 1,
+      "channel": "tq_b6_KV",
+      "kind": "tq",
+      "kv_mode": "KV",
+      "k_bits": 1568,
+      "v_bits": 1568,
+      "delta_ppl": -0.010622570963995104,
+      "top1_pair": 1.0,
+      "k_mse_layer0": 0.0008797948128116129,
+      "v_mse_layer0": 0.000864412153976696,
+      "ppl_ref": 19.635656709771567,
+      "ppl_alt": 19.42707555294737,
+      "t_alt": 0.039863599464297295,
+      "fire_count": 24
+    }
+  ],
+  "aggregates": [
+    {
+      "channel": "bf16_ref",
+      "kind": "bf16",
+      "kv_mode": null,
+      "n": 2,
+      "k_bits": 4096,
+      "v_bits": 4096,
+      "baseline_bytes_128k": 7516192768,
+      "kakeya_bytes_128k": 7516192768,
+      "total_ratio_128k": 1.0,
+      "mean_abs_delta_ppl": 0.0,
+      "ci95_abs_delta_ppl": 0.0,
+      "std_abs_delta_ppl": 0.0,
+      "mean_delta_ppl": 0.0,
+      "ci95_delta_ppl": 0.0,
+      "std_delta_ppl": 0.0,
+      "mean_top1_pair": 1.0,
+      "ci95_top1_pair": 0.0,
+      "mean_k_mse_layer0": 0.0,
+      "std_k_mse_layer0": 0.0,
+      "mean_v_mse_layer0": 0.0,
+      "std_v_mse_layer0": 0.0
+    },
+    {
+      "channel": "v14_Q38_KV",
+      "kind": "v14",
+      "kv_mode": "KV",
+      "n": 2,
+      "k_bits": 1632,
+      "v_bits": 1632,
+      "baseline_bytes_128k": 7516192768,
+      "kakeya_bytes_128k": 3795845120,
+      "total_ratio_128k": 1.9801104972375692,
+      "mean_abs_delta_ppl": 0.011450683155169469,
+      "ci95_abs_delta_ppl": 0.10753388165417287,
+      "std_abs_delta_ppl": 0.011968823693527045,
+      "mean_delta_ppl": 0.008463236396519193,
+      "ci95_delta_ppl": 0.14549238016958327,
+      "std_delta_ppl": 0.016193711416477807,
+      "mean_top1_pair": 1.0,
+      "ci95_top1_pair": 0.0,
+      "mean_k_mse_layer0": 0.0007596226747786977,
+      "std_k_mse_layer0": 0.0,
+      "mean_v_mse_layer0": 0.0007433577037128106,
+      "std_v_mse_layer0": 0.0
+    },
+    {
+      "channel": "tq_b6_KV",
+      "kind": "tq",
+      "kv_mode": "KV",
+      "n": 2,
+      "k_bits": 1568,
+      "v_bits": 1568,
+      "baseline_bytes_128k": 7516192768,
+      "kakeya_bytes_128k": 3699376128,
+      "total_ratio_128k": 2.0317460317460316,
+      "mean_abs_delta_ppl": 0.009755182990715625,
+      "ci95_abs_delta_ppl": 0.011021031588489064,
+      "std_abs_delta_ppl": 0.0012266718356511515,
+      "mean_delta_ppl": -0.009755182990715625,
+      "ci95_delta_ppl": 0.011021031588489064,
+      "std_delta_ppl": 0.0012266718356511515,
+      "mean_top1_pair": 1.0,
+      "ci95_top1_pair": 0.0,
+      "mean_k_mse_layer0": 0.0008797948128116129,
+      "std_k_mse_layer0": 0.0,
+      "mean_v_mse_layer0": 0.000864412153976696,
+      "std_v_mse_layer0": 0.0
+    }
+  ]
+}
