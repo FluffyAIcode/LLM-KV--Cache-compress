@@ -37,6 +37,10 @@ benchmarks/
   v14_streaming_diag.py              — batch-vs-streaming root-cause diagnostic
   v14_streaming_latency.py           — per-decode-step latency
 
+reports/paper/                       — joint paper for v1.4 + v1.5
+  kakeyalattice.tex                  — LaTeX source (arXiv-ready)
+  README.md                          — build instructions + scope
+
 reports/v1_4_release/                — frozen v1.4 evaluation data
   kv_128k_report/                    — v1.4-only 128k KV storage tables
   kv_128k_report_tq_compare/         — iso-bit comparison vs TurboQuant
@@ -44,7 +48,6 @@ reports/v1_4_release/                — frozen v1.4 evaluation data
   streaming/                         — streaming / online capability report
   niah/                              — v1.4 NIAH retrieval
   rigorous_eval/                     — n=32 rigorous protocol + ablation
-  paper/                             — LaTeX paper (v1.4)
   audit/                             — GPU/vLLM audit trail
   INVENTORY.md + MANIFEST.sha256     — file inventory + integrity manifest
 
