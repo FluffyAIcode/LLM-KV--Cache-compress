@@ -18,7 +18,7 @@ import time
 
 import torch
 
-from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
+from kakeyalattice import V14KakeyaZamirLatticeGPU
 
 
 def main() -> int:

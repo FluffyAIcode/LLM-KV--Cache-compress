@@ -153,7 +153,7 @@ def _sylvester_hadamard_normalised(D: int, device) -> torch.Tensor:
 
 
 def make_v14_codec_fn(D: int, q_range: int, device: str = "cuda"):
-    from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
+    from kakeyalattice import V14KakeyaZamirLatticeGPU
     if D % 4 != 0:
         raise ValueError(f"v1.4 requires D % 4 == 0, got {D}")
     cb = V14KakeyaZamirLatticeGPU(D=D, q_range=q_range, device=device)

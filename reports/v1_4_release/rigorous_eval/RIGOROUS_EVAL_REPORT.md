@@ -203,7 +203,7 @@ Based on n=32 evidence with CI, the v1.4 KakeyaLattice codec has these honest cl
 - **Eval data**: WikiText-103 test split, 32 passages of 2048 ctx + 64 eval tokens each = **2,048 target tokens per channel per model**.
 - **CI**: Student's t two-sided 95 %, computed from passage-level \|Δppl\| samples.
 - **In-forward hook**: `kakeya_v1_4_snapshot.snapshot_hook.HookState.phase = "inforward"` + `codec_fn` set by harness; fires on each non-boundary layer's `forward()` before RoPE.  `codec_fn == None` raises `RuntimeError` (no silent passthrough).
-- **Ablation codecs**: `kakeyaturbo_py.ablation_codecs.make_ablation_codec(variant, ...)` — 6 variants, parity-checked against `V14KakeyaZamirLatticeGPU` (bit-identical at `max_abs_diff = 0.000e+00`).
+- **Ablation codecs**: `kakeyalattice.ablation_codecs.make_ablation_codec(variant, ...)` — 6 variants, parity-checked against `V14KakeyaZamirLatticeGPU` (bit-identical at `max_abs_diff = 0.000e+00`).
 
 ## 7. Compliance + audit trail
 
@@ -221,7 +221,7 @@ Audit evidence (all committed):
 
 ```bash
 cd /workspace/LLM-KV--Cache-compress
-pip install -e kakeyaturbo-py
+pip install -e kakeyalattice
 pip install -e vllm_backend
 
 export VLLM_ENABLE_V1_MULTIPROCESSING=0 KAKEYA_SNAPSHOT_QWEN3=1

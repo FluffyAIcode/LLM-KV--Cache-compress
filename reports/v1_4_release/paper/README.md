@@ -10,9 +10,10 @@
 
 ## What this paper is
 
-A complete rewrite of the v1.3 Kakeya paper
-(`reports/v1_3_rsvd_rope/paper/kakeyaturbo.tex`) based on the
-**v1.4 KakeyaLattice** release. The v1.3 paper was a low-rank
+A complete rewrite of the v1.3 Kakeya paper (historically at
+`reports/v1_3_rsvd_rope/paper/kakeyaturbo.tex` before the v1.3
+cleanup PR removed that tree) based on the **v1.4 KakeyaLattice**
+release. The v1.3 paper was a low-rank
 PCA + Lloyd-Max codec framed against a conditional Kakeya lower
 bound; this paper is a $D_4$ nested-lattice codec framed against
 an unconditional lattice-density bound, with head-to-head wins
@@ -76,9 +77,9 @@ report file on the `main` branch at tag `v1.4`:
   `reports/v1_4_release/kv_128k_report/V14_KV_128K_REPORT.md`
   (+ `*_kv_128k.json` per model)
 - **Codec implementation**:
-  `kakeyaturbo-py/python/kakeyaturbo_py/v1_4_kakeya_zamir_lattice_gpu.py`
+  `kakeyalattice/python/kakeyalattice/v1_4_kakeya_zamir_lattice_gpu.py`
   (canonical class) delegates to
-  `kakeyaturbo-py/python/kakeyaturbo_py/lattice_codebooks.py::D4LatticeCodebook`
+  `kakeyalattice/python/kakeyalattice/lattice_codebooks.py::D4LatticeCodebook`
   (implementation core).  In the v1.4 release tag this was
   `bridge_b2_d4_tq_style.py::D4TQStyleCodebook`; the two produce
   bit-identical output (verified by `benchmarks/e8_parity_and_smoke.py`

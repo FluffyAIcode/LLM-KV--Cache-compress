@@ -21,8 +21,8 @@ import pathlib
 
 import torch
 
-from kakeyaturbo_py import V14KakeyaZamirLatticeGPU, V15KakeyaZamirE8GPU
-from kakeyaturbo_py.lattice_codebooks import (
+from kakeyalattice import V14KakeyaZamirLatticeGPU, V15KakeyaZamirE8GPU
+from kakeyalattice.lattice_codebooks import (
     D4LatticeCodebook,
     E8LatticeCodebook,
 )

@@ -6,8 +6,8 @@ rel-MSE comparison so we can see each factor's contribution isolated.
 from __future__ import annotations
 
 import torch
-from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
-from kakeyaturbo_py.ablation_codecs import make_ablation_codec, ABLATION_VARIANTS
+from kakeyalattice import V14KakeyaZamirLatticeGPU
+from kakeyalattice.ablation_codecs import make_ablation_codec, ABLATION_VARIANTS
 
 
 def main() -> None:

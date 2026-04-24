@@ -13,7 +13,7 @@ are on the v1.4 Release page.](https://github.com/FluffyAIcode/LLM-KV--Cache-com
 ## What's in the box
 
 ```
-kakeyaturbo-py/python/kakeyaturbo_py/
+kakeyalattice/python/kakeyalattice/
   v1_4_kakeya_zamir_lattice_gpu.py   — canonical V14KakeyaZamirLatticeGPU class (D4)
   v1_5_kakeya_zamir_e8_gpu.py        — canonical V15KakeyaZamirE8GPU class (E8)
   lattice_codebooks.py               — shared Hadamard/qmax wrapper +
@@ -50,7 +50,7 @@ reports/v1_4_release/
 Install the pure-Python codec + the vLLM snapshot plugin:
 
 ```bash
-pip install -e kakeyaturbo-py          # pure-Python, PyTorch-only
+pip install -e kakeyalattice          # pure-Python, PyTorch-only
 pip install -e vllm_backend             # installs the vllm.general_plugins entry point
 ```
 
@@ -58,7 +58,7 @@ Use the codec directly:
 
 ```python
 import torch
-from kakeyaturbo_py import V14KakeyaZamirLatticeGPU
+from kakeyalattice import V14KakeyaZamirLatticeGPU
 
 cb = V14KakeyaZamirLatticeGPU(D=128, q_range=38, device="cuda")
 K = torch.randn(2048, 8, 128, device="cuda", dtype=torch.float32) * 0.3
