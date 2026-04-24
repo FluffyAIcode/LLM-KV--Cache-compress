@@ -110,10 +110,16 @@ in-forward no-boundary $\abs{\Delta\mathrm{ppl}}$ at $n=32$
 passages with $95\%$ CI, the $E_8$ nested lattice variant reduces
 \mbox{$\abs{\Delta\mathrm{ppl}}$} by $28$--$53\%$ across three
 deployable models at both $Q=4$ (aggressive) and $Q=10$ (balanced)
-operating points. The cost is a fixed $+32$ bits per vector
-($-5$--$7\%$ compression ratio vs the $D_4$ nested lattice variant
-at iso-$Q$) and $1.56$--$1.80\times$ encode latency (two $D_8$
-candidate cosets + distance compare instead of one parity flip).
+operating points. The cost, once per-block bits are rounded up to
+integer packing at $D=128$, is $+32$ bits per vector at
+low $q_\mathrm{range}$ (where $D_4$'s parity-saving still clears
+the rounding floor) and $+16$ bits per vector at high
+$q_\mathrm{range}$ (where the parity saving is absorbed into
+integer alignment); see Appendix~\ref{app:ops} for the full table.
+This is a $-5$--$7\%$ compression ratio against the $D_4$ nested
+lattice variant at iso-$q_\mathrm{range}$, and a
+$1.56$--$1.80\times$ encode-latency overhead (two $D_8$ candidate
+cosets + distance compare instead of one parity flip).
 Long-context retrieval (Needle-in-a-Haystack at $16$k context) is
 preserved on Qwen3-4B and Gemma-4-E4B; GLM-4-9B shows a mild
 regression ($89\%$ vs $100\%$) at $Q=10$ on the $E_8$ nested lattice
@@ -294,13 +300,32 @@ $0.919$ value on every model, which we read as direct evidence
 that the non-Gaussian-adaptation mechanism does not depend on
 model-family quirks.
 
-\paragraph{Strict-GPU, live-vLLM, snapshot-mode.}
+\paragraph{Strict-GPU, live-vLLM; two measurement protocols.}
 Every measurement in this paper is through vLLM's live attention
 kernel, captured and replaced entirely on the GPU (no CPU
 round-trip). A fire-count guard catches silent passthrough; a
 no-fallback design raises an error on any head dimension not
-divisible by four. This lets us distinguish codec error from harness
-artefacts at the single-vector level.
+divisible by four. Two protocols are used, each appropriate to a
+different question:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Snapshot-mode} (\S\ref{sec:methodology-snapshot};
+    two-pass capture-and-replace; $n=4$ WikiText-103 passages;
+    boundary-layer protection $k=2$). This protocol isolates the
+    codec's \emph{intrinsic single-layer} error from cross-layer
+    accumulation and is used for all \emph{$D_4$ headline results}
+    in \S\ref{sec:benchmarks} (Pareto, multi-model, theory--experiment
+    match, $128$k storage).
+  \item \textbf{In-forward rigorous evaluation}
+    (\S\ref{sec:methodology-rigorous}; codec applied inside every
+    attention step; no-boundary unless the codec is structurally
+    undeployable there; $n=32$ passages; mean $\pm 95\%$ CI via
+    Student-$t$). This protocol measures \emph{deployment-realistic}
+    error including cross-layer accumulation, and is used for the
+    direct $E_8$-vs-$D_4$ comparison in \S\ref{sec:v15}.
+\end{itemize}
+Section~\ref{sec:methodology} defines both protocols; every results
+table in the paper cites the protocol it was produced under in its
+caption.
 
 \paragraph{$128$k KV storage at deployment scale.}
 With both $K$ and $V$ compressed, the codec shrinks the combined KV
@@ -317,14 +342,18 @@ proposition. Section~\ref{sec:codec} gives the nine-step algorithm
 and explains how each pre-processing lever closes one gap between
 real KV activations and the i.i.d.\ isotropic model assumed by the
 shaping-gain bound. Section~\ref{sec:methodology} describes the
-snapshot-mode harness and the four test models.
-Section~\ref{sec:benchmarks} reports the measured
-compression-rate Pareto of the $D_4$ nested lattice variant, the
-multi-model head-to-head, the theory--experiment match, and the
-$128$k KV storage. Section~\ref{sec:v15} reports the additional
-shaping gain, $\abs{\Delta\mathrm{ppl}}$ reduction, encode
-latency, and long-context retrieval performance of the $E_8$
-nested lattice variant. Section~\ref{sec:limits} lists caveats.
+two measurement protocols (snapshot-mode and in-forward rigorous
+evaluation) and the four test models.
+Section~\ref{sec:benchmarks} reports, under the \emph{snapshot}
+protocol, the $D_4$ nested lattice variant's
+compression-rate Pareto, the multi-model head-to-head, the
+theory--experiment match, and the $128$k KV storage. Section~\ref{sec:v15}
+reports, under the \emph{in-forward rigorous} protocol (mean
+$\pm 95\%$ CI, $n=32$), the additional shaping gain,
+$\abs{\Delta\mathrm{ppl}}$ reduction, encode latency, and
+long-context retrieval performance of the $E_8$ nested lattice
+variant against the $D_4$ variant at matched $q_\mathrm{range}$.
+Section~\ref{sec:limits} lists caveats.
 Section~\ref{sec:tq-comparison} compares the codec directly with
 the strongest deployed KV-cache quantiser and frames the $D_4$
 nested lattice variant as a drop-in upstream PR.  Section~\ref{sec:related} situates the work
@@ -565,18 +594,28 @@ min, $\approx\!2.5\times$ per-block work vs $D_4$ but the block
 count halves, giving a net $\approx 1.56$--$1.80\times$ encode cost
 on an NVIDIA H200 (Section~\ref{sec:results-latency}).
 
-\paragraph{Bit budget.}
+\paragraph{Bit budget (exact vs.\ slot-packed).}
 At parameter $q_\mathrm{range}$ the $D_4$ lattice contained in
 $[-q_\mathrm{range},+q_\mathrm{range}]^4$ has
 $(2q_\mathrm{range}+1)^4/2$ points (parity constraint halves the
 $\Z^4$ count), with $O(q_\mathrm{range}^3)$ boundary correction
-absorbed into the clamp step. The rate is
+absorbed into the clamp step. The \emph{exact} (information-theoretic)
+per-block rate is
 \begin{equation}
 \label{eq:bits-d4}
 \text{bits per }D_4\text{ block} \;=\; 4\log_2(2q_\mathrm{range}+1) - 1,
 \end{equation}
 multiplied by $K = D/4$ blocks plus two fp16 overhead scalars per
-vector.
+vector. Deployment slot formats address integer bits per block, so
+the \emph{packed} per-block cost is
+$\lceil 4\log_2(2q_\mathrm{range}+1)-1\rceil$ bits --- typically
+one bit above the exact value. At $D = 128$ the $D_4$ variant at
+$q_\mathrm{range}=152$ therefore uses $1056.3$ bits exact but
+$33 \cdot 32 + 32 = 1088$ bits slot-packed; every bit column in
+this paper's tables is the \emph{packed} value, which is what a
+production PR would actually consume. The same per-$q_\mathrm{range}$
+table (exact, packed, per-head bytes) is in
+Appendix~\ref{app:ops}.
 
 For the $E_8$ nested lattice variant: the two cosets (integer and
 half-integer) recover the full $\Z^8$ density within a parity
@@ -587,12 +626,18 @@ $q_\mathrm{range}$:
 \label{eq:bits-e8}
 \text{bits per }E_8\text{ block} \;=\; 8\log_2(2q_\mathrm{range}+1),
 \end{equation}
-multiplied by $K = D/8$ blocks plus the same two fp16 scalars. For
-$D=128$ this is a fixed $+32$ bits per vector vs the $D_4$ nested
-lattice variant at the same $q_\mathrm{range}$, arising from
-$D_4$'s parity saving that $E_8$'s two-coset union does not
-inherit. Canonical operating points for both codec variants are
-listed in Appendix~\ref{app:ops}.
+multiplied by $K = D/8$ blocks plus the same two fp16 scalars.
+Packed (integer-aligned) per-vector cost is
+$16 \lceil 8\log_2(2q_\mathrm{range}+1)\rceil + 32$. The packed
+$E_8-D_4$ gap is therefore $+32$ bits per vector at low
+$q_\mathrm{range}$ (parity saving visible after rounding) and
+$+16$ bits at high $q_\mathrm{range}$ (parity saving absorbed into
+integer alignment); the per-$q_\mathrm{range}$ gap table is in
+Table~\ref{tab:v15-bits}. The exact (unpacked) $D_4 \to E_8$
+overhead is the constant $+D/4$ bits per vector for the lost
+parity saving, independent of $q_\mathrm{range}$; the packed gap
+differs from this constant purely because ceiling arithmetic
+collapses fractional bits into whole bits.
 
 \subsection{The design role of each step}
 \label{sec:codec-why}
@@ -669,9 +714,13 @@ At parameter $q_\mathrm{range}$, the $D_4$ lattice in
 $[-q_\mathrm{range}, q_\mathrm{range}]^4$ has
 $(2q_\mathrm{range}+1)^4/2$ points; the clamp step absorbs the
 $O(q_\mathrm{range}^3)$ boundary correction without a pre-listed
-point table. Choosing $q_\mathrm{range}$ to match a production
-bit target (e.g.\ $q_\mathrm{range}=152$ $\to 1056$ bits for $D=128$)
-keeps the codec bit-exact with existing slot layouts.
+point table. Choosing $q_\mathrm{range}$ to track a production
+bit target (e.g.\ $q_\mathrm{range}=152$, whose exact rate is
+$1056.3$ bits per $D=128$ vector, slot-packed to $1088$ bits)
+keeps the codec slot-aligned with existing layouts; the $\sim\!32$
+bits of ceiling overhead are the
+$O(q_\mathrm{range}^3)$-boundary cost visible as the $3$--$11\%$
+rate premium in Section~\ref{sec:tq-comp-bits}.
 
 \paragraph{$D_4$ root lattice (step 7 closest-point) --- the
 structural lever.}
@@ -793,18 +842,64 @@ intrinsic to the codec itself. Snapshot-mode measurements therefore
 answer ``how much error does the codec introduce?'' rather than
 ``how much error does the codec plus the harness introduce?''.
 
-\subsection{Boundary-layer protection}
+\subsection{Boundary-layer protection (snapshot protocol)}
 
-We keep the first two and last two transformer layers at bf16
-(``boundary layers'') for every model. These layers have outsized
-influence on token-level perplexity because they sit at the
-embedding and pre-softmax boundaries; leaving them uncompressed at
-negligible cost ($L_\mathrm{bdry}/L \in \{10\%, 14\%, 17\%, 10\%\}$
-across the four models) meaningfully reduces
-$\abs{\Delta\mathrm{ppl}}$ while losing $< 15\%$ of the headline
-compression ratio. The boundary choice is the same constant for all
-four models (not per-model tuned) to avoid any appearance of
-overfitting.
+Under the snapshot protocol we keep the first two and last two
+transformer layers at bf16 (``boundary layers'') for every model.
+These layers have outsized influence on token-level perplexity
+because they sit at the embedding and pre-softmax boundaries;
+leaving them uncompressed at negligible cost
+($L_\mathrm{bdry}/L \in \{10\%, 14\%, 17\%, 10\%\}$ across the four
+models) meaningfully reduces $\abs{\Delta\mathrm{ppl}}$ while
+losing $< 15\%$ of the headline compression ratio. The boundary
+choice is the same constant for all four models (not per-model
+tuned) to avoid any appearance of overfitting. The in-forward
+rigorous protocol below uses $k=0$ (no boundary protection) as its
+default to test the codec at full deployment severity; a single
+boundary value $k=2$ is used only where a codec is structurally
+undeployable at $k=0$ (Section~\ref{sec:methodology-rigorous}).
+
+\subsection{In-forward rigorous evaluation}
+\label{sec:methodology-rigorous}
+
+For the direct $E_8$-vs-$D_4$ comparison in Section~\ref{sec:v15}
+we use a second protocol that complements the snapshot protocol by
+measuring deployment-realistic error including cross-layer
+accumulation:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{In-forward application.} The codec is applied
+    \emph{inside} every attention step as $K, V$ leave the QK-norm
+    / unit-norm stage and before they are written to the KV cache.
+    Codec error from layer $\ell$ propagates into layer $\ell+1$'s
+    inputs, so per-vector errors compound across layers --- this
+    is the harsh, real deployment condition.
+  \item \textbf{Boundary policy.} Default $k = 0$ (no boundary
+    protection): every one of the $L$ layers is codec-compressed.
+    For $D_4$-at-$q=2$ and TurboQuant-$b=2$ this is structurally
+    undeployable on every tested model; in those cases we report
+    only the $k=2$ guardrail result, clearly marked.
+  \item \textbf{Sample size.} $n = 32$ WikiText-103 passages per
+    (model, codec, $q$) tuple, ctx~$=\!2048$,
+    $n_\mathrm{eval}=64$. We report mean $\pm 95\%$ CI via
+    Student-$t$, so that $\abs{\Delta\mathrm{ppl}}$ differences
+    below the FlashAttention bf16 reproducibility floor at
+    $n=4$ are no longer a confound.
+  \item \textbf{Harness.} Protocol is produced by
+    \texttt{benchmarks/rigorous\_eval.py}; bit-level regression is
+    gated by a \texttt{sha256} frozen-parity test (eight hashes for
+    $D_4$ and $E_8$ each at four canonical $q$ values). Full
+    reproducibility manifest is in Appendix~\ref{app:repro}.
+\end{enumerate}
+
+\paragraph{When to use which protocol.}
+Snapshot isolates codec intrinsic error and supports the
+theoretical-match claim (Section~\ref{sec:bench-theory}): one
+per-vector error, no cross-layer coupling, reproducible closed-form
+K-MSE. In-forward rigorous measures what a production deployment
+would experience: cross-layer error accumulation under a
+paged-attention-native KV write path. Both numbers are informative
+and we separate them explicitly at the table level.
 
 \subsection{Quality metrics}
 
@@ -832,35 +927,52 @@ well-regularised models. Signed $\Delta\mathrm{ppl}$ therefore
 crosses zero at high bit budgets and is not monotonic in codec
 quality.
 
-\section{Main results}
+\section{Main results: $D_4$ variant, snapshot protocol}
 \label{sec:benchmarks}
 
+All tables in this section use the snapshot protocol defined in
+\S\ref{sec:methodology-snapshot} ($n=4$ passages, boundary-layer
+protection $k=2$). The protocol isolates codec intrinsic error and
+is the correct instrument for the four claims tested here;
+in-forward, cross-layer-accumulated numbers (including
+$E_8$-vs-$D_4$ side-by-side) are the subject of
+\S\ref{sec:v15}.
+
 We test four claims in sequence: (i) that the $D_4$ shaping gain
-translates to a monotone Pareto improvement across bit budgets
-(\S\ref{sec:bench-pareto}); (ii) that the non-Gaussian adaptation
-is architecture-independent across four transformer families
-(\S\ref{sec:bench-multi}); (iii) that the measured K-MSE ratio
-reproduces the theoretical $0.919$ to within $\sim\!1\%$
-(\S\ref{sec:bench-theory}); and (iv) that the codec delivers usable
-KV-cache reduction at $128$k context with both $K$ and $V$
-compressed (\S\ref{sec:bench-128k}).
+translates to a monotone Pareto improvement across bit budgets at
+near-matched rate (\S\ref{sec:bench-pareto}); (ii) that the
+non-Gaussian adaptation is architecture-independent across four
+transformer families (\S\ref{sec:bench-multi}); (iii) that the
+measured K-MSE ratio reproduces the theoretical $0.919$ to within
+$\sim\!1\%$ (\S\ref{sec:bench-theory}); and (iv) that the codec
+delivers usable KV-cache reduction at $128$k context with both
+$K$ and $V$ compressed (\S\ref{sec:bench-128k}).
 
 \subsection{Compression-rate Pareto on Qwen3-4B}
 \label{sec:bench-pareto}
 
 Table~\ref{tab:pareto-qwen3} gives the full Pareto sweep at seven
-bit levels, matched between TurboQuant $b\in\{2,\ldots,8\}$ and
-\textsc{KakeyaLattice} $q_\mathrm{range}\in\{2,5,10,19,38,76,152\}$,
+bit-tier pairings between TurboQuant $b\in\{2,\ldots,8\}$ and
+\textsc{KakeyaLattice} $q_\mathrm{range}\in\{2,5,10,19,38,76,152\}$
 on four WikiText-103 passages at ctx~$=\!2048$, $n_\mathrm{eval}=64$,
-strict-GPU.
+strict-GPU, under the snapshot protocol
+(\S\ref{sec:methodology-snapshot}). The pairings are
+\emph{near-matched rate}, not strictly iso-rate: the
+\textsc{KakeyaLattice} row in each pair sits $3$--$11\%$ above its
+TQ row (Section~\ref{sec:tq-comp-bits}).
 
 \begin{table}[H]
 \centering
 \small
-\caption{Full Pareto: \textsc{KakeyaLattice} vs.\ TurboQuant $k8v4$
-on Qwen3-4B, H200, vLLM 0.19.2, strict-GPU capture + replace. Bold
-rows are the three canonical operating points. CR = compression
-ratio vs.\ bf16.}
+\caption{Full Pareto: \textsc{KakeyaLattice} ($D_4$ variant) vs.\
+TurboQuant $k8v4$ on Qwen3-4B, H200, vLLM 0.19.2. Protocol:
+\emph{snapshot-mode}, $n=4$ passages, boundary $k=2$
+(\S\ref{sec:methodology-snapshot}); see \S\ref{sec:v15} for
+in-forward rigorous numbers. Bold rows are the three canonical
+operating points. CR = compression ratio vs.\ bf16. Bit column
+reports the \emph{packed} (integer-aligned) per-vector cost; see
+Eq.~\eqref{eq:bits-d4} and Table~\ref{tab:theory-vs-exp} for the
+exact-vs-packed discussion.}
 \label{tab:pareto-qwen3}
 \begin{tabular}{rrrlrrr}
   \toprule
@@ -887,11 +999,13 @@ ratio vs.\ bf16.}
 \paragraph{Observations.}
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{K-MSE: the lattice dominates at every bit level}
-    (all seven bit points, ratio $0.35\times$--$0.91\times$). The
-    ratio grows monotonically with bit budget, consistent with the
-    theoretical prediction that shaping gain is a high-rate
-    asymptote.
+  \item \textbf{K-MSE: the lattice dominates at every near-matched
+    bit tier} (all seven tier-pairings, ratio
+    $0.35\times$--$0.91\times$; the $D_4$ row sits $3$--$11\%$
+    above its paired TQ row in packed bits, so this is a
+    near-matched-rate, not iso-rate, comparison). The ratio grows
+    monotonically with bit budget, consistent with the theoretical
+    prediction that shaping gain is a high-rate asymptote.
   \item \textbf{Advantage grows with compression aggression.} At
     $1.88\times$ compression the K-MSE ratio is $0.91\times$; at
     $6.4\times$ compression the ratio is $0.35\times$ ($65\%$
@@ -921,11 +1035,17 @@ four models at the three canonical operating points.
 \begin{table}[H]
 \centering
 \small
-\caption{Twelve head-to-head pairs. K-MSE ratio $<\!1$ means
+\caption{Twelve head-to-head pairs ($D_4$ variant vs.\ TurboQuant
+$k8v4$) at three canonical operating points. Protocol:
+\emph{snapshot-mode} $n=4$ passages, boundary $k=2$
+(\S\ref{sec:methodology-snapshot}). K-MSE ratio $<\!1$ means
 \textsc{KakeyaLattice} beats the scalar-quantiser baseline on
 reconstruction; $\abs{\Delta\text{ppl}}$ ratio $<\!1$ means
 \textsc{KakeyaLattice} is closer to bf16. ``top-1 $\Delta$pp'' is
-\textsc{KakeyaLattice} top-1 minus baseline top-1. Data:
+\textsc{KakeyaLattice} top-1 minus baseline top-1. Bit-point
+matching is near-matched rather than strictly iso-rate: the
+\textsc{KakeyaLattice} rows pay $3$--$11\%$ more bits at the
+same $q$-tier (\S\ref{sec:tq-comp-bits}). Data:
 \texttt{reports/v1\_3\_ppl/snapshot\_mode\_qwen3/multimodel/}.}
 \label{tab:multimodel}
 \begin{tabular}{lrrrrrr}
@@ -999,20 +1119,26 @@ the bf16 floor on these runs.
 \begin{table}[H]
 \centering
 \small
-\caption{Theory-to-experiment match for the K-MSE shaping-gain
-ratio. Predicted from Proposition~\ref{prop:d4-kakeya}; measured in
-three independent environments.}
+\caption{Theory-to-experiment match for the $D_4$ K-MSE
+shaping-gain ratio. Predicted from
+Proposition~\ref{prop:d4-kakeya}; measured under the snapshot
+protocol (\S\ref{sec:methodology-snapshot}) in three independent
+environments. The bit-cost row reports both the exact
+(Eq.~\eqref{eq:bits-d4}) and the slot-packed (integer-aligned,
+deployment) values; the packed value is what Table~\ref{tab:pareto-qwen3}
+reports, per the bit-accounting note in \S\ref{sec:tq-comp-bits}.}
 \label{tab:theory-vs-exp}
 \begin{tabular}{lrr}
   \toprule
   Quantity & Predicted & Measured \\
   \midrule
-  K-MSE ratio at matched $1056$ bits (Qwen3-4B)  & $0.919$      & $\mathbf{0.913}$ (offline 100k samples) \\
+  K-MSE ratio at $q_\mathrm{range}=152$ (Qwen3-4B)  & $0.919$      & $\mathbf{0.913}$ (offline 100k samples) \\
                                                  &              & $\mathbf{0.911}$ (live vLLM, 4 passages) \\
                                                  &              & $\mathbf{0.911}$ (multi-model mean, Tab.~\ref{tab:multimodel}) \\
   Shaping gain (dB)                              & $+0.367\,$dB & $+0.381\,$dB (Qwen3-4B offline) \\
   cos$(K,\hat K)$                                & $\to 1.0$    & $1.0000$ \\
-  Bit cost (exact)                               & $1056$       & $1056$ (reported rounded to $1088$) \\
+  Bit cost (exact, Eq.~\eqref{eq:bits-d4})       & $1056.3$     & $1056.3$ \\
+  Bit cost (slot-packed, deployment)             & ---          & $1088$ (paired against TQ $b=8$ at $1056$) \\
   \bottomrule
 \end{tabular}
 \end{table}
@@ -1036,9 +1162,11 @@ with $K$ \emph{and} $V$ both compressed (boundary layers bf16).
 \centering
 \small
 \caption{$128$k KV cache storage: baseline bf16 vs.\
-\textsc{KakeyaLattice} (both $K$ and $V$ compressed, boundary
-layers $\{0,1,L{-}2,L{-}1\}$ kept bf16). Per-user GiB at ctx $=128{,}000$.
-Source:
+\textsc{KakeyaLattice} ($D_4$ variant, both $K$ and $V$
+compressed, boundary layers $\{0,1,L{-}2,L{-}1\}$ kept bf16).
+Per-user GiB at ctx $=128{,}000$. Protocol: \emph{snapshot-mode}
+extrapolation from the measured $2048$-token packed-bit cost
+(\S\ref{sec:methodology-snapshot}). Source:
 \texttt{reports/v1\_4\_release/kv\_128k\_report/V14\_KV\_128K\_REPORT.md}.}
 \label{tab:128k}
 \begin{tabular}{lrrrrrr}
@@ -1109,12 +1237,21 @@ closest-point subroutine inside the for-loop. This section reports
 the four empirical consequences of substituting $E_8$ for $D_4$:
 reconstruction MSE gain, $\abs{\Delta\mathrm{ppl}}$ reduction in
 live vLLM in-forward, encode/decode latency on H200, and
-long-context retrieval preservation. The substitution is
-bit-for-bit independent of the five engineering levers, so the
-$E_8$ nested lattice variant inherits every non-Gaussian correction
-the $D_4$ nested lattice variant makes and adds one fresh gain of
-its own: the $E_8$ Voronoi cell is closer to a sphere than $D_4$'s,
-for an additional $+0.29\,$dB of theoretical shaping gain
+long-context retrieval preservation. Every result in this section
+uses the \emph{in-forward rigorous evaluation} protocol defined in
+Section~\ref{sec:methodology-rigorous} (codec applied inside every
+attention step, cross-layer error allowed to compound, no-boundary
+protection unless stated otherwise, $n = 32$ passages, mean
+$\pm 95\%$ CI via Student-$t$); this is deliberately harsher than
+the snapshot protocol used for the $D_4$ headline results in
+Section~\ref{sec:benchmarks} and is chosen because the $E_8$
+upgrade's practical benefit only manifests under cross-layer
+error accumulation. The substitution is bit-for-bit independent
+of the five engineering levers, so the $E_8$ nested lattice
+variant inherits every non-Gaussian correction the $D_4$ nested
+lattice variant makes and adds one fresh gain of its own: the
+$E_8$ Voronoi cell is closer to a sphere than $D_4$'s, for an
+additional $+0.29\,$dB of theoretical shaping gain
 ($G(E_8)/G(D_4) \approx 0.936$).
 
 Two $E_8$ design facts matter for the upgrade:
@@ -1131,16 +1268,32 @@ Two $E_8$ design facts matter for the upgrade:
     $\sum_i z_i \equiv 0 \pmod 2$ halves its point count inside
     $[-q_\mathrm{range}, q_\mathrm{range}]^4$, saving $1$ bit per
     $4$ coordinates. $E_8$'s two-coset union recovers full $\Z^8$
-    density, so there is no analogous saving; the $E_8$ nested lattice variant pays a fixed
-    $+32$ bits per vector vs the $D_4$ nested lattice variant at the same $q_\mathrm{range}$. The CR cost is therefore $-5$--$7\%$ at iso-$Q$ (Table~\ref{tab:v15-bits}).
+    density, so there is no analogous saving. In exact
+    (information-theoretic) rate the $E_8$ variant therefore pays
+    $+D/4 = +32$ bits per vector vs the $D_4$ variant at
+    every $q_\mathrm{range}$. In packed (integer-aligned,
+    deployment) rate the gap is $+32$ bits at low
+    $q_\mathrm{range}$ and narrows to $+16$ bits at high
+    $q_\mathrm{range}$ as the parity saving gets absorbed into
+    ceiling arithmetic. The CR cost is $-5$--$7\%$ at
+    iso-$q_\mathrm{range}$ across the four canonical operating
+    points (Table~\ref{tab:v15-bits}).
 \end{enumerate}
 
 \begin{table}[H]
 \centering
 \small
-\caption{Canonical operating points: $D_4$ nested lattice variant vs the $E_8$ nested lattice variant ($E_8$)
-at $D = 128$. bits/tok/head includes $32$ bits fp16 overhead
-($\norm{x}$ + $q_\mathrm{max}$). CR is vs bf16.}
+\caption{Canonical operating points: $D_4$ nested lattice variant
+vs.\ $E_8$ nested lattice variant at $D = 128$.
+bits/tok/head is the \emph{packed} (integer-aligned, deployment)
+cost including $32$ bits fp16 overhead ($\norm{x}$ +
+$q_\mathrm{max}$); the exact information-theoretic rate is within
+one bit per block of the packed value
+(Eqs.~\eqref{eq:bits-d4},~\eqref{eq:bits-e8}). The packed
+$E_8 - D_4$ gap is \emph{not} a fixed $+32$: at low
+$q_\mathrm{range}$ it is $+32$ (parity saving still visible above
+the rounding floor), at high $q_\mathrm{range}$ it is $+16$
+(parity saving absorbed into integer alignment). CR is vs.\ bf16.}
 \label{tab:v15-bits}
 \begin{tabular}{rrrrrr}
   \toprule
@@ -1154,11 +1307,19 @@ at $D = 128$. bits/tok/head includes $32$ bits fp16 overhead
 \end{tabular}
 \end{table}
 
-(The overhead differential shrinks from $+32$ to $+16$ at large
-$q_\mathrm{range}$ because the bit-count formulas round up to
-integer per-block bits; at fine quantisation $D_4$'s $-1$-bit parity
-saving is the only asymmetry, while $E_8$'s coset-union density
-bonus compensates.)
+(The packed differential drops from $+32$ to $+16$ at large
+$q_\mathrm{range}$ because the per-block rates round up to integer
+bits: $\lceil 4\log_2(2q_\mathrm{range}+1) - 1 \rceil$ for $D_4$
+and $\lceil 8\log_2(2q_\mathrm{range}+1) \rceil$ for $E_8$. At
+$q_\mathrm{range} = 4$ the fractional parts align so that $D_4$
+saves one block bit above $E_8$, giving $+32$ across the
+$16$ pair-aligned blocks; at $q_\mathrm{range} \geq 38$ the
+fractional parts align so that the ceilings coincide in one of
+every pair of blocks, halving the packed gap to $+16$.
+The \emph{exact} information-theoretic gap is the constant
+$+D/4 = +32$ bits independent of $q_\mathrm{range}$, matching the
+abstract claim; the table reports packed values because that is
+what a deployment KV slot actually consumes.)
 
 \subsection{$E_8$ measured shaping gain}
 \label{sec:v15-shaping-gain}
@@ -1329,22 +1490,41 @@ deployment value.
 \label{sec:limits}
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Four-passage sample size.}
-    $\abs{\Delta\text{ppl}}$ differences below $\sim\!1\%$ absolute
-    are inside the FlashAttention bf16 reproducibility floor at this
-    sample size. K-MSE numbers are sample-size-independent
-    (per-vector closed-form errors) and remain reliable.
-    Publication-grade $\abs{\Delta\text{ppl}}$ tightening would
-    require $\geq 32$ passages.
+  \item \textbf{Four-passage sample size in \S\ref{sec:benchmarks}.}
+    The snapshot-protocol $D_4$ tables
+    (Tables~\ref{tab:pareto-qwen3}, \ref{tab:multimodel},
+    \ref{tab:theory-vs-exp}, \ref{tab:128k}) use $n=4$ passages at
+    $n_\mathrm{eval} = 64$ each. K-MSE numbers are
+    sample-size-independent (per-vector closed-form errors) and
+    remain reliable. $\abs{\Delta\text{ppl}}$ differences below
+    $\sim\!1\%$ absolute are inside the FlashAttention bf16
+    reproducibility floor at this sample size --- we therefore
+    treat signs below that threshold as ties. The in-forward
+    rigorous tables in \S\ref{sec:v15} use $n=32$ and report mean
+    $\pm 95\%$ CI, eliminating this confound for the
+    $E_8$-vs-$D_4$ comparison.
 
-  \item \textbf{Snapshot-mode vs.\ in-forward.}
-    All numbers in this paper are snapshot-mode
-    (\S\ref{sec:methodology-snapshot}), which isolates the codec's
-    intrinsic error. In-forward integration (codec inside every
-    attention step) adds correlated per-layer noise that is not
-    intrinsic to the codec; measuring that accurately needs a
-    paged-attention-native \textsc{KakeyaLattice} kernel, which is out of scope for
-    this paper.
+  \item \textbf{Snapshot-mode vs.\ in-forward --- what we measure
+    where.}
+    The two protocols measure different questions; the paper
+    consistently uses whichever is appropriate to the question
+    asked. Snapshot-mode (\S\ref{sec:methodology-snapshot})
+    isolates codec \emph{intrinsic} error and is used for every
+    $D_4$ result in \S\ref{sec:benchmarks}, because those claims
+    are about the codec's per-vector fidelity and its relation to
+    the theoretical $0.919$ shaping-gain ratio. In-forward
+    rigorous (\S\ref{sec:methodology-rigorous}) measures
+    \emph{deployment-realistic} error including cross-layer
+    accumulation and is used for every result in \S\ref{sec:v15},
+    because the $E_8$ upgrade's practical value (the
+    $28$--$53\%$ $\abs{\Delta\mathrm{ppl}}$ reduction under
+    compounding error) is only visible under that harsher
+    condition. Production PPL numbers in \S\ref{sec:benchmarks}
+    should therefore be read as a lower bound on the true
+    deployment $\abs{\Delta\mathrm{ppl}}$; the \S\ref{sec:v15}
+    in-forward tables are the deployment-realistic counterpart.
+    Codec K-MSE and shaping-gain ratios are not affected by
+    protocol choice.
 
   \item \textbf{Head\_dim $\nmid 4$.}
     By strict-ban design the codec raises \texttt{ValueError} on
@@ -1429,21 +1609,29 @@ layer policy, fp16 overhead scalars --- is identical by construction.
 Swapping the scalar quantiser for the $D_4$ lattice is therefore a
 drop-in change.
 
-\subsection{Positioning: drop-in improvement, not replacement}
+\subsection{Positioning: near-matched-rate fidelity improvement}
+\label{sec:tq-positioning}
 
 The measured K-MSE improvement is a direct consequence of the
 lattice shaping gain. It is unconditional (see
 Proposition~\ref{prop:d4-kakeya}) and architecture-independent (see
 Table~\ref{tab:multimodel}: the ratio is within $\sim 1\%$ of $0.919$
-on every tested model). At matched bits, the other lever
-contributions cancel exactly because they are identical between the
-two codecs; the residual is the shaping gain.
+on every tested model). We emphasise that the comparison is
+\emph{near-matched rate}, not strictly iso-rate: at a given
+$q$-tier the $D_4$ variant pays $3$--$11\%$ more packed bits than
+the adjacent TurboQuant-$b$ point (see
+\S\ref{sec:tq-comp-bits}), because its per-block rate
+$4\log_2(2q+1)-1$ rounds up to the next integer. Within that
+near-matched-rate band the other four levers are identical between
+the two codecs by construction, so the residual in K-MSE is the
+shaping gain alone.
 
-We therefore position \textsc{KakeyaLattice} as an
-\emph{$\approx 8\%$ improvement to the upstream TurboQuant kernel},
-not as a standalone KV codec. Every TurboQuant deployment becomes
-$\sim\!8\%$ more faithful on $K$ at zero additional engineering
-cost, plus the aggressive-compression
+We therefore position \textsc{KakeyaLattice} as a \emph{near-matched-rate
+K-fidelity improvement to the upstream TurboQuant kernel}, not as
+a standalone KV codec and not as a strictly iso-rate one. Every
+TurboQuant deployment becomes meaningfully more faithful on $K$
+(the $12/12$ K-MSE win in Table~\ref{tab:multimodel}) at a modest
+rate premium, plus the aggressive-compression
 $1.8$--$5.3\times\,\abs{\Delta\mathrm{ppl}}$ improvement at the
 $q_\mathrm{range}=10$ operating point.
 
@@ -1462,18 +1650,36 @@ $q_\mathrm{range}=10$ operating point.
 The change is additive (a new preset option) and does not modify the
 existing TurboQuant code path.
 
-\subsection{Compression vs.\ per-bit fidelity}
+\subsection{Near-matched rate: the $3$--$11\%$ premium}
+\label{sec:tq-comp-bits}
 
-At each matched bit point, \textsc{KakeyaLattice} pays $\sim\!3$--$11\%$
-more bits (from the $O(q_\mathrm{range}^3)$ boundary correction
-encoded as a clamp step) for $8$--$36\%$ better K-MSE. The
-\emph{Pareto curve} is strictly better (Table~\ref{tab:pareto-qwen3});
-the \emph{raw compression ratio at a fixed operating point} is
-slightly worse. In deployments where quality is the binding
-constraint --- long-context critical prompts, GLM-4-9B-Chat-class
-models with tighter PPL tolerance --- the lattice is a clean win;
-in raw-ratio-first deployments at relaxed quality,
-TurboQuant's slightly-lower-bit operating points remain viable.
+At each operating point the $D_4$ variant's packed rate sits
+\emph{above} the paired TurboQuant-$b$ rate by $3$--$11\%$. This
+is the gap between the exact per-block rate
+$4\log_2(2q_\mathrm{range}+1) - 1$ (Eq.~\eqref{eq:bits-d4}) and
+its integer-ceiling deployment value; TurboQuant's per-coord
+uniform quantiser has integer bits by construction and therefore
+has no such ceiling overhead. Concretely: at $q_\mathrm{range}=152$
+the $D_4$ exact rate is $1056.3$ bits per $D=128$ vector but the
+packed rate is $1088$ bits; the paired TQ point is $k8v4$ at
+$1056$ bits (TQ's round-to-even slot rule lands exactly there).
+Table~\ref{tab:pareto-qwen3}, Table~\ref{tab:multimodel}, and
+Table~\ref{tab:theory-vs-exp} therefore compare \emph{near-matched
+rate}, not strictly iso-rate points. The three canonical operating
+points sit at packed rate premia of (rounded) $+11\%$
+($q_\mathrm{range}=10$, $576$ vs.\ $\sim\!520$ interpolated TQ),
+$+4\%$ ($q_\mathrm{range}=38$, $832$ vs.\ $800$ at TQ $b=6$), and
+$+3\%$ ($q_\mathrm{range}=152$, $1088$ vs.\ $1056$ at TQ $b=8$).
+
+The headline claim is therefore: at a $3$--$11\%$ packed-rate
+premium, \textsc{KakeyaLattice} delivers $8$--$36\%$ better K-MSE
+at the same $q$-tier, and a strictly better \emph{Pareto curve}
+across the full bit-budget sweep (Table~\ref{tab:pareto-qwen3}).
+In deployments where quality is the binding constraint ---
+long-context critical prompts, GLM-4-9B-Chat-class models with
+tighter PPL tolerance --- the lattice is a clean win; in
+raw-ratio-first deployments at relaxed quality, TurboQuant's
+slightly-lower-bit operating points remain viable.
 
 \subsection{End-to-end vLLM throughput (not measured here)}
 
