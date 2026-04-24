@@ -245,8 +245,12 @@ def ppl_and_top1(pls, ids, start, end) -> tuple[float, list[int]]:
     return float(math.exp(mean_nll)), top1_ids
 
 
-def default_boundary_for_model(num_layers: int) -> set[int]:
-    return set(list(range(2)) + list(range(num_layers - 2, num_layers)))
+def default_boundary_for_model(num_layers: int, k: int = 2) -> set[int]:
+    """Symmetric boundary: first k + last k layers stay bf16."""
+    if k <= 0:
+        return set()
+    k = min(k, num_layers // 2)
+    return set(list(range(k)) + list(range(num_layers - k, num_layers)))
 
 
 def fmt_bytes(b: float) -> str:
@@ -305,6 +309,10 @@ def main() -> int:
     ap.add_argument("--no-boundary", action="store_true",
                     help="Disable boundary-layer protection (include all layers "
                          "in the codec sweep — for boundary ablation)")
+    ap.add_argument("--boundary-size", type=int, default=2,
+                    help="Symmetric boundary (first k + last k layers stay bf16). "
+                         "Only applies when --no-boundary is NOT set.  k=2 matches "
+                         "the v1.4 production default.  k=0 equivalent to --no-boundary.")
     ap.add_argument("--ctx-len", type=int, default=2048)
     ap.add_argument("--n-eval", type=int, default=64)
     ap.add_argument("--n-passages", type=int, default=32)
@@ -430,7 +438,7 @@ def main() -> int:
     if args.no_boundary:
         boundary = set()
     else:
-        boundary = default_boundary_for_model(num_layers)
+        boundary = default_boundary_for_model(num_layers, k=args.boundary_size)
     # Layers that weren't captured (e.g. Gemma-4 kv_shared) are always
     # skipped by the hook naturally; we also add them to boundary for
     # bookkeeping so the "expected fires" count below is correct.

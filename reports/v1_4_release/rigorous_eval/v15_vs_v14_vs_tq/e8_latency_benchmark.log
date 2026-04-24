@@ -1,0 +1,38 @@
+[config] D=128, N=2048, H=8, n_iters=500
+[device] NVIDIA H200
+
+Codec               bits    mean μs     p50 μs     p99 μs     stdev    Msamp/s     μs/vec
+----------------------------------------------------------------------------------------
+bf16 memcpy (baseline)  2048      21.46      21.36      23.70      0.80     763.46      0.001
+v1.4 D4 Q=4          416     354.22     309.59    2732.78    296.23      46.25      0.022
+v1.5 E8 Q=4          448     551.14     540.05     807.86     47.43      29.73      0.034
+v1.4 D4 Q=10         576     330.49     321.12     475.82     47.87      49.57      0.020
+v1.5 E8 Q=10         608     595.77     558.73     987.72     96.58      27.50      0.036
+v1.4 D4 Q=38         832     342.06     326.86     463.27    148.87      47.90      0.021
+v1.5 E8 Q=38         848     612.59     546.20    1170.37    185.96      26.75      0.037
+v1.4 D4 Q=152       1088     348.45     311.52     723.19    160.75      47.02      0.021
+v1.5 E8 Q=152       1104     587.58     545.33    1168.51    175.44      27.88      0.036
+TQ b=2               288     142.68     139.30     207.02     14.27     114.83      0.009
+TQ b=3               416     139.86     139.63     145.20      1.47     117.15      0.009
+TQ b=4               544     143.96     139.63     209.41     16.82     113.81      0.009
+TQ b=6               800     139.78     139.53     146.64      1.51     117.22      0.009
+TQ b=8              1056     143.69     139.70     206.72     15.44     114.02      0.009
+
+Overhead vs bf16 memcpy (baseline 21.46 μs):
+
+v1.5 E8 vs v1.4 D4 at matched Q:
+  Q        v14 μs     v15 μs   ratio v15/v14  v14 bits  v15 bits
+  4        354.22     551.14          1.556x       416       448
+  10       330.49     595.77          1.803x       576       608
+  38       342.06     612.59          1.791x       832       848
+  152      348.45     587.58          1.686x      1088      1104
+
+[CAVEAT] TQ b=2 deployment guardrail:
+  TQ b=2 encode time is MEASURED here (low, similar to b=3 per the
+  Hadamard-dominated cost), but DEPLOYMENT requires boundary-layer
+  protection (first 2 + last 2 layers kept bf16) to avoid Δppl
+  divergence — see Phase β findings where TQ b=2 no-boundary on
+  Qwen3-4B produced 145,000% Δppl.  With boundary=2, b=2 is the
+  aggressive-edge TQ point and still usable.
+
+[done] → /workspace/LLM-KV--Cache-compress/reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/e8_latency_benchmark.json

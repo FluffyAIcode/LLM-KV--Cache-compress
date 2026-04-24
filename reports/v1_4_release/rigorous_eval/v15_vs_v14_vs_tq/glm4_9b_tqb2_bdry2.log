@@ -1,0 +1,233 @@
+[config] mode: inforward
+[config] v1.4 D4 Q:     []
+[config] v1.5 E8 Q:     (none)
+[config] TQ   b:        [2]
+[config] KV modes:      ['KV']
+[config] ablations:     (none)
+[config] no_boundary:   False
+[config] n_passages:    32
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-24 04:21:07 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-24 04:21:07 [nixl_utils.py:34] NIXL is not available
+WARNING 04-24 04:21:07 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-24 04:21:07 [utils.py:233] non-default args: {'trust_remote_code': True, 'max_model_len': 2113, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.6, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'zai-org/GLM-4-9B-Chat'}
+WARNING 04-24 04:21:07 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 04-24 04:21:08 [model.py:554] Resolved architecture: ChatGLMModel
+INFO 04-24 04:21:08 [model.py:1685] Using max model len 2113
+INFO 04-24 04:21:08 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-24 04:21:08 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-24 04:21:08 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-24 04:21:08 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-24 04:21:08 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-24 04:21:08 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-24 04:21:08 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+WARNING 04-24 04:21:10 [registry.py:245] Using a slow tokenizer. This might cause a significant slowdown. Consider using a fast tokenizer instead.
+INFO 04-24 04:21:10 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='zai-org/GLM-4-9B-Chat', speculative_config=None, tokenizer='zai-org/GLM-4-9B-Chat', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=2113, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=zai-org/GLM-4-9B-Chat, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-24 04:21:11 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:46809 backend=nccl
+INFO 04-24 04:21:11 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-24 04:21:11 [gpu_model_runner.py:4752] Starting to load model zai-org/GLM-4-9B-Chat...
+INFO 04-24 04:21:12 [cuda.py:368] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+INFO 04-24 04:21:12 [flash_attn.py:637] Using FlashAttention version 3
+INFO 04-24 04:21:13 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 17.51 GiB. Available RAM: 1641.18 GiB.
+INFO 04-24 04:21:13 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/10 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards:  10% Completed | 1/10 [00:00<00:03,  2.34it/s]
+Loading safetensors checkpoint shards:  20% Completed | 2/10 [00:00<00:04,  1.98it/s]
+Loading safetensors checkpoint shards:  30% Completed | 3/10 [00:01<00:03,  1.84it/s]
+Loading safetensors checkpoint shards:  40% Completed | 4/10 [00:02<00:03,  1.79it/s]
+Loading safetensors checkpoint shards:  50% Completed | 5/10 [00:02<00:02,  1.79it/s]
+Loading safetensors checkpoint shards:  60% Completed | 6/10 [00:03<00:02,  1.75it/s]
+Loading safetensors checkpoint shards:  70% Completed | 7/10 [00:03<00:01,  1.75it/s]
+Loading safetensors checkpoint shards:  80% Completed | 8/10 [00:04<00:01,  1.80it/s]
+Loading safetensors checkpoint shards:  90% Completed | 9/10 [00:04<00:00,  1.84it/s]
+Loading safetensors checkpoint shards: 100% Completed | 10/10 [00:05<00:00,  1.92it/s]
+Loading safetensors checkpoint shards: 100% Completed | 10/10 [00:05<00:00,  1.85it/s]
+
+INFO 04-24 04:21:19 [default_loader.py:384] Loading weights took 5.51 seconds
+INFO 04-24 04:21:19 [gpu_model_runner.py:4854] Model loading took 17.56 GiB memory and 7.098501 seconds
+INFO 04-24 04:21:21 [gpu_worker.py:440] Available KV cache memory: 63.82 GiB
+INFO 04-24 04:21:21 [kv_cache_utils.py:1337] GPU KV cache size: 1,673,040 tokens
+INFO 04-24 04:21:21 [kv_cache_utils.py:1342] Maximum concurrency for 2,113 tokens per request: 786.20x
+2026-04-24 04:21:21,350 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-24 04:21:21,371 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-24 04:21:21 [core.py:307] init engine (profile, create kv cache, warmup model) took 2.13 s
+[data] loaded 32 passages
+[model] zai-org/GLM-4-9B-Chat
+[model] L=40  captured=40  distinct_hds=[128]  distinct_kvh=[2]
+[channels] 2 total
+
+=== passage 1/32 ===
+  [ref] ppl=18.879  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+6133.011% top1= 14.06% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 2/32 ===
+  [ref] ppl=22.325  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5558.213% top1= 18.75% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 3/32 ===
+  [ref] ppl=3.190  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+8329.978% top1= 15.62% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 4/32 ===
+  [ref] ppl=5.665  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+4084.288% top1= 21.88% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 5/32 ===
+  [ref] ppl=25.204  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+2897.693% top1= 15.62% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 6/32 ===
+  [ref] ppl=21.277  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+2719.890% top1= 18.75% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 7/32 ===
+  [ref] ppl=22.989  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+12291.948% top1=  9.38% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 8/32 ===
+  [ref] ppl=6.900  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+7033.366% top1= 20.31% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 9/32 ===
+  [ref] ppl=2.639  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+16562.006% top1= 17.19% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 10/32 ===
+  [ref] ppl=8.362  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5658.334% top1= 20.31% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 11/32 ===
+  [ref] ppl=8.287  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+6360.140% top1= 10.94% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 12/32 ===
+  [ref] ppl=6.323  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+15613.391% top1= 10.94% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 13/32 ===
+  [ref] ppl=18.863  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+4087.850% top1= 17.19% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 14/32 ===
+  [ref] ppl=13.628  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+1877.133% top1= 17.19% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 15/32 ===
+  [ref] ppl=13.596  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+3109.882% top1= 14.06% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 16/32 ===
+  [ref] ppl=8.569  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5971.970% top1= 18.75% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 17/32 ===
+  [ref] ppl=6.981  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+8177.193% top1=  6.25% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 18/32 ===
+  [ref] ppl=7.349  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+9680.191% top1= 23.44% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 19/32 ===
+  [ref] ppl=10.726  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+4808.929% top1= 21.88% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 20/32 ===
+  [ref] ppl=8.704  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5526.372% top1=  7.81% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 21/32 ===
+  [ref] ppl=21.415  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+8315.295% top1=  6.25% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 22/32 ===
+  [ref] ppl=18.584  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5741.902% top1= 12.50% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 23/32 ===
+  [ref] ppl=13.687  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+7567.297% top1=  9.38% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 24/32 ===
+  [ref] ppl=38.958  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+2946.432% top1= 18.75% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 25/32 ===
+  [ref] ppl=35.097  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+2499.533% top1=  9.38% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 26/32 ===
+  [ref] ppl=8.958  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+10283.122% top1= 10.94% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 27/32 ===
+  [ref] ppl=13.030  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5229.789% top1= 10.94% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 28/32 ===
+  [ref] ppl=12.703  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+8047.443% top1= 10.94% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 29/32 ===
+  [ref] ppl=3.084  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+10551.222% top1= 15.62% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 30/32 ===
+  [ref] ppl=8.482  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5789.774% top1= 23.44% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 31/32 ===
+  [ref] ppl=4.050  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+7162.687% top1= 14.06% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+=== passage 32/32 ===
+  [ref] ppl=25.470  (0.08s)
+  [bf16_ref                        ] Δppl= +0.000% top1=100.00% K-MSE(l0)=0.00e+00 V-MSE(l0)=0.00e+00 fires=0
+  [tq_b2_KV                        ] Δppl=+5293.474% top1=  9.38% K-MSE(l0)=5.62e-01 V-MSE(l0)=5.79e-01 fires=36
+
+================================================================================================================================
+v1.4 KakeyaLattice rigorous eval — model=zai-org/GLM-4-9B-Chat  mode=inforward  n=32
+Boundary skip: [0, 1, 38, 39]  (codec on 36/40 layers; uncaptured-by-arch: (none))
+================================================================================================================================
+Channel                          KV   n     CR       |Δppl|±95%CI         Δppl±95%CI   top1%    K-MSE(l0)    V-MSE(l0)
+--------------------------------------------------------------------------------------------------------------------------------
+bf16_ref                          -  32  1.00×  0.000%±0.000% +0.000%±0.000% 100.00%    0.000e+00    0.000e+00
+tq_b2_KV                         KV  32  4.41× 6747.180%±1265.238% +6747.180%±1265.238%  14.75%    5.616e-01    5.786e-01
+
+[done] → reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/glm4_9b_tqb2_bdry2_inforward.json
+[rank0]:[W424 04:21:31.260671800 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

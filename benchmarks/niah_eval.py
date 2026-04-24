@@ -166,6 +166,20 @@ def make_v14_codec_fn(D: int, q_range: int, device: str = "cuda"):
     return fn
 
 
+def make_v15_codec_fn(D: int, q_range: int, device: str = "cuda"):
+    from kakeyalattice import V15KakeyaZamirE8GPU
+    if D % 8 != 0:
+        raise ValueError(f"v1.5 E8 requires D % 8 == 0, got {D}")
+    cb = V15KakeyaZamirE8GPU(D=D, q_range=q_range, device=device)
+    def fn(X):
+        assert X.is_cuda and X.dtype == torch.float32
+        return cb.roundtrip(X)
+    fn.bits_per_token_per_head = cb.bits_per_token_per_head
+    fn.channel_id = f"v15_Q{q_range}"
+    fn.label = f"v1.5 Q={q_range}"
+    return fn
+
+
 def make_tq_codec_fn(D: int, bits_per_coord: int, device: str = "cuda"):
     H = _sylvester_hadamard_normalised(D, device)
     qs = (1 << (bits_per_coord - 1)) - 1
@@ -200,11 +214,16 @@ def main() -> int:
     ap.add_argument("--depths", type=str, default="0.1,0.5,0.9",
                     help="Needle depths as fractions of the haystack")
     ap.add_argument("--q-values", type=str, default="38,152",
-                    help="v1.4 Q values")
+                    help="v1.4 D4 Q values")
+    ap.add_argument("--v15-q-values", type=str, default="",
+                    help="v1.5 E8 Q values (empty = skip)")
     ap.add_argument("--tq-b-values", type=str, default="6,8",
                     help="TQ b values")
     ap.add_argument("--mode", choices=["inforward", "snapshot"],
                     default="inforward")
+    ap.add_argument("--boundary-size", type=int, default=2,
+                    help="Symmetric boundary layers (bf16 at first/last k). "
+                         "k=0 for no-boundary; required ≥1 for TQ b=2.")
     ap.add_argument("--n-trials", type=int, default=3,
                     help="Repeats per (ctx, depth, codec) cell; mitigates "
                          "generation non-determinism")
@@ -216,14 +235,17 @@ def main() -> int:
 
     CTX_LENS = [int(x) for x in args.ctx_lengths.split(",") if x.strip()]
     DEPTHS   = [float(x) for x in args.depths.split(",") if x.strip()]
-    Q_VALS   = [int(x) for x in args.q_values.split(",") if x.strip()]
-    TQ_VALS  = [int(x) for x in args.tq_b_values.split(",") if x.strip()]
-    print(f"[config] ctx lengths: {CTX_LENS}", flush=True)
-    print(f"[config] depths:      {DEPTHS}", flush=True)
-    print(f"[config] v1.4 Q:      {Q_VALS}", flush=True)
-    print(f"[config] TQ   b:      {TQ_VALS}", flush=True)
-    print(f"[config] mode:        {args.mode}", flush=True)
-    print(f"[config] n_trials:    {args.n_trials}", flush=True)
+    Q_VALS    = [int(x) for x in args.q_values.split(",") if x.strip()]
+    Q15_VALS  = [int(x) for x in args.v15_q_values.split(",") if x.strip()]
+    TQ_VALS   = [int(x) for x in args.tq_b_values.split(",") if x.strip()]
+    print(f"[config] ctx lengths:  {CTX_LENS}", flush=True)
+    print(f"[config] depths:       {DEPTHS}", flush=True)
+    print(f"[config] v1.4 D4 Q:    {Q_VALS}", flush=True)
+    print(f"[config] v1.5 E8 Q:    {Q15_VALS or '(none)'}", flush=True)
+    print(f"[config] TQ   b:       {TQ_VALS}", flush=True)
+    print(f"[config] mode:         {args.mode}", flush=True)
+    print(f"[config] boundary k:   {args.boundary_size}", flush=True)
+    print(f"[config] n_trials:     {args.n_trials}", flush=True)
 
     from vllm import LLM
     from transformers import AutoTokenizer
@@ -251,30 +273,80 @@ def main() -> int:
     HookState.phase = "off"
     cap_dry = dict(HookState.captured)
     num_layers = max(cap_dry.keys()) + 1 if cap_dry else 0
-    head_dim = cap_dry[0]['K'].shape[-1] if cap_dry else 0
-    num_kv_heads = cap_dry[0]['K'].shape[1] if cap_dry else 0
-    print(f"[model] L={num_layers} hd={head_dim} kv_h={num_kv_heads}",
+    # Per-layer head_dim discovery (Gemma-4 alternates sliding hd=256 /
+    # full hd=512 across layers — same fix as rigorous_eval.py).
+    per_layer_shape: dict[int, tuple[int, int]] = {}
+    for lid, kv in cap_dry.items():
+        per_layer_shape[lid] = (kv['K'].shape[-1], kv['K'].shape[1])
+    distinct_hds = sorted({hd for hd, _ in per_layer_shape.values()})
+    distinct_nkvs = sorted({nkv for _, nkv in per_layer_shape.values()})
+    head_dim = distinct_hds[0] if distinct_hds else 0  # kept for reporting
+    num_kv_heads = distinct_nkvs[0] if distinct_nkvs else 0
+    print(f"[model] L={num_layers} hds={distinct_hds} kv_hs={distinct_nkvs}",
           flush=True)
-    if num_layers == 0 or head_dim == 0:
+    if len(distinct_hds) > 1:
+        hd_counts = {}
+        for hd, _ in per_layer_shape.values():
+            hd_counts[hd] = hd_counts.get(hd, 0) + 1
+        for hd, cnt in sorted(hd_counts.items()):
+            print(f"[model]   hd={hd}: {cnt} layer(s)", flush=True)
+    if num_layers == 0 or not distinct_hds:
         print("[ERROR] Snapshot hook didn't fire.", flush=True)
         return 1
-    if head_dim % 4 != 0:
-        print(f"[FAIL] head_dim {head_dim} not divisible by 4.", flush=True)
-        return 2
+    for hd in distinct_hds:
+        if hd % 4 != 0:
+            print(f"[FAIL] head_dim {hd} not divisible by 4.", flush=True)
+            return 2
     HookState.captured = {}
     torch.cuda.empty_cache()
 
-    boundary = default_boundary_for_model(num_layers)
+    # Build boundary set: first k + last k layers kept bf16.
+    k = max(0, args.boundary_size)
+    k = min(k, num_layers // 2)
+    boundary = set(list(range(k)) + list(range(num_layers - k, num_layers)))
+    print(f"[boundary] k={k}, bf16-protected layers: {sorted(boundary)}",
+          flush=True)
 
     # Load haystack once; reused across trials.
     hay_s = load_haystack(tok, max(CTX_LENS))
 
+    # Per-layer codec dispatcher: build one codec_fn per distinct hd,
+    # wrap into a single callable that routes by input X.shape[-1].
+    def _per_layer_dispatch(per_hd_fns: dict, channel_id: str, label: str):
+        def fn(X: torch.Tensor) -> torch.Tensor:
+            D = X.shape[-1]
+            hd_fn = per_hd_fns.get(D)
+            if hd_fn is None:
+                raise RuntimeError(
+                    f"no codec for head_dim={D}; have {sorted(per_hd_fns.keys())}"
+                )
+            return hd_fn(X)
+        rep = per_hd_fns[distinct_hds[0]]
+        fn.bits_per_token_per_head = rep.bits_per_token_per_head
+        fn.channel_id = channel_id
+        fn.label = label
+        return fn
+
     # Build channels.
     channels: list[tuple[str, Any]] = [("bf16", None)]
     for Q in Q_VALS:
-        channels.append((f"v14_Q{Q}", make_v14_codec_fn(head_dim, Q)))
+        per_hd = {hd: make_v14_codec_fn(hd, Q) for hd in distinct_hds}
+        channels.append((f"v14_Q{Q}",
+                         _per_layer_dispatch(per_hd, f"v14_Q{Q}", f"v1.4 Q={Q}")))
+    for Q in Q15_VALS:
+        for hd in distinct_hds:
+            if hd % 8 != 0:
+                raise ValueError(
+                    f"v1.5 E8 requires all head_dims % 8 == 0; "
+                    f"got {hd}. No fallback."
+                )
+        per_hd = {hd: make_v15_codec_fn(hd, Q) for hd in distinct_hds}
+        channels.append((f"v15_Q{Q}",
+                         _per_layer_dispatch(per_hd, f"v15_Q{Q}", f"v1.5 Q={Q}")))
     for b in TQ_VALS:
-        channels.append((f"tq_b{b}", make_tq_codec_fn(head_dim, b)))
+        per_hd = {hd: make_tq_codec_fn(hd, b) for hd in distinct_hds}
+        channels.append((f"tq_b{b}",
+                         _per_layer_dispatch(per_hd, f"tq_b{b}", f"TQ b={b}")))
 
     records: list[dict] = []
 
