@@ -35,6 +35,7 @@
 \newtheorem{proposition}[theorem]{Proposition}
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{remark}[theorem]{Remark}
+\newtheorem{fact}[theorem]{Fact}
 
 % --- Math shortcuts ---
 \newcommand{\R}{\mathbb{R}}
@@ -82,10 +83,19 @@ $G(E_8)\approx 0.0717$.
 
 Measured results are live-vLLM on NVIDIA H200 under two protocols.
 Under \emph{snapshot} evaluation the $D_4$ variant wins $12/12$
-on K-MSE ($10$--$36\%$ better) and $9/12$ on $|\Delta\mathrm{ppl}|$
-across four open-source models at three near-matched bit tiers;
-the theoretical $G(D_4)/G(\Z^4)\approx 0.919$ shaping ratio is
-recovered to within $\sim\!1\%$ in three independent environments.
+on K-MSE ($10$--$36\%$ better) across four open-source models at
+three \emph{near-matched} bit tiers (the $D_4$ variant sits
+$3$--$11\%$ above its paired TurboQuant-$b$ rate, not strictly
+iso-rate, because $4\log_2(2q_\mathrm{range}+1)-1$ rounds up to
+the next integer; see \S\ref{sec:tq-comp-bits}). The theoretical
+$G(D_4)/G(\Z^4)\approx 0.919$ shaping ratio is recovered to
+within $\sim\!1\%$ in three independent environments. On
+$|\Delta\mathrm{ppl}|$ at $n=4$ passages the $D_4$ variant wins
+$9/12$ pairs; the three losses are all $<\!1\%$ absolute on both
+sides, inside the FlashAttention bf16 reproducibility floor at
+this sample size (\S\ref{sec:limits}), and the
+deployment-operating-point win at $q_\mathrm{range}=10$ is
+$4/4$ at $1.8$--$5.3\times$ improvement.
 Under \emph{in-forward rigorous} evaluation ($n=32$, $95\%$ CI,
 no-boundary) the $E_8$ variant reduces
 $|\Delta\mathrm{ppl}|$ by $28$--$53\%$ across three deployable
@@ -221,42 +231,49 @@ conditional.
 \end{proposition}
 
 The bound sits at the deep end of a published four-link chain:
-\emph{multilinear Kakeya endpoint}~\cite{guth-endpoint}
+\emph{multilinear Kakeya
+endpoint}~\cite{guth-endpoint,carbery-valdimarsson}
 $\to$ \emph{Brascamp--Lieb
 equivalence}~\cite{bennett-carbery-christ-tao} $\to$ \emph{matrix
 concentration} (Tropp's matrix Chernoff via Lieb
-concavity~\cite{tropp-matrix-chernoff,carbery-valdimarsson}) $\to$
-\emph{lattice second-moment
+concavity)~\cite{tropp-matrix-chernoff} $\to$ \emph{lattice
+second-moment
 optimality}~\cite{zamir-feder,conway-sloane-book}. The codec uses
-the chain's shallow end (link 4), which is \emph{unconditional} at
-the codec's block dimension:
+the chain's shallow end (link 4), which is classical and
+unconditional at the codec's block dimension:
 
-\begin{proposition}[$D_4$ Voronoi cells as a restricted Kakeya cover]
+\begin{fact}[$D_4$ / $E_8$ second-moment shaping gain, classical]
 \label{prop:d4-kakeya}
-After unit-norm factorisation and Sylvester--Hadamard rotation, let
-$\Lambda = D_4^{\otimes K}$ with $K = D/4$ scaled by
-$q_\mathrm{max}/q_\mathrm{range}$. Its Voronoi cells
-direction-cover $S^{D-1}$ with covering radius
-$\varrho(\Lambda)^2 \leq q_\mathrm{max}^2 \cdot G(D_4)
-/ [q_\mathrm{range}^2 \cdot (2q_\mathrm{range}+1)^{4K/D}]$, where
-$G(D_4)\approx 0.0766 < G(\Z^4) = 1/12 \approx 0.0833$. The ratio
-$G(D_4)/G(\Z^4) \approx 0.919$ is the MSE shaping gain
-($+0.367\,$dB). The same statement holds for $\Lambda = E_8^{\otimes K}$
-at $K = D/8$ with $G(E_8)\approx 0.0717$ ($+0.65\,$dB over
-$\Z^8$, or $+0.29\,$dB over $D_4$). \qed
-\end{proposition}
+For i.i.d.\ coordinates and tensor-product lattice $\Lambda =
+D_4^{\otimes K}$ with $K = D/4$, the per-coordinate Voronoi-cell
+MSE ratio to $\Z^D$ is
+$G(D_4)/G(\Z^4) \approx 0.0766/0.0833 \approx 0.919$, i.e.\
+$+0.367\,$dB. Substituting $\Lambda = E_8^{\otimes K}$ at $K = D/8$
+gives $G(E_8)/G(\Z^8) \approx 0.860$, i.e.\ $+0.65\,$dB over
+$\Z^8$, or $+0.29\,$dB over $D_4$ at matched
+rate~\cite{zamir-feder,conway-sloane-book,eyuboglu-forney,erez-zamir}.
+\end{fact}
 
-\noindent The proof is immediate from the second-moment formula for
-Voronoi cells~\cite{conway-sloane-book} and the Gaussian
-channel-coding
-view~\cite{zamir-feder,eyuboglu-forney,erez-zamir}; it drives the
-central empirical prediction ($0.919$ K-MSE ratio) tested in
-\S\ref{sec:benchmarks}. Our use of Kakeya is literature-traceable
-\emph{framing}, not a new harmonic-analysis theorem: the
-$D_4$-lattice bound is pure lattice geometry, the direction set
-$\Theta$ is a finite discrete instance (not the continuous Kakeya
-hard case), and the MSE bound is multiplicative rather than
-Hausdorff-dimensional.
+Fact~\ref{prop:d4-kakeya} is a textbook consequence of lattice
+source coding and is stated here only so that
+\S\ref{sec:benchmarks}'s measured $\approx 0.919$ K-MSE ratio has
+an explicit reference. We use it as the \emph{engineering target}
+the five-lever preprocessing pipeline is designed to hit, not as
+a new theoretical contribution. The connection to the Kakeya
+chain ($D_4$ as a discrete direction-cover of $S^{D-1}$; the
+multilinear-Kakeya / Brascamp--Lieb / matrix-concentration
+ancestry of the lattice-second-moment
+bounds~\cite{guth-endpoint,bennett-carbery-christ-tao,tropp-matrix-chernoff})
+is literature-traceable \emph{framing}: the codec gains nothing
+formal from the ancestry, and loses nothing if a reader prefers
+to treat Fact~\ref{prop:d4-kakeya} as a pure lattice-coding
+statement. We retain the Kakeya framing because it names the
+direction-cover structure of the codebook precisely and because
+the prior-work paper~\cite{kakeya-v13-paper} used a conditional
+Kakeya lower bound that the present codec replaces with the
+unconditional lattice second-moment bound above. Caveats on what
+the Kakeya framing does \emph{not} buy are listed explicitly in
+\S\ref{sec:limits}.
 
 \section{The \textsc{KakeyaLattice} codec}
 \label{sec:codec}
@@ -652,22 +669,35 @@ same $q$-tier (\S\ref{sec:tq-comp-bits}). Data:
   Metric & \textsc{KakeyaLattice} wins & tie & baseline wins \\
   \midrule
   K-MSE ratio ($<1.0$)                & $\mathbf{12/12}$ & 0 & 0 \\
-  $\abs{\Delta\text{ppl}}$ ratio ($<1.0$) & $\mathbf{9/12}$  & 0 & 3 \\
+  $\abs{\Delta\text{ppl}}$ ratio ($<1.0$)\textsuperscript{*} & $\mathbf{9/12}$  & (3 sub-floor) & 0 \\
   top-1 pair ($\geq$ baseline)        & $6/12$  & 2 & 4 \\
   \bottomrule
 \end{tabular}
 \end{table}
+
+\textsuperscript{*}\emph{At $n = 4$ passages the
+FlashAttention bf16 reproducibility floor is
+$\sim\!1\%\,|\Delta\mathrm{ppl}|$ (\S\ref{sec:limits}); the three
+``baseline wins'' rows on $|\Delta\mathrm{ppl}|$ are all
+sub-floor near-lossless ties (both sides $< 1\%$ absolute) and
+should be read as ties, not as baseline wins. Deployment-realistic
+$n=32$ $|\Delta\mathrm{ppl}|$ numbers with $95\%$ CI are in
+\S\ref{sec:v15}.}
 
 K-MSE dominance is universal ($12/12$, $10$--$36\%$ better),
 mirroring $G(D_4)/G(\Z^4) \approx 0.919$ with the expected drift
 to $0.64$ at aggressive $q_\mathrm{range}=10$.
 $\abs{\Delta\text{ppl}}$ dominance is clean at the deployment
 operating point ($q_\mathrm{range}=10$, all four models,
-$1.8$--$5.3\times$ better). The three near-lossless losses
-($q_\mathrm{range}=152$ on DeepSeek-1.5B and Gemma-4-E4B) are
-below $1\%$ absolute on both sides and therefore inside the
-FlashAttention bf16 reproducibility floor at $n=4$; the K-MSE
-ratio still confirms higher $K$-fidelity to bf16.
+$1.8$--$5.3\times$ better). The three near-lossless rows at
+$q_\mathrm{range}=152$ on DeepSeek-1.5B and Gemma-4-E4B where the
+ratio is $> 1$ are all $< 1\%$ absolute on both sides and
+therefore sub-floor at $n=4$; the K-MSE ratio still confirms
+higher $K$-fidelity to bf16 on those rows. Publication-grade
+$|\Delta\mathrm{ppl}|$ tightening requires $n \geq 32$
+(\S\ref{sec:limits} caveat 1); the $E_8$-vs-$D_4$ comparison in
+\S\ref{sec:v15} uses $n = 32$ with Student-$t$ $95\%$ CI to
+eliminate this confound.
 
 \subsection{Theory--experiment reconciliation}
 \label{sec:bench-theory}
@@ -1039,7 +1069,11 @@ factorisation, Hadamard rotation, per-vector $q_\mathrm{max}$,
 joint scale) and differ only in the per-block quantiser:
 TurboQuant uses int-per-coord $\Z^4$ cells ($G=1/12$, $0\,$dB
 reference), \textsc{KakeyaLattice} uses $D_4$ closest-point
-($G\approx 0.0766$, $+0.367\,$dB) --- a drop-in change.
+($G\approx 0.0766$, $+0.367\,$dB). The swap is structurally
+drop-in (same slot layout, same overhead scalars, same boundary
+layer policy) at a modest rate premium: see
+\S\ref{sec:tq-comp-bits} for the quantitative $3$--$11\%$
+packed-rate premium discussion.
 
 \paragraph{Near-matched rate: the $3$--$11\%$ premium.}
 \label{sec:tq-comp-bits}
@@ -1089,8 +1123,9 @@ Hickman--Rogers--Zhang and Zahl pushed high-$D$
 bounds~\cite{hickman-rogers-zhang,zahl-restricted,zahl-2022};
 Wang--Zahl~\cite{wang-zahl} resolved the three-dimensional
 Euclidean case in 2025. The paper relies on three specific links:
-Guth's multilinear Kakeya endpoint~\cite{guth-endpoint},
-Brascamp--Lieb~\cite{bennett-carbery-christ-tao,carbery-valdimarsson},
+Guth's multilinear Kakeya endpoint~\cite{guth-endpoint}
+(with the Borsuk--Ulam-based proof of~\cite{carbery-valdimarsson}),
+Brascamp--Lieb~\cite{bennett-carbery-christ-tao},
 and Tropp's matrix-concentration
 bounds~\cite{tropp-matrix-chernoff}.
 
@@ -1132,30 +1167,49 @@ attention kernel.
 \section{Conclusion}
 
 \textsc{KakeyaLattice} is a Zamir--Feder nested-lattice KV-cache
-codec with two lattice variants. The $D_4$ variant's shaping gain
-is unconditionally bounded by $G(\Z^4)/G(D_4)\approx 0.919$ via
-Prop.~\ref{prop:d4-kakeya}; placing it at the shallow end of the
-multilinear Kakeya $\to$ Brascamp--Lieb $\to$ matrix concentration
-$\to$ lattice second-moment chain
-(\S\ref{sec:framework})~\cite{guth-endpoint,bennett-carbery-christ-tao,tropp-matrix-chernoff,conway-sloane-book,wang-zahl}
-grounds the design in published theorems without a conditional
-Kakeya dependency at deployment dimension. Under snapshot
-evaluation the theoretical $0.919$ ratio is recovered within
-$\sim\!1\%$ on every tested model in three independent
-environments; the codec wins $12/12$ on K-MSE and $9/12$ on
-$|\Delta\mathrm{ppl}|$ across four transformer families, and
-shrinks the $128$k KV cache by $2.5$--$2.8\times$ balanced and
+codec with two lattice variants ($D_4$ and $E_8$). The $D_4$
+variant's shaping-gain target is the textbook second-moment ratio
+$G(\Z^4)/G(D_4) \approx 0.919$
+(Fact~\ref{prop:d4-kakeya})~\cite{zamir-feder,conway-sloane-book};
+the Kakeya framing (\S\ref{sec:framework}) names the codec's
+direction-cover structure and situates it inside the
+multilinear-Kakeya / Brascamp--Lieb / matrix-concentration ancestry
+of lattice-second-moment bounds but does not provide new formal
+results at deployment dimension.
+
+Under snapshot evaluation ($n=4$, boundary $k=2$) the target
+$0.919$ K-MSE ratio is recovered to within $\sim\!1\%$ on every
+tested model in three independent environments; the codec wins
+$12/12$ pairs on K-MSE and $9/12$ on $|\Delta\mathrm{ppl}|$
+across four transformer families, with the three
+$|\Delta\mathrm{ppl}|$ losses all $<\!1\%$ absolute (inside the
+FlashAttention bf16 reproducibility floor at $n=4$, which
+\S\ref{sec:limits} caveats) and $4/4$ wins at
+$1.8$--$5.3\times$ improvement at the deployment operating
+point $q_\mathrm{range}=10$. At $128$k the codec shrinks the
+combined KV cache by $2.5$--$2.8\times$ balanced and
 $1.66$--$1.73\times$ near-lossless with both $K$ and $V$
-compressed. The $E_8$ variant extends this with $+1.3$ to
-$+2.0\,$dB further per-layer K-MSE gain and a $28$--$53\%$
-in-forward $|\Delta\mathrm{ppl}|$ reduction (four models,
-$n=32$, $95\%$ CI); the excess over the $+0.29\,$dB theoretical
-minimum is super-linear amplification of per-layer error under
-cross-layer accumulation. Cost is $+16$--$32$ packed bits/vector
-and $1.56$--$1.80\times$ encode latency; long-context retrieval
-is preserved on three of four models. We frame the codec as an
-additive near-matched-rate drop-in PR over the production-deployed
-TurboQuant kernel (\S\ref{sec:tq-comparison}).
+compressed, at a $3$--$11\%$ packed-rate premium over the paired
+TurboQuant operating points (the comparison is near-matched rate,
+not strictly iso-rate, because $4\log_2(2q+1)-1$ rounds up to the
+next integer; \S\ref{sec:tq-comp-bits}).
+
+The $E_8$ variant, evaluated separately under in-forward rigorous
+conditions ($n=32$, no-boundary, $95\%$ CI) that reviewers
+requested for deployment-realistic $|\Delta\mathrm{ppl}|$ numbers,
+adds $+1.3$ to
+$+2.0\,$dB per-layer K-MSE gain and a $28$--$53\%$
+$|\Delta\mathrm{ppl}|$ reduction over $D_4$ on three deployable
+models. The empirical gain exceeds the $+0.29\,$dB theoretical
+minimum because cross-layer error accumulation amplifies
+per-layer error super-linearly at aggressive bit budgets. Cost:
+$+16$--$32$ packed bits/vector and $1.56$--$1.80\times$ encode
+latency; long-context retrieval (NIAH at $16$k) is preserved on
+three of four models. We therefore position \textsc{KakeyaLattice}
+as a near-matched-rate, deployment-realistic fidelity
+improvement over the production-deployed TurboQuant kernel
+(\S\ref{sec:tq-comparison}), not as a strictly iso-rate or
+unconditional upgrade.
 
 \paragraph{Reproducibility and distortion choice.}
 All code, unit tests, per-model JSON, four per-architecture
