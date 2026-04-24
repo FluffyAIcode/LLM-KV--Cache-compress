@@ -1,0 +1,318 @@
+{
+  "device": "NVIDIA H200",
+  "config": {
+    "head_dim": 128,
+    "n_tokens": 2048,
+    "n_heads": 8,
+    "n_iters": 500
+  },
+  "results": [
+    {
+      "channel_id": "bf16_memcpy",
+      "label": "bf16 memcpy (baseline)",
+      "bits_per_token_per_head": 2048,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 21.460209041833878,
+      "stdev_us": 0.801755491971164,
+      "min_us": 20.559877157211304,
+      "p50_us": 21.364539861679077,
+      "p99_us": 23.696571588516235,
+      "max_us": 33.24635326862335,
+      "per_vec_mean_us": 0.0013098272120259935,
+      "throughput_Msamples_per_sec": 763.4594783332041,
+      "q_or_b": "bf16_memcpy"
+    },
+    {
+      "channel_id": "v14_Q4",
+      "label": "v1.4 D4 Q=4",
+      "bits_per_token_per_head": 416,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 354.222372174263,
+      "stdev_us": 296.227911866456,
+      "min_us": 302.75993049144745,
+      "p50_us": 309.59025025367737,
+      "p99_us": 2732.781693339348,
+      "max_us": 3498.336300253868,
+      "per_vec_mean_us": 0.021620017832901794,
+      "throughput_Msamples_per_sec": 46.253430858793244,
+      "q_or_b": "v14_Q4",
+      "overhead_vs_bf16": 16.506007536261773
+    },
+    {
+      "channel_id": "v15_Q4",
+      "label": "v1.5 E8 Q=4",
+      "bits_per_token_per_head": 448,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 551.1419922113419,
+      "stdev_us": 47.432903111092806,
+      "min_us": 530.3509533405304,
+      "p50_us": 540.0516092777252,
+      "p99_us": 807.8552782535553,
+      "max_us": 838.7565612792969,
+      "per_vec_mean_us": 0.03363903761055553,
+      "throughput_Msamples_per_sec": 29.727366507245492,
+      "q_or_b": "v15_Q4",
+      "overhead_vs_bf16": 25.682042105785758
+    },
+    {
+      "channel_id": "v14_Q10",
+      "label": "v1.4 D4 Q=10",
+      "bits_per_token_per_head": 576,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 330.492090433836,
+      "stdev_us": 47.86997229956664,
+      "min_us": 302.8474748134613,
+      "p50_us": 321.12374901771545,
+      "p99_us": 475.8201539516449,
+      "max_us": 1003.5969316959381,
+      "per_vec_mean_us": 0.02017163637901831,
+      "throughput_Msamples_per_sec": 49.57456010064499,
+      "q_or_b": "v14_Q10",
+      "overhead_vs_bf16": 15.400226987052399
+    },
+    {
+      "channel_id": "v15_Q10",
+      "label": "v1.5 E8 Q=10",
+      "bits_per_token_per_head": 608,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 595.7739129662514,
+      "stdev_us": 96.5828338194939,
+      "min_us": 542.5997078418732,
+      "p50_us": 558.728352189064,
+      "p99_us": 987.7216070890427,
+      "max_us": 1089.9733752012253,
+      "per_vec_mean_us": 0.036363153867569054,
+      "throughput_Msamples_per_sec": 27.500364892492527,
+      "q_or_b": "v15_Q10",
+      "overhead_vs_bf16": 27.761794482284298
+    },
+    {
+      "channel_id": "v14_Q38",
+      "label": "v1.4 D4 Q=38",
+      "bits_per_token_per_head": 832,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 342.0594297349453,
+      "stdev_us": 148.87433944752442,
+      "min_us": 305.90593814849854,
+      "p50_us": 326.8606960773468,
+      "p99_us": 463.2696509361267,
+      "max_us": 3590.6359553337097,
+      "per_vec_mean_us": 0.020877650740658282,
+      "throughput_Msamples_per_sec": 47.89810943874758,
+      "q_or_b": "v14_Q38",
+      "overhead_vs_bf16": 15.939240343285803
+    },
+    {
+      "channel_id": "v15_Q38",
+      "label": "v1.5 E8 Q=38",
+      "bits_per_token_per_head": 848,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 612.5855706632137,
+      "stdev_us": 185.955234912055,
+      "min_us": 534.3016237020493,
+      "p50_us": 546.1964756250381,
+      "p99_us": 1170.3725904226303,
+      "max_us": 2321.755513548851,
+      "per_vec_mean_us": 0.037389256021924666,
+      "throughput_Msamples_per_sec": 26.745651194921088,
+      "q_or_b": "v15_Q38",
+      "overhead_vs_bf16": 28.54518189776521
+    },
+    {
+      "channel_id": "v14_Q152",
+      "label": "v1.4 D4 Q=152",
+      "bits_per_token_per_head": 1088,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 348.4490141272545,
+      "stdev_us": 160.75212681174813,
+      "min_us": 303.55527997016907,
+      "p50_us": 311.52181327342987,
+      "p99_us": 723.1850177049637,
+      "max_us": 3152.213990688324,
+      "per_vec_mean_us": 0.021267640022415435,
+      "throughput_Msamples_per_sec": 47.01979152111051,
+      "q_or_b": "v14_Q152",
+      "overhead_vs_bf16": 16.236981356891658
+    },
+    {
+      "channel_id": "v15_Q152",
+      "label": "v1.5 E8 Q=152",
+      "bits_per_token_per_head": 1104,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 587.5837914645672,
+      "stdev_us": 175.43833914029727,
+      "min_us": 533.1598222255707,
+      "p50_us": 545.3303456306458,
+      "p99_us": 1168.506219983101,
+      "max_us": 3244.645893573761,
+      "per_vec_mean_us": 0.035863268522007274,
+      "throughput_Msamples_per_sec": 27.883682698534745,
+      "q_or_b": "v15_Q152",
+      "overhead_vs_bf16": 27.38015227713529
+    },
+    {
+      "channel_id": "tq_b2",
+      "label": "TQ b=2",
+      "bits_per_token_per_head": 288,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 142.67507195472717,
+      "stdev_us": 14.273493526307988,
+      "min_us": 137.72770762443542,
+      "p50_us": 139.29791748523712,
+      "p99_us": 207.02369511127472,
+      "max_us": 230.0664782524109,
+      "per_vec_mean_us": 0.008708195309736766,
+      "throughput_Msamples_per_sec": 114.83435596373047,
+      "q_or_b": "tq_b2",
+      "overhead_vs_bf16": 6.648354248395285
+    },
+    {
+      "channel_id": "tq_b3",
+      "label": "TQ b=3",
+      "bits_per_token_per_head": 416,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 139.85972106456757,
+      "stdev_us": 1.4695489433207336,
+      "min_us": 137.79476284980774,
+      "p50_us": 139.627605676651,
+      "p99_us": 145.19505202770233,
+      "max_us": 158.10132026672363,
+      "per_vec_mean_us": 0.008536359928257298,
+      "throughput_Msamples_per_sec": 117.14595078046933,
+      "q_or_b": "tq_b3",
+      "overhead_vs_bf16": 6.517164897691783
+    },
+    {
+      "channel_id": "tq_b4",
+      "label": "TQ b=4",
+      "bits_per_token_per_head": 544,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 143.96457374095917,
+      "stdev_us": 16.824808125129803,
+      "min_us": 137.87485659122467,
+      "p50_us": 139.627605676651,
+      "p99_us": 209.40788090229034,
+      "max_us": 297.85558581352234,
+      "per_vec_mean_us": 0.00878690025274409,
+      "throughput_Msamples_per_sec": 113.805775783981,
+      "q_or_b": "tq_b4",
+      "overhead_vs_bf16": 6.708442283125901
+    },
+    {
+      "channel_id": "tq_b6",
+      "label": "TQ b=6",
+      "bits_per_token_per_head": 800,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 139.77530226111412,
+      "stdev_us": 1.5055727714690412,
+      "min_us": 137.5880092382431,
+      "p50_us": 139.53447341918945,
+      "p99_us": 146.64232730865479,
+      "max_us": 159.8615199327469,
+      "per_vec_mean_us": 0.008531207413398079,
+      "throughput_Msamples_per_sec": 117.21670234268616,
+      "q_or_b": "tq_b6",
+      "overhead_vs_bf16": 6.51323116138526
+    },
+    {
+      "channel_id": "tq_b8",
+      "label": "TQ b=8",
+      "bits_per_token_per_head": 1056,
+      "n_iters": 500,
+      "shape": [
+        2048,
+        8,
+        128
+      ],
+      "total_vecs_per_call": 16384,
+      "mean_us": 143.69282498955727,
+      "stdev_us": 15.438993795336648,
+      "min_us": 137.95867562294006,
+      "p50_us": 139.69838619232178,
+      "p99_us": 206.7163586616516,
+      "max_us": 223.84151816368103,
+      "per_vec_mean_us": 0.008770314025241532,
+      "throughput_Msamples_per_sec": 114.02100279669976,
+      "q_or_b": "tq_b8",
+      "overhead_vs_bf16": 6.695779370529283
+    }
+  ]
+}

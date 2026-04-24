@@ -1,0 +1,178 @@
+[config] ctx lengths:  [4096, 8192, 16384]
+[config] depths:       [0.1, 0.5, 0.9]
+[config] v1.4 D4 Q:    [4, 10]
+[config] v1.5 E8 Q:    [4, 10]
+[config] TQ   b:       [2, 3]
+[config] mode:         inforward
+[config] boundary k:   2
+[config] n_trials:     3
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO 04-24 05:08:00 [nixl_utils.py:20] Setting UCX_RCACHE_MAX_UNRELEASED to '1024' to avoid a rare memory leak in UCX when using NIXL.
+WARNING 04-24 05:08:00 [nixl_utils.py:34] NIXL is not available
+WARNING 04-24 05:08:00 [nixl_utils.py:44] NIXL agent config is not available
+[snap-patch] Qwen3Attention.forward wrapped (capture / replace / off)
+[snap-patch] Qwen2Attention.forward wrapped (for DeepSeek-R1-Distill-Qwen-1.5B)
+[snap-patch] Gemma4Attention.forward wrapped (for Gemma 4 E2B/E4B/26B-A4B/31B)
+[snap-patch] GLMAttention.forward wrapped (for GLM-4 / ChatGLM)
+INFO 04-24 05:08:00 [utils.py:233] non-default args: {'max_model_len': 16640, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.4, 'disable_log_stats': True, 'enforce_eager': True, 'model': 'deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B'}
+WARNING 04-24 05:08:00 [arg_utils.py:1440] The global random seed is set to 0. Since VLLM_ENABLE_V1_MULTIPROCESSING is set to False, this may affect the random state of the Python process that launched vLLM.
+INFO 04-24 05:08:01 [model.py:554] Resolved architecture: Qwen2ForCausalLM
+INFO 04-24 05:08:01 [model.py:1685] Using max model len 16640
+INFO 04-24 05:08:01 [scheduler.py:239] Chunked prefill is enabled with max_num_batched_tokens=16384.
+INFO 04-24 05:08:01 [vllm.py:845] Asynchronous scheduling is enabled.
+WARNING 04-24 05:08:01 [vllm.py:903] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+WARNING 04-24 05:08:01 [vllm.py:914] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 04-24 05:08:01 [kernel.py:199] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'])
+INFO 04-24 05:08:01 [vllm.py:1092] Cudagraph is disabled under eager mode
+INFO 04-24 05:08:01 [compilation.py:303] Enabled custom fusions: norm_quant, act_quant
+INFO 04-24 05:08:02 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev100+gf946659ff) with config: model='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B', speculative_config=None, tokenizer='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=16640, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [16384], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto')
+INFO 04-24 05:08:03 [parallel_state.py:1402] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.17.0.4:52399 backend=nccl
+INFO 04-24 05:08:03 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+INFO 04-24 05:08:04 [gpu_model_runner.py:4752] Starting to load model deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B...
+INFO 04-24 05:08:04 [cuda.py:368] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+INFO 04-24 05:08:04 [flash_attn.py:637] Using FlashAttention version 3
+INFO 04-24 05:08:10 [weight_utils.py:615] Time spent downloading weights for deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B: 5.269778 seconds
+INFO 04-24 05:08:10 [weight_utils.py:659] No model.safetensors.index.json found in remote.
+INFO 04-24 05:08:10 [weight_utils.py:904] Filesystem type for checkpoints: OVERLAY. Checkpoint size: 3.31 GiB. Available RAM: 1641.45 GiB.
+INFO 04-24 05:08:10 [weight_utils.py:927] Auto-prefetch is disabled because the filesystem (OVERLAY) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  1.52it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  1.52it/s]
+
+INFO 04-24 05:08:11 [default_loader.py:384] Loading weights took 0.77 seconds
+INFO 04-24 05:08:11 [gpu_model_runner.py:4854] Model loading took 3.35 GiB memory and 6.836450 seconds
+INFO 04-24 05:08:12 [gpu_worker.py:440] Available KV cache memory: 50.16 GiB
+INFO 04-24 05:08:12 [kv_cache_utils.py:1337] GPU KV cache size: 1,878,368 tokens
+INFO 04-24 05:08:12 [kv_cache_utils.py:1342] Maximum concurrency for 16,640 tokens per request: 112.88x
+2026-04-24 05:08:13,007 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-04-24 05:08:13,017 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+INFO 04-24 05:08:13 [core.py:307] init engine (profile, create kv cache, warmup model) took 1.34 s
+[model] L=28 hd=128 kv_h=2
+[boundary] k=2, bf16-protected layers: [0, 1, 26, 27]
+Token indices sequence length is longer than the specified maximum sequence length for this model (18170 > 16384). Running this sequence through the model will result in indexing errors
+
+=== ctx=4096 depth=0.10 (prompt 4116 tok, question at idx 4096) ===
+  [bf16      ] acc=  0.0% (0/3)  sample_output='He should stay in San Francisco and not go to the city.\n\nBut wait, the text says...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output='He was a writer, so he would have been interested in writing about San Francisco...'
+  [v14_Q10   ] acc=  0.0% (0/3)  sample_output='He should go to the city of San Francisco, and then go to the city of Los Angele...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output='[Your Answer]\n\nThe best thing to do in San Francisco is to go to the Golden Gate...'
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='He should stay in San Francisco and not go to the city.\n\nBut wait, the text says...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='In the best way to get the best way to do this: \nThe way to write a poem on the ...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='1. Go to San Francisco, stay there, and watch the movie. 2. Go to San Francisco,...'
+
+=== ctx=4096 depth=0.50 (prompt 4116 tok, question at idx 4096) ===
+  [bf16      ] acc=  0.0% (0/3)  sample_output='He should go to San Francisco and stay there for a few days.\n\nBut wait, the text...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output='[Insert Answer]\n\nThe answer is [insert answer], which is [insert answer].\n\nThe a...'
+  [v14_Q10   ] acc=  0.0% (0/3)  sample_output='He should go to San Francisco and stay there for 6 months.\n\nBut wait, the text s...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output="[Your Answer]\n\nExplanation: [Your Explanation]\n\nThe text above describes Du Fu's..."
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='He traveled to San Francisco in 770, but he died in November or December 770. So...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='He is a Poet of the Poet . He was a Poet: he wrote a poem in the past, a year ag...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='In San Francisco, the best thing to do is to stay in San Francisco, as it is a c...'
+
+=== ctx=4096 depth=0.90 (prompt 4116 tok, question at idx 4096) ===
+  [bf16      ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Pa...'
+  [v14_Q4    ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park ...'
+  [v14_Q10   ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Pa...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output='To my Retired Friend Wei ( Chinese : 贈卫八...'
+  [v15_Q10   ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park ...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='The political life of the poems, as a result of his previous year, he was in the...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='To My Retired Friend Wei ( Chinese : 贈卫八处在 San Francisco )\n\nBut wait, in the exa...'
+
+=== ctx=8192 depth=0.10 (prompt 8212 tok, question at idx 8192) ===
+  [bf16      ] acc=  0.0% (0/3)  sample_output='Based on the information provided, the best thing to do in San Francisco would b...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output="I should go to the beach because it's a popular place and I can enjoy the water...."
+  [v14_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to attend the concert by The Song of th...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output='It is important to address the situation in San Francisco by taking appropriate ...'
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to go to the beach and enjoy the beach,...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='100% of the song is 100% . 100% . 100% . 100%...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to visit the San Francisco State Capito...'
+
+=== ctx=8192 depth=0.50 (prompt 8212 tok, question at idx 8192) ===
+  [bf16      ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to go to the Golden Gate Bridge and cro...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output="I think it's important to listen to some of the great works of literature and po..."
+  [v14_Q10   ] acc=  0.0% (0/3)  sample_output='He should take a break from his work and travel to San Francisco to listen to so...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output='Based on the analysis, the best thing to do is to follow the recommended actions...'
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to go to the beach.\n\nExplanation: The t...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='The most popular song in the song, but the song is a song that is a little over ...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to stay in the city and not leave. This...'
+
+=== ctx=8192 depth=0.90 (prompt 8212 tok, question at idx 8192) ===
+  [bf16      ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Pa...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output='San Francisco is a city in California, and according to the text, San Francisco ...'
+  [v14_Q10   ] acc=100.0% (3/3)  sample_output="It was a sandwich and sit in Dolores Park on a sunny day.\n\nNow, let's go back to..."
+  [v15_Q4    ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park ...'
+  [v15_Q10   ] acc=100.0% (3/3)  sample_output='It was mentioned in the song " Kiss You " that the best thing to do in San Franc...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='The group\'s song "Kiss \'s \' and \'s \'s \'sine wave, but the group\'s song is a bit ...'
+  [tq_b3     ] acc=100.0% (3/3)  sample_output='He should eat a sandwich and sit in Dolores Park.\n\nNow, considering the text, wh...'
+
+=== ctx=16384 depth=0.10 (prompt 16404 tok, question at idx 16384) ===
+  [bf16      ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take the best available options, whi...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output='1942, 1943, 1944, 1945, 1946, 1...'
+  [v14_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take the bus to San Francisco Bay Ar...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output='The best thing to do is to take the bus to San Francisco, as the bus is the most...'
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take the opportunity to join the Ame...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='The question is about the number of the 2019th ship, the 2020s, the 2019th ship...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='The best thing to do to save the Ise class battleship in San Francisco.\n\nFrom th...'
+
+=== ctx=16384 depth=0.50 (prompt 16404 tok, question at idx 16384) ===
+  [bf16      ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take the best available options, whi...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output='The best thing to do is to take the Ise class battleships and convert it into a ...'
+  [v14_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take the bus to San Francisco. The b...'
+  [v15_Q4    ] acc=  0.0% (0/3)  sample_output='The best thing to do is to convert the Ise class battleship into a carrier. The ...'
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take the bus to San Francisco. The b...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='13, 2018, 200000000000000000000...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='1. Identify the most significant issue or threat facing the Ise class ships. 2. ...'
+
+=== ctx=16384 depth=0.90 (prompt 16404 tok, question at idx 16384) ===
+  [bf16      ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Pa...'
+  [v14_Q4    ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to go to the San Francisco Bay Area and...'
+  [v14_Q10   ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Pa...'
+  [v15_Q4    ] acc=100.0% (3/3)  sample_output='The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Pa...'
+  [v15_Q10   ] acc=  0.0% (0/3)  sample_output='The best thing to do in San Francisco is to take a flight to New York City and s...'
+  [tq_b2     ] acc=  0.0% (0/3)  sample_output='1000 meters ( 100000000000000000000000...'
+  [tq_b3     ] acc=  0.0% (0/3)  sample_output='1939. The Ise class battleship was the most valuable and most powerful ship in t...'
+
+==============================================================================================================
+NIAH inforward — model=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+==============================================================================================================
+Channel       bits/head/tok   total trials   overall accuracy
+------------------------------------------------------------------------
+bf16                   2048             27             33.33%
+v14_Q4                  416             27             11.11%
+v14_Q10                 576             27             33.33%
+v15_Q4                  448             27             22.22%
+v15_Q10                 608             27             22.22%
+tq_b2                   288             27              0.00%
+tq_b3                   416             27             11.11%
+
+Per-cell accuracy:
+  ctx=4096:
+    channel        d=0.10   d=0.50   d=0.90
+    bf16             0.0%     0.0%   100.0%
+    v14_Q4           0.0%     0.0%   100.0%
+    v14_Q10          0.0%     0.0%   100.0%
+    v15_Q4           0.0%     0.0%     0.0%
+    v15_Q10          0.0%     0.0%   100.0%
+    tq_b2            0.0%     0.0%     0.0%
+    tq_b3            0.0%     0.0%     0.0%
+  ctx=8192:
+    channel        d=0.10   d=0.50   d=0.90
+    bf16             0.0%     0.0%   100.0%
+    v14_Q4           0.0%     0.0%     0.0%
+    v14_Q10          0.0%     0.0%   100.0%
+    v15_Q4           0.0%     0.0%   100.0%
+    v15_Q10          0.0%     0.0%   100.0%
+    tq_b2            0.0%     0.0%     0.0%
+    tq_b3            0.0%     0.0%   100.0%
+  ctx=16384:
+    channel        d=0.10   d=0.50   d=0.90
+    bf16             0.0%     0.0%   100.0%
+    v14_Q4           0.0%     0.0%     0.0%
+    v14_Q10          0.0%     0.0%   100.0%
+    v15_Q4           0.0%     0.0%   100.0%
+    v15_Q10          0.0%     0.0%     0.0%
+    tq_b2            0.0%     0.0%     0.0%
+    tq_b3            0.0%     0.0%     0.0%
+
+[done] → reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/niah/deepseek_1p5b_niah_inforward.json
+[rank0]:[W424 05:10:52.177499359 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

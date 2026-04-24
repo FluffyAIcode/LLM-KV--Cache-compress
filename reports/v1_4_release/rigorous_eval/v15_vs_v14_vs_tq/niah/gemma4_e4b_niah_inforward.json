@@ -1,0 +1,961 @@
+{
+  "model": "google/gemma-4-E4B",
+  "model_name": "gemma4_e4b",
+  "mode": "inforward",
+  "num_layers": 24,
+  "head_dim": 256,
+  "num_kv_heads": 2,
+  "boundary_skip_layers": [
+    0,
+    1,
+    22,
+    23
+  ],
+  "ctx_lengths": [
+    4096,
+    8192,
+    16384
+  ],
+  "depths": [
+    0.1,
+    0.5,
+    0.9
+  ],
+  "q_values": [
+    4,
+    10
+  ],
+  "tq_b_values": [
+    2,
+    3
+  ],
+  "n_trials": 3,
+  "records": [
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit"
+      ],
+      "t_gen_last": 0.7455997541546822
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 1.3525308836251497
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.342000326141715
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.6208009328693151
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.672369772568345
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" The \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \"",
+        "\" The \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \""
+      ],
+      "t_gen_last": 1.0388949401676655
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 1.0428474210202694
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 0.7605880424380302
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.3343502767384052
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.328929491341114
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a poem written by Du Fu, a Chinese poet",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a poem written by Du Fu, a Chinese poet"
+      ],
+      "t_gen_last": 1.6342847272753716
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.6187988240271807
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" The \" \n = = = 2006 , \n = = = 2006 , \n = = = 2",
+        "\" The \" \n = = = 2006 , \n = = = 2006 , \n = = = 2"
+      ],
+      "t_gen_last": 1.0455777179449797
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.0326569955796003
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a description of San Francisco. It is a city",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a description of San Francisco. It is a city"
+      ],
+      "t_gen_last": 0.7572538014501333
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 1.3476712070405483
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.3344866912811995
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.6067522354424
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is about Du Fu, a prominent Chinese poet of the",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is about Du Fu, a prominent Chinese poet of the"
+      ],
+      "t_gen_last": 1.6230664253234863
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" The Bill , \" in the 2000s , \" The Bill \" , \" The Bill \" , \" The Bill \" , \" The Bill",
+        "\" The Bill , \" in the 2000s , \" The Bill \" , \" The Bill \" , \" The Bill \" , \" The Bill"
+      ],
+      "t_gen_last": 1.0346737541258335
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.0316566862165928
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 0.8629337158054113
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is about",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is about"
+      ],
+      "t_gen_last": 1.4441527146846056
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.4445100706070662
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.739745682105422
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.",
+        "Eat a sandwich and sit in Dolores Park on a sunny day."
+      ],
+      "t_gen_last": 0.913391163572669
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" The \" \n = = = = = = = = = = = = = = = = = = = = = = = = = = =",
+        "\" The \" \n = = = = = = = = = = = = = = = = = = = = = = = = = = ="
+      ],
+      "t_gen_last": 1.1575524397194386
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nAccording to the text above, what is the best thing to do in San Francisco?",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nAccording to the text above, what is the best thing to do in San Francisco?"
+      ],
+      "t_gen_last": 1.1517322529107332
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and"
+      ],
+      "t_gen_last": 0.8771137930452824
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.4633104242384434
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.",
+        "Eat a sandwich and sit in Dolores Park on a sunny day."
+      ],
+      "t_gen_last": 0.7988293431699276
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is"
+      ],
+      "t_gen_last": 1.7710595186799765
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and"
+      ],
+      "t_gen_last": 1.785306015983224
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" The \" \" The \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \"",
+        "\" The \" \" The \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \""
+      ],
+      "t_gen_last": 1.1501032821834087
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nAccording to the text above, what is the best thing to do in San Francisco?",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nAccording to the text above, what is the best thing to do in San Francisco?"
+      ],
+      "t_gen_last": 1.1467061936855316
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a quote from the article \"One Direction's",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a quote from the article \"One Direction's"
+      ],
+      "t_gen_last": 0.8571636881679296
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.4581923447549343
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.4317085929214954
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and"
+      ],
+      "t_gen_last": 1.7311792261898518
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.7296098358929157
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" The \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \"",
+        "\" The \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \" \""
+      ],
+      "t_gen_last": 1.1417964342981577
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to"
+      ],
+      "t_gen_last": 1.1858505439013243
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit"
+      ],
+      "t_gen_last": 1.224240105599165
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 1.789581123739481
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit"
+      ],
+      "t_gen_last": 1.7822980545461178
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 2.0931662637740374
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit"
+      ],
+      "t_gen_last": 2.1038391701877117
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "1930 , 0000000000000000000000000",
+        "1930 , 0000000000000000000000000"
+      ],
+      "t_gen_last": 1.4553825594484806
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 1.4633221216499805
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.1776852943003178
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 1.7800564169883728
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.7791255358606577
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do"
+      ],
+      "t_gen_last": 2.102875826880336
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 2.105601156130433
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "1994 , 2000 , \n The 1994 , 2000 , 2000",
+        "1994 , 2000 , \n The 1994 , 2000 , 2000"
+      ],
+      "t_gen_last": 1.4764133766293526
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to"
+      ],
+      "t_gen_last": 1.456825863569975
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 4096,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and"
+      ],
+      "t_gen_last": 1.17645606957376
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to"
+      ],
+      "t_gen_last": 1.789091331884265
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 1120,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is about",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is about"
+      ],
+      "t_gen_last": 1.8243631087243557
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 864,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is to eat a sandwich and"
+      ],
+      "t_gen_last": 2.0838444754481316
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 1184,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe best thing to do in San Francisco is eat a sandwich and sit"
+      ],
+      "t_gen_last": 2.107354560866952
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "12000 , 000000000000000000000000",
+        "12000 , 000000000000000000000000"
+      ],
+      "t_gen_last": 1.4644219819456339
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a",
+        "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n\nExplanation:\n\nThe text above is a"
+      ],
+      "t_gen_last": 1.4839847646653652
+    }
+  ],
+  "by_channel": {
+    "bf16": {
+      "channel": "bf16",
+      "bits_per_token_per_head": 4096,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "v14_Q4": {
+      "channel": "v14_Q4",
+      "bits_per_token_per_head": 800,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "v14_Q10": {
+      "channel": "v14_Q10",
+      "bits_per_token_per_head": 1120,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "v15_Q4": {
+      "channel": "v15_Q4",
+      "bits_per_token_per_head": 864,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "v15_Q10": {
+      "channel": "v15_Q10",
+      "bits_per_token_per_head": 1184,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "tq_b2": {
+      "channel": "tq_b2",
+      "bits_per_token_per_head": 544,
+      "n_correct": 0,
+      "n_trials": 27
+    },
+    "tq_b3": {
+      "channel": "tq_b3",
+      "bits_per_token_per_head": 800,
+      "n_correct": 27,
+      "n_trials": 27
+    }
+  }
+}

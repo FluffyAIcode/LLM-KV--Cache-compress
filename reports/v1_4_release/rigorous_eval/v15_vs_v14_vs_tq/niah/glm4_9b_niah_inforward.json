@@ -1,0 +1,961 @@
+{
+  "model": "zai-org/GLM-4-9B-Chat",
+  "model_name": "glm4_9b",
+  "mode": "inforward",
+  "num_layers": 40,
+  "head_dim": 128,
+  "num_kv_heads": 2,
+  "boundary_skip_layers": [
+    0,
+    1,
+    38,
+    39
+  ],
+  "ctx_lengths": [
+    4096,
+    8192,
+    16384
+  ],
+  "depths": [
+    0.1,
+    0.5,
+    0.9
+  ],
+  "q_values": [
+    4,
+    10
+  ],
+  "tq_b_values": [
+    2,
+    3
+  ],
+  "n_trials": 3,
+  "records": [
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information"
+      ],
+      "t_gen_last": 0.4426674656569958
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information about the best thing to do in San Francisco. The passage is about the English actor Robert Boulter and his career in film",
+        "The text does not provide information about the best thing to do in San Francisco. The passage is about the English actor Robert Boulter and his career in film"
+      ],
+      "t_gen_last": 1.42166562192142
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information"
+      ],
+      "t_gen_last": 1.4425803422927856
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information on what the best thing to do in San Francisco. The text focuses on the filmography and life of Robert Boulter,",
+        "The text does not provide information on what the best thing to do in San Francisco. The text focuses on the filmography and life of Robert Boulter,"
+      ],
+      "t_gen_last": 1.8986244816333055
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information about the best thing to do in San Francisco. The information given is about Robert Boulter's career and Du Fu's life",
+        "The text does not provide information about the best thing to do in San Francisco. The information given is about Robert Boulter's career and Du Fu's life"
+      ],
+      "t_gen_last": 1.893255703151226
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "### in the 5 . \" \n \" is \"the \" is . \" \n\" is the \n \" \n \" is \"the \" \n \"",
+        "### in the 5 . \" \n \" is \"the \" is . \" \n\" is the \n \" \n \" is \"the \" \n \""
+      ],
+      "t_gen_last": 0.8851614091545343
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.1,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Enjoy a sandwich and sit in Dolores Park on a sunny day. This is mentioned as a suggestion for what to do in San Francisco, indicating a leisurely",
+        "Enjoy a sandwich and sit in Dolores Park on a sunny day. This is mentioned as a suggestion for what to do in San Francisco, indicating a leisurely"
+      ],
+      "t_gen_last": 0.8714212458580732
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated in the text as the best thing to do in San Francisco. The information",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated in the text as the best thing to do in San Francisco. The information"
+      ],
+      "t_gen_last": 0.43645004741847515
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis information is taken from the first paragraph of the text, which states, \"The",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis information is taken from the first paragraph of the text, which states, \"The"
+      ],
+      "t_gen_last": 1.3977579083293676
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated in the first sentence of the text. The rest of the text is about",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated in the first sentence of the text. The rest of the text is about"
+      ],
+      "t_gen_last": 1.3875258564949036
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the first sentence of",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the first sentence of"
+      ],
+      "t_gen_last": 1.8938433155417442
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. 735.  (The number 735 is likely a typographical error and",
+        "eat a sandwich and sit in Dolores Park on a sunny day. 735.  (The number 735 is likely a typographical error and"
+      ],
+      "t_gen_last": 1.8921606801450253
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "the \" was the \" \nthe  the \" \ntheatrical \" \n \" \n \"the critic and \" \nthe poet \" was \" \n \"",
+        "the \" was the \" \nthe  the \" \ntheatrical \" \n \" \n \"the critic and \" \nthe poet \" was \" \n \""
+      ],
+      "t_gen_last": 0.8650085106492043
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.5,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "go to San Francisco and visit the city, enjoy the scenery, and experience the city's culture. However, the text does not specifically mention the \"best\"",
+        "go to San Francisco and visit the city, enjoy the scenery, and experience the city's culture. However, the text does not specifically mention the \"best\""
+      ],
+      "t_gen_last": 0.857490386813879
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated as the best thing to do in San Francisco according to the text. The",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated as the best thing to do in San Francisco according to the text. The"
+      ],
+      "t_gen_last": 0.43988381512463093
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is the best thing to do in San Francisco according to the text, which is a",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is the best thing to do in San Francisco according to the text, which is a"
+      ],
+      "t_gen_last": 1.3938149102032185
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day.  who remained in the area for some years at least. His last known descendant is a",
+        "eat a sandwich and sit in Dolores Park on a sunny day.  who remained in the area for some years at least. His last known descendant is a"
+      ],
+      "t_gen_last": 1.3880156856030226
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. who remained in the area for some years. He was a loyal friend, patriotic subject,",
+        "eat a sandwich and sit in Dolores Park on a sunny day. who remained in the area for some years. He was a loyal friend, patriotic subject,"
+      ],
+      "t_gen_last": 1.9009829759597778
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. who remained in the area for some years at least. His last known descendant is a grandson",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. who remained in the area for some years at least. His last known descendant is a grandson"
+      ],
+      "t_gen_last": 1.8833436518907547
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "original text \"theater \" \"theorizing the \" \n \" , \" \n\" \n  \" \n \"> \n> \n* \nPlease note that",
+        "original text \"theater \" \"theorizing the \" \n \" , \" \n\" \n  \" \n \"> \n> \n* \nPlease note that"
+      ],
+      "t_gen_last": 0.8977610636502504
+    },
+    {
+      "ctx_len": 4096,
+      "depth": 0.9,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The text suggests that the best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. The text states,",
+        "The text suggests that the best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. The text states,"
+      ],
+      "t_gen_last": 0.87076111510396
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the first paragraph of the",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the first paragraph of the"
+      ],
+      "t_gen_last": 0.5754391495138407
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "Kiss You !  \"Kiss You\" is a song by One Direction, a British-Irish boy band. The song was released in 2012",
+        "Kiss You !  \"Kiss You\" is a song by One Direction, a British-Irish boy band. The song was released in 2012"
+      ],
+      "t_gen_last": 1.5181801412254572
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is stated in the first sentence of the \"Present\" section: \"The best",
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is stated in the first sentence of the \"Present\" section: \"The best"
+      ],
+      "t_gen_last": 1.5091740973293781
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information on what the best thing to do in San Francisco is. However, it does mention that the best thing to do in San Francisco",
+        "The text does not provide information on what the best thing to do in San Francisco is. However, it does mention that the best thing to do in San Francisco"
+      ],
+      "t_gen_last": 2.0063134636729956
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day.  This information is found in the first paragraph under the heading \"The best thing to do",
+        "eat a sandwich and sit in Dolores Park on a sunny day.  This information is found in the first paragraph under the heading \"The best thing to do"
+      ],
+      "t_gen_last": 2.003056662157178
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "2015 ,  , \"  \" \" \" \" \" \n \"the\" \n\n= \n> \" \nis 2013 years of 2015",
+        "2015 ,  , \"  \" \" \" \" \" \n \"the\" \n\n= \n> \" \nis 2013 years of 2015"
+      ],
+      "t_gen_last": 0.9995892383158207
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.1,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information about what is considered the best thing to do in San Francisco. The information given is about Robert Boulter, an English actor",
+        "The text does not provide information about what is considered the best thing to do in San Francisco. The information given is about Robert Boulter, an English actor"
+      ],
+      "t_gen_last": 0.9983658362179995
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the first sentence of the text. The rest of the text provides additional",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the first sentence of the text. The rest of the text provides additional"
+      ],
+      "t_gen_last": 0.5687553901225328
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco, according to the text, is to eat a sandwich and sit in Dolores Park on a sunny day. The text",
+        "The best thing to do in San Francisco, according to the text, is to eat a sandwich and sit in Dolores Park on a sunny day. The text"
+      ],
+      "t_gen_last": 1.5015612933784723
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day.  (The first sentence of the Du Fu section is a quote from the text.)=",
+        "eat a sandwich and sit in Dolores Park on a sunny day.  (The first sentence of the Du Fu section is a quote from the text.)="
+      ],
+      "t_gen_last": 1.5069051142781973
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Enjoy a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the text as the recommended activity in San Francisco. The quote is:",
+        "Enjoy a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the text as the recommended activity in San Francisco. The quote is:"
+      ],
+      "t_gen_last": 1.9660655315965414
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day.  This information is found in the first paragraph under the heading \"Du Fu.\" However,",
+        "eat a sandwich and sit in Dolores Park on a sunny day.  This information is found in the first paragraph under the heading \"Du Fu.\" However,"
+      ],
+      "t_gen_last": 1.9747978746891022
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The \"the poet , ,  \" 2012 : 2013 , \" \" is the \" is , \" is the \" 2012 :",
+        "The \"the poet , ,  \" 2012 : 2013 , \" \" is the \" is , \" is the \" 2012 :"
+      ],
+      "t_gen_last": 0.9911238346248865
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.5,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The text does not provide information on what the best thing to do in San Francisco is; it only suggests sitting in Dolores Park on a sunny day, but",
+        "The text does not provide information on what the best thing to do in San Francisco is; it only suggests sitting in Dolores Park on a sunny day, but"
+      ],
+      "t_gen_last": 0.9800817221403122
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information"
+      ],
+      "t_gen_last": 0.5663335155695677
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day.  This is mentioned in the first sentence of the text as the best thing to do in",
+        "Eat a sandwich and sit in Dolores Park on a sunny day.  This is mentioned in the first sentence of the text as the best thing to do in"
+      ],
+      "t_gen_last": 1.5979951713234186
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated in the first paragraph as the recommended activity. The text does not provide any",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is stated in the first paragraph as the recommended activity. The text does not provide any"
+      ],
+      "t_gen_last": 1.537697121500969
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nEvidence: \n\n- The first sentence of the text states, \"The best thing to",
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nEvidence: \n\n- The first sentence of the text states, \"The best thing to"
+      ],
+      "t_gen_last": 2.023912938311696
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. challenged prominent songwriters to compete for space on One Direction's second album. described Du Fu",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. challenged prominent songwriters to compete for space on One Direction's second album. described Du Fu"
+      ],
+      "t_gen_last": 2.0320484302937984
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "United States \"unfortunate \" to the \"s\" and \" ) \n\nA \"A \" \"s the \"the \"the \" @ \" \" @",
+        "United States \"unfortunate \" to the \"s\" and \" ) \n\nA \"A \" \"s the \"the \"the \" @ \" \" @"
+      ],
+      "t_gen_last": 0.9848600011318922
+    },
+    {
+      "ctx_len": 8192,
+      "depth": 0.9,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is referenced in the text in the context of a quote by the band One Direction.",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is referenced in the text in the context of a quote by the band One Direction."
+      ],
+      "t_gen_last": 0.9988223779946566
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco according to the text. The",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco according to the text. The"
+      ],
+      "t_gen_last": 0.9137389659881592
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco, according to the text, is to eat a sandwich and sit in Dolores Park on a sunny day. The text",
+        "The best thing to do in San Francisco, according to the text, is to eat a sandwich and sit in Dolores Park on a sunny day. The text"
+      ],
+      "t_gen_last": 1.875408487394452
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. = = = Robert Boulter is an English actor who has appeared in television series such",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. = = = Robert Boulter is an English actor who has appeared in television series such"
+      ],
+      "t_gen_last": 2.017782436683774
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is stated in the first paragraph of the text where it suggests this as the best",
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is stated in the first paragraph of the text where it suggests this as the best"
+      ],
+      "t_gen_last": 2.3768073692917824
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is mentioned in the first paragraph of the \"Du Fu\" section as the best",
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is mentioned in the first paragraph of the \"Du Fu\" section as the best"
+      ],
+      "t_gen_last": 2.372814852744341
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "\" \n\nThe and to 6 \nThe above . @ thes \nThee \nviewed from the 2015 \u2013 4.1 . in",
+        "\" \n\nThe and to 6 \nThe above . @ thes \nThee \nviewed from the 2015 \u2013 4.1 . in"
+      ],
+      "t_gen_last": 1.3483911287039518
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.1,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "sit in a sunny day in San Francisco is to sit in the park. \n\nThe text states: \"Robert Boulter = = = Du Fu = =",
+        "sit in a sunny day in San Francisco is to sit in the park. \n\nThe text states: \"Robert Boulter = = = Du Fu = ="
+      ],
+      "t_gen_last": 1.350993799045682
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information"
+      ],
+      "t_gen_last": 0.9050132762640715
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "There is no information in the provided text about the best thing to do in San Francisco. The text primarily discusses the history and significance of Du Fu, an influential",
+        "There is no information in the provided text about the best thing to do in San Francisco. The text primarily discusses the history and significance of Du Fu, an influential"
+      ],
+      "t_gen_last": 1.89142544567585
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the first paragraph as the recommended activity for enjoying San Francisco. The text",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned in the first paragraph as the recommended activity for enjoying San Francisco. The text"
+      ],
+      "t_gen_last": 1.8830507639795542
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is the best thing to do according to the text, which suggests this activity as",
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is the best thing to do according to the text, which suggests this activity as"
+      ],
+      "t_gen_last": 2.3937800992280245
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is stated in the first sentence of the text: \"The best thing to do",
+        "eat a sandwich and sit in Dolores Park on a sunny day. \n\nThis is stated in the first sentence of the text: \"The best thing to do"
+      ],
+      "t_gen_last": 2.3861288074404
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "@ thes were 6 . @ the 5/5 @ 5 @ 6 4 the 6 @ 6 .@ the 5",
+        "@ thes were 6 . @ the 5/5 @ 5 @ 6 4 the 6 @ 6 .@ the 5"
+      ],
+      "t_gen_last": 1.352814206853509
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.5,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information on what the best thing to do in San Francisco is. The text discusses Du Fu, a Chinese poet, and his life,",
+        "The text does not provide information on what the best thing to do in San Francisco is. The text discusses Du Fu, a Chinese poet, and his life,"
+      ],
+      "t_gen_last": 1.3459089435636997
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The information"
+      ],
+      "t_gen_last": 0.9017726238816977
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v14_Q4",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. This information is found in the first sentence",
+        "The best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. This information is found in the first sentence"
+      ],
+      "t_gen_last": 1.891003429889679
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v14_Q10",
+      "codec_bits_per_token_per_head": 576,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best activity in San Francisco according to the text. The information is",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best activity in San Francisco according to the text. The information is"
+      ],
+      "t_gen_last": 1.8892793282866478
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v15_Q4",
+      "codec_bits_per_token_per_head": 448,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "The text does not provide information about the best thing to do in San Francisco. It discusses the Ise class battleships and their history. If you are looking",
+        "The text does not provide information about the best thing to do in San Francisco. It discusses the Ise class battleships and their history. If you are looking"
+      ],
+      "t_gen_last": 2.390987480059266
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "v15_Q10",
+      "codec_bits_per_token_per_head": 608,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. most critically, time.  (This is found in the first paragraph of the text.)",
+        "Eat a sandwich and sit in Dolores Park on a sunny day. most critically, time.  (This is found in the first paragraph of the text.)"
+      ],
+      "t_gen_last": 2.3977521769702435
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "tq_b2",
+      "codec_bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 3,
+      "accuracy": 0.0,
+      "sample_outputs": [
+        "5, the , thes , the , ,@ the , the 6 , the , 7 @ are 6 . \n\nare 10 .",
+        "5, the , thes , the , ,@ the , the 6 , the , 7 @ are 6 . \n\nare 10 ."
+      ],
+      "t_gen_last": 1.344061991199851
+    },
+    {
+      "ctx_len": 16384,
+      "depth": 0.9,
+      "channel": "tq_b3",
+      "codec_bits_per_token_per_head": 416,
+      "n_correct": 3,
+      "n_trials": 3,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "the best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. day. The text states, \"The",
+        "the best thing to do in San Francisco is to eat a sandwich and sit in Dolores Park on a sunny day. day. The text states, \"The"
+      ],
+      "t_gen_last": 1.356135692447424
+    }
+  ],
+  "by_channel": {
+    "bf16": {
+      "channel": "bf16",
+      "bits_per_token_per_head": 2048,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "v14_Q4": {
+      "channel": "v14_Q4",
+      "bits_per_token_per_head": 416,
+      "n_correct": 18,
+      "n_trials": 27
+    },
+    "v14_Q10": {
+      "channel": "v14_Q10",
+      "bits_per_token_per_head": 576,
+      "n_correct": 27,
+      "n_trials": 27
+    },
+    "v15_Q4": {
+      "channel": "v15_Q4",
+      "bits_per_token_per_head": 448,
+      "n_correct": 18,
+      "n_trials": 27
+    },
+    "v15_Q10": {
+      "channel": "v15_Q10",
+      "bits_per_token_per_head": 608,
+      "n_correct": 24,
+      "n_trials": 27
+    },
+    "tq_b2": {
+      "channel": "tq_b2",
+      "bits_per_token_per_head": 288,
+      "n_correct": 0,
+      "n_trials": 27
+    },
+    "tq_b3": {
+      "channel": "tq_b3",
+      "bits_per_token_per_head": 416,
+      "n_correct": 15,
+      "n_trials": 27
+    }
+  }
+}
