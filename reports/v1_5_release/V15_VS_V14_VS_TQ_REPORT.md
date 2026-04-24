@@ -7,7 +7,7 @@
 **Sample**: n=32 passages × 64 eval tokens = 2,048 target tokens per channel
 **Statistics**: mean ± 95% Student's t CI
 **Environment**: vast.ai H200 · vLLM `0.19.2rc1.dev100` · FlashAttention v3
-**Raw data**: `reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq/*`
+**Raw data**: `reports/v1_5_release/*`
 
 **Research question**: Does the v1.5 E8 lattice upgrade deliver measurable
 shaping-gain PPL advantage over v1.4 D4 at aggressive bit budgets?
@@ -157,7 +157,7 @@ python benchmarks/rigorous_eval.py \
     --no-boundary \
     --ctx-len 2048 --n-eval 64 --n-passages 32 \
     --gpu-mem-util 0.40 \
-    --out-dir reports/v1_4_release/rigorous_eval/v15_vs_v14_vs_tq
+    --out-dir reports/v1_5_release
 ```
 
 ## Bottom line

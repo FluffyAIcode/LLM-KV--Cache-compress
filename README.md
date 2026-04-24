@@ -37,12 +37,24 @@ benchmarks/
   v14_streaming_diag.py              — batch-vs-streaming root-cause diagnostic
   v14_streaming_latency.py           — per-decode-step latency
 
-reports/v1_4_release/
+reports/v1_4_release/                — frozen v1.4 evaluation data
   kv_128k_report/                    — v1.4-only 128k KV storage tables
   kv_128k_report_tq_compare/         — iso-bit comparison vs TurboQuant
   kv_128k_isoppl_n8/                 — iso-PPL comparison vs TurboQuant
   streaming/                         — streaming / online capability report
-  paper/                             — LaTeX paper
+  niah/                              — v1.4 NIAH retrieval
+  rigorous_eval/                     — n=32 rigorous protocol + ablation
+  paper/                             — LaTeX paper (v1.4)
+  audit/                             — GPU/vLLM audit trail
+  INVENTORY.md + MANIFEST.sha256     — file inventory + integrity manifest
+
+reports/v1_5_release/                — v1.5 evaluation data (E8 lattice)
+  V15_FULL_4MODEL_REPORT.md          — primary report (4 models × 5 axes)
+  V15_VS_V14_VS_TQ_REPORT.md         — Qwen3-4B first-measurement detail
+  e8_latency_benchmark.{json,log}    — v1.5 vs v1.4 vs TQ pure codec latency
+  {model}_{nobdry,tqb2_bdry2}_inforward.{json,log}  — 4 models × 2 boundary modes
+  niah/                              — v1.5 NIAH retrieval + guardrail
+  README.md                          — directory guide
 ```
 
 ## Quick start
