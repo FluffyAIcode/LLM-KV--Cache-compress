@@ -72,12 +72,13 @@ def load_host_hidden_states(
 
     hf_id = HOST_MODELS[model_key]
     tok = AutoTokenizer.from_pretrained(hf_id, trust_remote_code=True)
+    # For Stage 0.5 we only need the input embedding table, not the full model.
+    # Loading just the embedding saves HBM + disk and avoids needing accelerate.
     model = AutoModelForCausalLM.from_pretrained(
         hf_id,
         dtype=torch.bfloat16,
-        device_map=device,
         trust_remote_code=True,
-    )
+    ).to(device)
     model.eval()
 
     # Tokenise to exactly seqlen tokens (pad/truncate).
