@@ -1,0 +1,88 @@
+{
+  "model": "zai-org/GLM-4-9B-Chat",
+  "model_name": "smoke",
+  "mode": "inforward",
+  "num_layers": 40,
+  "head_dim": 128,
+  "num_kv_heads": 2,
+  "boundary_skip_layers": [
+    0,
+    1,
+    38,
+    39
+  ],
+  "ctx_lengths": [
+    2048
+  ],
+  "depths": [
+    0.5
+  ],
+  "q_values": [
+    38
+  ],
+  "tq_b_values": [
+    6
+  ],
+  "n_trials": 1,
+  "records": [
+    {
+      "ctx_len": 2048,
+      "depth": 0.5,
+      "channel": "bf16",
+      "codec_bits_per_token_per_head": 2048,
+      "n_correct": 1,
+      "n_trials": 1,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The sentence"
+      ],
+      "t_gen_last": 0.3853090666234493
+    },
+    {
+      "ctx_len": 2048,
+      "depth": 0.5,
+      "channel": "v14_Q38",
+      "codec_bits_per_token_per_head": 832,
+      "n_correct": 1,
+      "n_trials": 1,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The sentence"
+      ],
+      "t_gen_last": 1.455206423997879
+    },
+    {
+      "ctx_len": 2048,
+      "depth": 0.5,
+      "channel": "tq_b6",
+      "codec_bits_per_token_per_head": 800,
+      "n_correct": 1,
+      "n_trials": 1,
+      "accuracy": 1.0,
+      "sample_outputs": [
+        "Eat a sandwich and sit in Dolores Park on a sunny day. This is mentioned as the best thing to do in San Francisco in the text. The sentence"
+      ],
+      "t_gen_last": 0.8563968688249588
+    }
+  ],
+  "by_channel": {
+    "bf16": {
+      "channel": "bf16",
+      "bits_per_token_per_head": 2048,
+      "n_correct": 1,
+      "n_trials": 1
+    },
+    "v14_Q38": {
+      "channel": "v14_Q38",
+      "bits_per_token_per_head": 832,
+      "n_correct": 1,
+      "n_trials": 1
+    },
+    "tq_b6": {
+      "channel": "tq_b6",
+      "bits_per_token_per_head": 800,
+      "n_correct": 1,
+      "n_trials": 1
+    }
+  }
+}

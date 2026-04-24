@@ -1,0 +1,128 @@
+{
+  "mode": "inforward",
+  "model": "zai-org/GLM-4-9B-Chat",
+  "model_name": "smoke_glm",
+  "num_layers": 40,
+  "head_dim": 128,
+  "num_kv_heads": 2,
+  "boundary_skip_layers": [
+    0,
+    1,
+    38,
+    39
+  ],
+  "raw_bits_per_token_per_head": 2048,
+  "report_ctx_tokens": 131072,
+  "ctx_len": 1024,
+  "n_eval": 16,
+  "n_passages": 1,
+  "q_values": [
+    38
+  ],
+  "tq_b_values": [
+    6
+  ],
+  "per_passage": [
+    {
+      "passage": 0,
+      "channel": "bf16_ref",
+      "kind": "bf16",
+      "k_bits": 2048,
+      "v_bits": 2048,
+      "baseline_bytes_128k": null,
+      "kakeya_bytes_128k": null,
+      "total_ratio_128k": 1.0,
+      "ppl_ref": 7.6852327491878745,
+      "ppl_alt": 7.6852327491878745,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "k_mse_rel_layer0": 0.0,
+      "v_mse_rel_layer0": 0.0,
+      "t_ref": 0.04695897549390793,
+      "t_alt": 0.0,
+      "fire_count": 0
+    },
+    {
+      "passage": 0,
+      "channel": "v14_Q38_inforward",
+      "kind": "v14",
+      "k_bits": 832,
+      "v_bits": 832,
+      "baseline_bytes_128k": 5368709120,
+      "kakeya_bytes_128k": 2499805184,
+      "total_ratio_128k": 2.1476510067114094,
+      "ppl_ref": 7.6852327491878745,
+      "ppl_alt": 7.730474624269644,
+      "delta_ppl": 0.00588685815488808,
+      "top1_pair": 0.9375,
+      "k_mse_rel_layer0": 0.0005696197622455657,
+      "v_mse_rel_layer0": 0.000575397745706141,
+      "t_ref": 0.04695897549390793,
+      "t_alt": 0.1881420649588108,
+      "fire_count": 36
+    },
+    {
+      "passage": 0,
+      "channel": "tq_b6_inforward",
+      "kind": "tq",
+      "k_bits": 800,
+      "v_bits": 800,
+      "baseline_bytes_128k": 5368709120,
+      "kakeya_bytes_128k": 2424307712,
+      "total_ratio_128k": 2.2145328719723185,
+      "ppl_ref": 7.6852327491878745,
+      "ppl_alt": 7.389580656033963,
+      "delta_ppl": -0.03847015475037556,
+      "top1_pair": 1.0,
+      "k_mse_rel_layer0": 0.0006615885649807751,
+      "v_mse_rel_layer0": 0.0006684514228254557,
+      "t_ref": 0.04695897549390793,
+      "t_alt": 0.046481624245643616,
+      "fire_count": 36
+    }
+  ],
+  "aggregates": [
+    {
+      "channel": "bf16_ref",
+      "kind": "bf16",
+      "k_bits": 2048,
+      "v_bits": 2048,
+      "baseline_bytes_128k": null,
+      "kakeya_bytes_128k": null,
+      "total_ratio_128k": 1.0,
+      "mean_delta_ppl": 0.0,
+      "mean_abs_delta_ppl": 0.0,
+      "mean_top1_pair": 1.0,
+      "mean_k_mse_layer0": 0.0,
+      "mean_v_mse_layer0": 0.0
+    },
+    {
+      "channel": "v14_Q38_inforward",
+      "kind": "v14",
+      "k_bits": 832,
+      "v_bits": 832,
+      "baseline_bytes_128k": 5368709120,
+      "kakeya_bytes_128k": 2499805184,
+      "total_ratio_128k": 2.1476510067114094,
+      "mean_delta_ppl": 0.00588685815488808,
+      "mean_abs_delta_ppl": 0.00588685815488808,
+      "mean_top1_pair": 0.9375,
+      "mean_k_mse_layer0": 0.0005696197622455657,
+      "mean_v_mse_layer0": 0.000575397745706141
+    },
+    {
+      "channel": "tq_b6_inforward",
+      "kind": "tq",
+      "k_bits": 800,
+      "v_bits": 800,
+      "baseline_bytes_128k": 5368709120,
+      "kakeya_bytes_128k": 2424307712,
+      "total_ratio_128k": 2.2145328719723185,
+      "mean_delta_ppl": -0.03847015475037556,
+      "mean_abs_delta_ppl": 0.03847015475037556,
+      "mean_top1_pair": 1.0,
+      "mean_k_mse_layer0": 0.0006615885649807751,
+      "mean_v_mse_layer0": 0.0006684514228254557
+    }
+  ]
+}
