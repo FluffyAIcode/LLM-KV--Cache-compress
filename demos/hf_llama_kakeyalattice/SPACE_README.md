@@ -9,7 +9,7 @@ pinned: false
 license: apache-2.0
 ---
 
-# KakeyaLattice KV-cache compression demo
+# KakeyaLattice KV-cache compression
 
 Side-by-side comparison of **bf16 DynamicCache** vs **KakeyaLattice E8**
 compression at three quality levels (Q=10 aggressive, Q=38 balanced,

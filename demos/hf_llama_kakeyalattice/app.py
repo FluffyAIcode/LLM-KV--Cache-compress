@@ -146,9 +146,9 @@ EXAMPLE_PROMPTS = [
 ]
 
 
-with gr.Blocks(title="KakeyaLattice KV-cache compression demo") as demo:
+with gr.Blocks(title="KakeyaLattice KV-cache compression") as demo:
     gr.Markdown(
-        "# KakeyaLattice KV-cache compression demo\n\n"
+        "# KakeyaLattice KV-cache compression\n\n"
         "Compare generation output + latency across **bf16 baseline** and "
         "three **KakeyaLattice E8** compression levels on a small HF causal LM. "
         "The E8 variant uses 8-D nested-lattice closest-point quantisation "

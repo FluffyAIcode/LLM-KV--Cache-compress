@@ -10,7 +10,7 @@ pinned: false
 license: apache-2.0
 ---
 
-# KakeyaLattice KV-cache compression demo
+# KakeyaLattice KV-cache compression
 
 A Gradio Space that compares bf16 baseline vs KakeyaLattice E8 at three
 compression levels on a small HuggingFace causal LM.
