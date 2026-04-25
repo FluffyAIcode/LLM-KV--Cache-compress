@@ -233,9 +233,19 @@ def main():
     p.add_argument("--hf-home", default=os.environ.get("HF_HOME", "/workspace/.hf_home"))
     args = p.parse_args()
 
-    if not torch.cuda.is_available():
-        raise RuntimeError("Stage 0.75 requires CUDA for efficient bf16 matmul on attention forward.")
-    device = "cuda"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu":
+        print(
+            "[warn] No CUDA available; falling back to CPU.  Two behavioural differences to expect:"
+            "\n  1. FP8 baseline uses the 127-level uniform fake-quant fallback (no "
+            "native float8_e4m3fn on CPU).  This is a strictly higher-precision FP8 "
+            "reference than the GPU run, so E8/FP8 ratios will look WORSE on CPU "
+            "even though the V4 KV distribution is identical."
+            "\n  2. bf16 -> fp32 coercion in F.linear etc., yielding ~1e-3 numerical drift "
+            "from the GPU reference. K-MSE magnitudes should still match within "
+            "single-digit percent.",
+            flush=True,
+        )
     if args.seqlen % 128 != 0:
         raise ValueError(f"seqlen must be multiple of 128 (HCA ratio); got {args.seqlen}")
 
