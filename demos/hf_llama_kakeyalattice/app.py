@@ -150,10 +150,10 @@ EXAMPLE_PROMPTS = [
 with gr.Blocks(title="KakeyaLattice KV-cache compression") as demo:
     gr.Markdown(
         "# KakeyaLattice KV-cache compression\n\n"
-        "Compare generation output + latency across **bf16 baseline** and "
-        "three **KakeyaLattice E8** compression levels on a small HF causal LM. "
-        "The E8 variant uses 8-D nested-lattice closest-point quantisation "
-        "with Sylvester-Hadamard rotation and per-vector adaptive scaling."
+        "By dynamically adapting to the empirical non-Gaussian patterns and "
+        "heavy-tail characteristics of real LLM KV activations, our solution "
+        "achieves near-lossless compression and performance gains on models "
+        "like Qwen3."
     )
     with gr.Row():
         prompt = gr.Textbox(
