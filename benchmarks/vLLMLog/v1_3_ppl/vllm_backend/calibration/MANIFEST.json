@@ -1,0 +1,24 @@
+{
+  "model_path": "Qwen/Qwen3-4B",
+  "split": "train",
+  "sigma_q_safetensors": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_sigma_q.safetensors",
+  "sigma_q_sidecar": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_sigma_q.json",
+  "roundtrip_check": "reports/v1_3_ppl/vllm_backend/calibration/roundtrip_check.json",
+  "roundtrip_bar": 2e-05,
+  "roundtrip_pass": {
+    "fwd": true,
+    "rev": true
+  },
+  "roundtrip_summary": {
+    "fwd_err_max": 5.562479503978812e-06,
+    "rev_err_max": 1.0976220277828616e-06
+  },
+  "lloyd_max_K": {
+    "path": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_lloyd_max_K_b3.f32",
+    "bits": 3
+  },
+  "lloyd_max_V": {
+    "path": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_lloyd_max_V_b2.f32",
+    "bits": 2
+  }
+}

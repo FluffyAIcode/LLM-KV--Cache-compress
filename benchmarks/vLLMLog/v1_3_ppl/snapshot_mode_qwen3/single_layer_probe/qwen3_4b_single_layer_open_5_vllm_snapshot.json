@@ -1,0 +1,832 @@
+{
+  "model_name": "qwen3_4b_single_layer_open_5",
+  "model_path": "Qwen/Qwen3-4B",
+  "engine": "vllm",
+  "recipe": "v1.3 PPL snapshot-mode (Qwen3)",
+  "ctx_len": 2048,
+  "n_eval": 64,
+  "n_passages_total": 2,
+  "block_size": 512,
+  "bit_width_k": 3,
+  "bit_width_v": 2,
+  "outlier_threshold": 2.0,
+  "boundary_skip_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "q_calib": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_sigma_q.safetensors",
+  "k_centroids": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_lloyd_max_K_b3.f32",
+  "v_centroids": "reports/v1_3_ppl/vllm_backend/calibration/qwen3_4b_lloyd_max_V_b2.f32",
+  "mean_delta_ppl": 0.02021245949666687,
+  "mean_top1_pair": 0.9609375,
+  "verdict": "PASS",
+  "per_passage": [
+    {
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.6688585635274649,
+      "t_codec_sec": 0.9386181123554707,
+      "t_alt_sec": 0.05987931974232197,
+      "ppl_ref": 27.69810560312822,
+      "ppl_alt": 28.3971942338291,
+      "delta_ppl": 0.025239582833489035,
+      "top1_pair": 0.96875,
+      "n_boundary_skipped": 70
+    },
+    {
+      "ctx_len": 2048,
+      "n_eval": 64,
+      "t_ref_sec": 0.1945831310003996,
+      "t_codec_sec": 0.6124093346297741,
+      "t_alt_sec": 0.05961977317929268,
+      "ppl_ref": 8.358697138917835,
+      "ppl_alt": 8.485626764830634,
+      "delta_ppl": 0.0151853361598447,
+      "top1_pair": 0.953125,
+      "n_boundary_skipped": 70
+    }
+  ],
+  "codec_stats": [
+    {
+      "layer": 0,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 2.144381284713745,
+      "compressed_bytes": 1066496,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 3,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 5,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.003725704737007618,
+      "compressed_bytes": 935424,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 6,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 8,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 8,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 9,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 9,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 10,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 10,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 11,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 11,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 12,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 12,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 13,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 13,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 14,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 14,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 15,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 15,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 16,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 16,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 17,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 17,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 18,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 18,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 19,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 19,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 20,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 20,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 21,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 21,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 22,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 22,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 23,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 23,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 24,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 24,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 25,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 25,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 26,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 26,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 27,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 27,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 28,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 28,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 0,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 1,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 2,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 3,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 4,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 5,
+      "stream": "K",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 2.1121528148651123,
+      "compressed_bytes": 1066496,
+      "whitened": false,
+      "metric": "inner_product",
+      "bit_width": 3,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 5,
+      "stream": "V",
+      "n_tokens": 2112,
+      "n_compressible": 2048,
+      "mean_block_mse": 0.0034724418073892593,
+      "compressed_bytes": 935424,
+      "whitened": false,
+      "metric": "mse",
+      "bit_width": 2,
+      "codec_backend": "gpu-per-head"
+    },
+    {
+      "layer": 6,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 6,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 7,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 8,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 8,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 9,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 9,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 10,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 10,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 11,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 11,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 12,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 12,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 13,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 13,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 14,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 14,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 15,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 15,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 16,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 16,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 17,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 17,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 18,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 18,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 19,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 19,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 20,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 20,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 21,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 21,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 22,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 22,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 23,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 23,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 24,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 24,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 25,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 25,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 26,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 26,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 27,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 27,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 28,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 28,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 29,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 30,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 31,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 32,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 33,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 34,
+      "stream": "V",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "K",
+      "boundary_skip": true
+    },
+    {
+      "layer": 35,
+      "stream": "V",
+      "boundary_skip": true
+    }
+  ]
+}

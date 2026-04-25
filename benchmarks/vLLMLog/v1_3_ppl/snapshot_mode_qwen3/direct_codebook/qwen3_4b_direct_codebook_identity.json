@@ -1,0 +1,46 @@
+{
+  "recode": "identity",
+  "kakeya": null,
+  "n_passages": 4,
+  "n_eval": 64,
+  "mean_delta_ppl": 0.0,
+  "mean_top1_pair": 1.0,
+  "per_passage": [
+    {
+      "passage": 0,
+      "ppl_ref": 1.0,
+      "ppl_alt": 1.0,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "t_recode": 0.08309728652238846,
+      "t_alt": 0.060891540721058846
+    },
+    {
+      "passage": 1,
+      "ppl_ref": 1.0,
+      "ppl_alt": 1.0,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "t_recode": 0.07985551282763481,
+      "t_alt": 0.06013937294483185
+    },
+    {
+      "passage": 2,
+      "ppl_ref": 1.0004195682254935,
+      "ppl_alt": 1.0004195682254935,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "t_recode": 0.08019464649260044,
+      "t_alt": 0.06084231846034527
+    },
+    {
+      "passage": 3,
+      "ppl_ref": 1.0237741037194594,
+      "ppl_alt": 1.0237741037194594,
+      "delta_ppl": 0.0,
+      "top1_pair": 1.0,
+      "t_recode": 0.07925494574010372,
+      "t_alt": 0.06117274984717369
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "n_passages": 4,
+  "n_train": 200000,
+  "n_test": 100000,
+  "D": 128,
+  "boundary_skip_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "results": [
+    {
+      "name": "TQ-k8v4",
+      "bits_per_token_per_head": 1024,
+      "rel_mse": 3.5433688026387244e-05,
+      "abs_mse": 0.022138012573122978,
+      "cos_mean": 0.9999814033508301,
+      "cos_min": 0.999935507774353,
+      "encode_ms_per_M_vec": 523.7477831542492
+    },
+    {
+      "name": "GuthKatz-polys8",
+      "bits_per_token_per_head": 8,
+      "rel_mse": 0.7406793832778931,
+      "abs_mse": 462.7564697265625,
+      "cos_mean": 0.38993901014328003,
+      "cos_min": 5.6735116231720895e-05,
+      "n_cells_occupied": 256,
+      "max_cell_count": 2905,
+      "mean_cell_count": 781.25,
+      "build_time_s": 0.05710909701883793,
+      "encode_ms_per_M_vec": 4.898384213447571
+    },
+    {
+      "name": "GuthKatz-polys12",
+      "bits_per_token_per_head": 12,
+      "rel_mse": 0.5898638963699341,
+      "abs_mse": 368.5310363769531,
+      "cos_mean": 0.5092343688011169,
+      "cos_min": 2.5137807824648917e-05,
+      "n_cells_occupied": 4080,
+      "max_cell_count": 981,
+      "mean_cell_count": 48.828125,
+      "build_time_s": 0.014949129894375801,
+      "encode_ms_per_M_vec": 3.8332678377628326
+    },
+    {
+      "name": "GuthKatz-polys16",
+      "bits_per_token_per_head": 16,
+      "rel_mse": 0.572468638420105,
+      "abs_mse": 357.6629638671875,
+      "cos_mean": 0.4948563277721405,
+      "cos_min": 1.564645026519429e-05,
+      "n_cells_occupied": 44057,
+      "max_cell_count": 612,
+      "mean_cell_count": 3.0517578125,
+      "build_time_s": 0.01902279444038868,
+      "encode_ms_per_M_vec": 4.7750212252140045
+    },
+    {
+      "name": "GuthKatz-polys20",
+      "bits_per_token_per_head": 20,
+      "rel_mse": 0.6344453692436218,
+      "abs_mse": 396.38433837890625,
+      "cos_mean": 0.3859735429286957,
+      "cos_min": 2.00363433577877e-06,
+      "n_cells_occupied": 112991,
+      "max_cell_count": 492,
+      "mean_cell_count": 0.19073486328125,
+      "build_time_s": 0.024505922570824623,
+      "encode_ms_per_M_vec": 3.572572022676468
+    },
+    {
+      "name": "D4-TQ-Q16",
+      "bits_per_token_per_head": 672,
+      "rel_mse": 0.0029141567647457123,
+      "abs_mse": 1.8206864595413208,
+      "cos_mean": 0.9984801411628723,
+      "cos_min": 0.9952471256256104,
+      "build_time_s": 0.0004024989902973175,
+      "encode_ms_per_M_vec": 89.42238986492157
+    },
+    {
+      "name": "D4-TQ-Q64",
+      "bits_per_token_per_head": 928,
+      "rel_mse": 0.0001820620527723804,
+      "abs_mse": 0.11374745517969131,
+      "cos_mean": 0.9999047517776489,
+      "cos_min": 0.9996936917304993,
+      "build_time_s": 0.00028957612812519073,
+      "encode_ms_per_M_vec": 6.896667182445526
+    },
+    {
+      "name": "D4-TQ-Q152",
+      "bits_per_token_per_head": 1088,
+      "rel_mse": 3.232097878935747e-05,
+      "abs_mse": 0.020193275064229965,
+      "cos_mean": 0.9999830722808838,
+      "cos_min": 0.99994957447052,
+      "build_time_s": 0.0002459641546010971,
+      "encode_ms_per_M_vec": 6.728526204824448
+    },
+    {
+      "name": "D4-Q1",
+      "bits_per_token_per_head": 224,
+      "rel_mse": 1.8638966083526611,
+      "abs_mse": 1164.5123291015625,
+      "cos_mean": 0.06327919661998749,
+      "cos_min": -0.40967243909835815,
+      "build_time_s": 0.007383212447166443,
+      "encode_ms_per_M_vec": 5.833636969327927
+    },
+    {
+      "name": "D4-Q2",
+      "bits_per_token_per_head": 352,
+      "rel_mse": 0.8892684578895569,
+      "abs_mse": 555.5909423828125,
+      "cos_mean": 0.49034881591796875,
+      "cos_min": -0.3034980893135071,
+      "build_time_s": 0.0030722804367542267,
+      "encode_ms_per_M_vec": 5.388054996728897
+    },
+    {
+      "name": "D4-Q4",
+      "bits_per_token_per_head": 480,
+      "rel_mse": 0.4047848880290985,
+      "abs_mse": 252.89866638183594,
+      "cos_mean": 0.782468318939209,
+      "cos_min": 0.5372243523597717,
+      "build_time_s": 0.004376543685793877,
+      "encode_ms_per_M_vec": 5.449652671813965
+    },
+    {
+      "name": "D4-Q8",
+      "bits_per_token_per_head": 608,
+      "rel_mse": 0.16196677088737488,
+      "abs_mse": 101.19246673583984,
+      "cos_mean": 0.9169608354568481,
+      "cos_min": 0.8717573285102844,
+      "build_time_s": 0.01795993372797966,
+      "encode_ms_per_M_vec": 5.727168172597885
+    },
+    {
+      "name": "D4-Q16",
+      "bits_per_token_per_head": 736,
+      "rel_mse": 0.04952181503176689,
+      "abs_mse": 30.93989372253418,
+      "cos_mean": 0.975204348564148,
+      "cos_min": 0.9665526151657104,
+      "build_time_s": 0.04806877113878727,
+      "encode_ms_per_M_vec": 5.596578121185303
+    },
+    {
+      "name": "NonGauss-b2",
+      "bits_per_token_per_head": 256,
+      "rel_mse": 0.10544981807470322,
+      "abs_mse": 65.8822021484375,
+      "cos_mean": 0.9445485472679138,
+      "cos_min": 0.859792947769165,
+      "build_time_s": 0.34514511935412884,
+      "encode_ms_per_M_vec": 37.76999190449715
+    },
+    {
+      "name": "NonGauss-b3",
+      "bits_per_token_per_head": 384,
+      "rel_mse": 0.030817870050668716,
+      "abs_mse": 19.254173278808594,
+      "cos_mean": 0.9842329621315002,
+      "cos_min": 0.9452188611030579,
+      "build_time_s": 0.47596479021012783,
+      "encode_ms_per_M_vec": 3.3988244831562042
+    },
+    {
+      "name": "NonGauss-b4",
+      "bits_per_token_per_head": 512,
+      "rel_mse": 0.008781101554632187,
+      "abs_mse": 5.486195087432861,
+      "cos_mean": 0.9955102801322937,
+      "cos_min": 0.9686126708984375,
+      "build_time_s": 0.7562480475753546,
+      "encode_ms_per_M_vec": 10.078232735395432
+    },
+    {
+      "name": "NonGauss-b6",
+      "bits_per_token_per_head": 768,
+      "rel_mse": 0.0017139080446213484,
+      "abs_mse": 1.0708035230636597,
+      "cos_mean": 0.9990848898887634,
+      "cos_min": 0.9751729965209961,
+      "build_time_s": 2.3867353424429893,
+      "encode_ms_per_M_vec": 10.674949735403061
+    },
+    {
+      "name": "NonGauss-b8",
+      "bits_per_token_per_head": 1024,
+      "rel_mse": 0.001124147092923522,
+      "abs_mse": 0.7023367285728455,
+      "cos_mean": 0.999380886554718,
+      "cos_min": 0.9759361743927002,
+      "build_time_s": 8.957032280042768,
+      "encode_ms_per_M_vec": 8.472297340631485
+    }
+  ]
+}
