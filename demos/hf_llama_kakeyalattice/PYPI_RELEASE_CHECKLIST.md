@@ -4,6 +4,43 @@ Status at 2026-04-25: package is build-verified + twine-check-PASSED,
 but **NOT yet published to PyPI**. This doc is the exact sequence to
 follow when ready.
 
+## Account setup (one-off, ~30 minutes)
+
+You need **two separate accounts** — PyPA runs two isolated indices
+and accounts do NOT sync between them:
+
+1. **TestPyPI** — https://test.pypi.org/account/register/
+   - Exclusively for testing uploads and installs
+   - Safe sandbox: packages here are irrelevant to production
+   - Get an API token at https://test.pypi.org/manage/account/token/
+   - Scope: "Upload packages" (can narrow to just `kakeyalattice` after first upload)
+
+2. **Production PyPI** — https://pypi.org/account/register/
+   - The real index (`pip install kakeyalattice` resolves from here)
+   - **Two-factor authentication is required** for uploads (enable in account settings)
+   - Get an API token at https://pypi.org/manage/account/token/
+   - Scope: start with "Entire account" for first upload, tighten to "Project-specific" after namespace is claimed
+
+Store both tokens in `~/.pypirc`:
+
+```ini
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+  username = __token__
+  password = pypi-AgEIcH...    # the token string from pypi.org
+
+[testpypi]
+  repository = https://test.pypi.org/legacy/
+  username = __token__
+  password = pypi-AgENdGVz...  # token from test.pypi.org
+```
+
+Or use `twine upload --username __token__ --password pypi-AgE...` each time.
+
 ## Pre-release
 
 - [x] `pyproject.toml` has `version`, `description`, `classifiers`, URLs
@@ -14,9 +51,10 @@ follow when ready.
 - [x] `twine check dist/*` PASSED
 - [x] Local install-from-wheel smoke test passes
 - [ ] Maintainer agreement: who owns the PyPI namespace, who has 2FA
-- [ ] First-time PyPI account signup and API token (one-off)
-- [ ] Test upload to `testpypi.org` passes end-to-end
-- [ ] Test install from `testpypi.org` in a fresh virtualenv:
+- [ ] TestPyPI account created, API token obtained (see Account setup)
+- [ ] Production PyPI account created, 2FA enabled, API token obtained
+- [ ] Test upload to **TestPyPI** (`test.pypi.org`) passes end-to-end
+- [ ] Test install from TestPyPI in a fresh virtualenv:
       `pip install --index-url https://test.pypi.org/simple/ kakeyalattice`
 
 ## Release
