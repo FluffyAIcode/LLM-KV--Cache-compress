@@ -1,15 +1,72 @@
 [build-system]
-requires = ["setuptools>=61"]
+# Pin setuptools < 77 to stay on metadata-version 2.1 (twine-compatible).
+# setuptools 77+ emits Metadata-Version 2.4 with PEP 639 fields
+# (License-File, License-Expression) that twine 6.x does not yet accept.
+# This constraint can be relaxed once twine / PyPI fully roll out PEP 639.
+requires = ["setuptools>=61,<77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "kakeyalattice"
 version = "1.5.0"
-description = "KakeyaLattice reference Python codec for LLM KV-cache compression. Hadamard-rotated, per-vector-qmax nested-lattice quantisation: v1.4 D4 (V14KakeyaZamirLatticeGPU) and v1.5 E8 (V15KakeyaZamirE8GPU)."
+description = "Nested-lattice KV-cache compression for LLM inference: Zamir-Feder D4 and E8 variants with shaping gain over scalar quantisation."
+readme = "README.md"
+# NOTE: we intentionally declare the license only via classifier
+# ("License :: OSI Approved :: Apache Software License") rather than
+# PEP 639 fields, to remain compatible with older twine / PyPI metadata.
+# A copy of the Apache-2.0 license text is included in the sdist.
 requires-python = ">=3.10"
+authors = [
+    { name = "Allen Li", email = "AllenL329@gmail.com" },
+]
+keywords = [
+    "llm",
+    "kv-cache",
+    "quantization",
+    "compression",
+    "lattice",
+    "nested-lattice",
+    "zamir-feder",
+    "d4",
+    "e8",
+    "kakeya",
+    "inference",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "torch>=2.1",
 ]
+
+[project.optional-dependencies]
+hf = [
+    "transformers>=4.45",
+]
+dev = [
+    "pytest>=7",
+    "build",
+    "twine",
+]
+
+[project.urls]
+Homepage = "https://github.com/FluffyAIcode/LLM-KV--Cache-compress"
+Repository = "https://github.com/FluffyAIcode/LLM-KV--Cache-compress"
+Issues = "https://github.com/FluffyAIcode/LLM-KV--Cache-compress/issues"
+Documentation = "https://github.com/FluffyAIcode/LLM-KV--Cache-compress/tree/main/reports/paper"
 
 [tool.setuptools.packages.find]
 where = ["python"]
