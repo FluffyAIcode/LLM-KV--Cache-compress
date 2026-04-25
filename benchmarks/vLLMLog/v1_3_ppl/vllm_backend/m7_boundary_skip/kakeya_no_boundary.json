@@ -1,0 +1,16 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "kv_cache_dtype": "kakeya_v1_3_ppl",
+  "engine": "vllm",
+  "n_input_tokens": 8192,
+  "block_size": 512,
+  "enforce_eager": true,
+  "total_wall_s": 91.84527730941772,
+  "window": 2048,
+  "stride": 1024,
+  "n_tokens_scored": 8191,
+  "total_nll": 81663.16168321948,
+  "mean_nll": 9.96986469090703,
+  "perplexity": 21372.593248562873,
+  "vllm_gen_wall_s": 79.9552948474884
+}

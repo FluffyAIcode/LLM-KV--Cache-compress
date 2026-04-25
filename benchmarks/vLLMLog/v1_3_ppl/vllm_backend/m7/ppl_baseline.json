@@ -1,0 +1,16 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "kv_cache_dtype": "auto",
+  "engine": "vllm",
+  "n_input_tokens": 16384,
+  "block_size": null,
+  "enforce_eager": true,
+  "total_wall_s": 13.501364946365356,
+  "window": 2048,
+  "stride": 1024,
+  "n_tokens_scored": 16383,
+  "total_nll": 38676.99119585823,
+  "mean_nll": 2.3608002927338236,
+  "perplexity": 10.599430706415559,
+  "vllm_gen_wall_s": 1.622798204421997
+}
