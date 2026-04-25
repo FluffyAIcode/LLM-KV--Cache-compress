@@ -2,7 +2,7 @@
 # Loose-pinned (>=) so security patches land automatically.
 kakeyalattice[hf]>=1.5.0
 gradio>=4.44
-transformers>=4.45
+transformers>=4.51  # Qwen3ForCausalLM requires 4.51+
 # CPU torch (via --extra-index-url https://download.pytorch.org/whl/cpu in Dockerfile)
 torch>=2.1
 # Deps that transformers pulls but we want explicit for the free-CPU Space

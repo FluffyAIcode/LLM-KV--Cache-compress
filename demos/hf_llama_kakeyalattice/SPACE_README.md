@@ -15,9 +15,12 @@ Side-by-side comparison of **bf16 DynamicCache** vs **KakeyaLattice E8**
 compression at three quality levels (Q=10 aggressive, Q=38 balanced,
 Q=152 near-lossless) on a small HuggingFace causal LM.
 
-Default model: `Qwen/Qwen2-0.5B` (head_dim=64, E8-compatible, runs on
-free CPU tier). Override `KAKEYA_DEMO_MODEL` env var to use a larger
-model on a GPU Space.
+Default model: `Qwen/Qwen3-0.6B` (head_dim=128, GQA 16/8 — the same
+attention shape as modern production LLMs, so the codec numbers are
+representative). Runs on the free CPU tier (each "Run comparison"
+click takes ~4–8 minutes on 2 cores). Override `KAKEYA_DEMO_MODEL`
+env var to use a larger model on a GPU Space (`Qwen/Qwen3-1.7B`,
+`Qwen/Qwen3-4B`).
 
 ## How it works
 
@@ -29,7 +32,7 @@ decode) to every K and V written into the cache.
 from transformers import AutoModelForCausalLM
 from kakeyalattice.hf import KakeyaLatticeCache
 
-model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2-0.5B")
+model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-0.6B")
 cache = KakeyaLatticeCache(
     variant="e8", q_range=38,
     num_hidden_layers=model.config.num_hidden_layers,
@@ -40,14 +43,19 @@ out = model.generate(input_ids, max_new_tokens=200, past_key_values=cache)
 
 ## What you'll see in the demo
 
-For each prompt, the app generates four times:
+For each prompt, the app generates four times (bits/vec here assume
+head_dim=128 → bf16 baseline is 2048 bits/vec; exact numbers for other
+head_dims scale proportionally):
 
-| config                   | bits/token        | expected quality                       |
-| ------------------------ | ----------------- | -------------------------------------- |
-| bf16 DynamicCache        | 1024 (reference)  | identical to reference                 |
-| E8 Q=152 near-lossless   | ~960 (-6%)        | essentially identical                  |
-| E8 Q=38 balanced         | ~440 (-57%)       | ~1% deviation in ppl                   |
-| E8 Q=10 aggressive       | ~320 (-69%)       | noticeably different but coherent      |
+| config                   | bits/vec (head_dim=128) | expected quality                  |
+| ------------------------ | ----------------------- | --------------------------------- |
+| bf16 DynamicCache        | 2048 (reference)        | identical to reference            |
+| E8 Q=152 near-lossless   | ~1920 (-6%)             | essentially identical             |
+| E8 Q=38 balanced         | ~880 (-57%)             | ~1% deviation in ppl              |
+| E8 Q=10 aggressive       | ~640 (-69%)             | noticeably different but coherent |
+
+(The percentage savings `-6% / -57% / -69%` are what matter — they are
+fixed by the E8 codec design and do not depend on head_dim.)
 
 Wall-clock latency per config is also reported.
 

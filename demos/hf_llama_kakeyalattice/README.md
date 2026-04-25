@@ -31,13 +31,14 @@ python app.py
 4. Copy `app.py` and this `README.md` to the Space repo
 5. Push: `git push`
 
-The default model is `Qwen/Qwen2-0.5B` (head_dim=64, E8-compatible).
+The default model is `Qwen/Qwen3-0.6B` (head_dim=128, GQA 16/8,
+E8-compatible, fits on free HF Space CPU tier).
 Override with:
 
 ```bash
-KAKEYA_DEMO_MODEL=Qwen/Qwen2.5-1.5B python app.py     # needs GPU
+KAKEYA_DEMO_MODEL=Qwen/Qwen3-1.7B python app.py       # GPU recommended
+KAKEYA_DEMO_MODEL=Qwen/Qwen3-4B python app.py         # GPU required
 KAKEYA_DEMO_MODEL=meta-llama/Llama-3.2-1B python app.py
-KAKEYA_DEMO_MODEL=Qwen/Qwen3-4B python app.py         # head_dim=128
 ```
 
 ## What the demo shows

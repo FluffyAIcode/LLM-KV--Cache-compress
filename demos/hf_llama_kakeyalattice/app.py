@@ -5,9 +5,10 @@ Run locally:
     python app.py
 
 Deploy to HF Spaces: see ./SPACE_README.md and ./HF_SPACE_DEPLOY.md.
-By default uses Qwen2-0.5B (head_dim=64, E8-compatible) so it fits on a
-free HF Space CPU. Swap to Qwen/Qwen2.5-1.5B or Llama-3.2-1B (GPU Space)
-for more interesting decode-length comparisons.
+By default uses Qwen3-0.6B (head_dim=128, GQA 16/8, E8-compatible) —
+fits on a free HF Space CPU and is architecturally closer to production
+LLMs than Qwen2-0.5B. Swap to Qwen/Qwen3-1.7B or Qwen/Qwen3-4B
+(GPU Space) for faster / longer comparisons.
 
 The demo shows, side-by-side, the same prompt generated under:
   (a) bf16 DynamicCache — reference
@@ -33,7 +34,7 @@ except ImportError as e:
 from kakeyalattice.hf import KakeyaLatticeCache
 
 
-DEFAULT_MODEL = os.environ.get("KAKEYA_DEMO_MODEL", "Qwen/Qwen2-0.5B")
+DEFAULT_MODEL = os.environ.get("KAKEYA_DEMO_MODEL", "Qwen/Qwen3-0.6B")
 DEFAULT_PROMPT = "List five countries in Africa:"
 _model_cache: dict = {}
 
@@ -174,13 +175,18 @@ with gr.Blocks(title="KakeyaLattice KV-cache compression") as demo:
 
     gr.Markdown(
         "### About the default model\n\n"
-        f"The default model is **{DEFAULT_MODEL}** (0.5B params). It runs on a "
-        "free HF Space CPU but is *small*. Small models can fall into "
-        "greedy-decode repetition loops on open-ended prompts — that is a "
-        "property of the **model**, not the codec. If you see all four outputs "
-        "repeating the same phrase, try a short, fact-shaped prompt (e.g. "
-        "\"List five countries in Africa:\") or switch to a larger model "
-        "(`KAKEYA_DEMO_MODEL=Qwen/Qwen2.5-1.5B`) on a GPU Space."
+        f"The default model is **{DEFAULT_MODEL}** (0.6B params, head_dim=128, "
+        "GQA 16/8). It runs on a free HF Space CPU in roughly 4–8 minutes per "
+        "'Run comparison' click (four generations × ~128 tokens each on 2 "
+        "cores). That is slow but deliberate: Qwen3's head_dim=128 + GQA is "
+        "the same shape used by most production LLMs, so the E8 codec numbers "
+        "you see here are representative.\n\n"
+        "Small models can still fall into greedy-decode repetition loops on "
+        "open-ended prompts — that is a property of the **model**, not the "
+        "codec. If you see all four outputs repeating the same phrase, try a "
+        "short, fact-shaped prompt (e.g. \"List five countries in Africa:\"). "
+        "For faster decode / larger context, switch to a GPU Space and set "
+        "`KAKEYA_DEMO_MODEL=Qwen/Qwen3-1.7B` or `Qwen/Qwen3-4B`."
     )
 
     header_out = gr.Markdown("")

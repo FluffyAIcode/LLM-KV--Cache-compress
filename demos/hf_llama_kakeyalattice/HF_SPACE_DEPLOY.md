@@ -62,24 +62,32 @@ git push
 HF Space CPU-Basic (free):
 
 - 2 CPU cores
-- 16 GiB RAM (plenty for Qwen2-0.5B)
+- 16 GiB RAM (fits Qwen3-0.6B ~2.4 GB with headroom)
 - Persistent storage: 50 GiB for /data (we don't need it; model cached
   in `/home/user/.cache`)
 - No GPU
 
-This is enough to run the default `Qwen/Qwen2-0.5B` (0.5 B params at
-fp32 = 2 GB RAM used). For bigger models (Qwen3-4B, LLaMA-3.1-8B) you
-need T4-Small ($0.60/hr) or better.
+This is enough to run the default `Qwen/Qwen3-0.6B` (0.6 B params at
+fp32 ≈ 2.4 GB RAM). Inference is CPU-bound on 2 cores, so a single
+"Run comparison" click (4 × 128-token generations) takes ~4–8 minutes.
+For faster decode or bigger models (Qwen3-1.7B, Qwen3-4B, LLaMA-3.1-8B)
+upgrade to T4-Small ($0.60/hr) or better.
 
 ## Upgrading to GPU
 
-If you later want to serve Qwen3-4B:
+If you later want to serve `Qwen3-1.7B` or `Qwen3-4B`:
 
-1. In the Space settings, switch hardware to "T4-small" or "A10G-small".
+1. In the Space settings, switch hardware to "T4-small" (sufficient
+   for Qwen3-1.7B) or "A10G-small" (better for Qwen3-4B).
 2. Edit `Dockerfile`: change `--extra-index-url https://download.pytorch.org/whl/cpu`
    to `https://download.pytorch.org/whl/cu124` (or cu128 for newer).
-3. Set env var `KAKEYA_DEMO_MODEL=Qwen/Qwen3-4B` in the Space settings.
+3. Set env var `KAKEYA_DEMO_MODEL=Qwen/Qwen3-1.7B` (or `Qwen/Qwen3-4B`)
+   in the Space settings.
 4. Re-push — Dockerfile will rebuild with CUDA torch.
+
+T4-small typical timings: ~30–60 seconds per full Run comparison
+(4 generations) on Qwen3-1.7B. Qwen3-4B requires A10G-small or
+better to stay under a comfortable latency budget.
 
 ## Troubleshooting
 
@@ -90,10 +98,12 @@ If you later want to serve Qwen3-4B:
 - **Slow first generation**: the model weights are downloaded on first
   run into `/home/user/.cache/huggingface`. Each subsequent call
   reuses cache.
-- **OOM on free tier**: the default model `Qwen/Qwen2-0.5B` fits
-  comfortably in 16 GB. If you switch to a larger model without
-  upgrading hardware, you'll OOM. Stick to ≤1.5B params on free CPU
-  tier.
+- **OOM on free tier**: the default model `Qwen/Qwen3-0.6B` uses
+  ~2.4 GB fp32 and fits comfortably in 16 GB. If you switch to
+  `Qwen3-4B` (~16 GB fp32) or larger without upgrading hardware,
+  you'll OOM. Stick to ≤1.7B params on free CPU tier, and expect
+  Qwen3-1.7B generations on free CPU to be slow (~15+ min per full
+  Run comparison).
 - **Build failure on `kakeyalattice` install**: check
   `pip install kakeyalattice` works locally first. Our package is at
   https://pypi.org/project/kakeyalattice/1.5.0/.
