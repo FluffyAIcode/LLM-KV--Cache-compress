@@ -17,7 +17,8 @@ Upgrade path from Stage 0.5:
 | file | purpose |
 | --- | --- |
 | `dsv4_weight_loader.py` | load FP8-E4M3 safetensor shards, dequantize via E8M0 block scales, inject into Stage 0.5's `DSV4MainKVProjection` + `DSV4Compressor` |
-| `run_stage075_real_weights.py` | end-to-end driver: host hidden → V4 KV streams (trained weights) → non-Gaussian audit + KakeyaLattice / FP8 codec comparison |
+| `run_stage075_real_weights.py` | **n=1** driver: host hidden → V4 KV streams (trained weights) → non-Gaussian audit + KakeyaLattice / FP8 codec comparison (single passage) |
+| `run_stage075_n8.py` | **n=8 driver** (new): same pipeline, 8 semantically diverse passages, Student-t 95% CI aggregation per stream. See `reports/v1_5_release/dsv4_stage075/FINDINGS_N8.md` for results. |
 | `README.md` | this file |
 
 ## Why this runs on our existing vast H200
@@ -39,22 +40,28 @@ End-to-end wall time on H200: ~15 seconds.
 `reports/v1_5_release/dsv4_stage075/FINDINGS.md`. See FINDINGS.md for the
 analysis.
 
-## Headline finding (2026-04-25 H200 run, TRAINED V4-Flash weights)
+## Headline finding — **n=8 with 95% CI** (2026-04-26 H200 run)
 
-E8 Q=38 vs FP8 per-64-block across three V4 KV streams:
+E8 Q=38 vs FP8 per-64-block across three V4 KV streams, aggregated
+over n=8 semantically diverse WikiText-style passages on trained
+V4-Flash weights:
 
 ```
-stream                  E8/FP8 rel-MSE   bit savings
-sliding_window_kv       0.786            -22.0%       ← strong Pareto win
-csa_pool_kv_ratio4      0.902            -22.0%       ← moderate Pareto win
-hca_pool_kv_ratio128    0.966            -22.0%       ← marginal Pareto win
-mean                    0.884            -22.0%
+stream                  E8/FP8 (mean ± CI95)   n=1 value   bit savings
+sliding_window_kv       0.790  ± 0.005         0.786       -22.0%   ← confirmed strong win
+csa_pool_kv_ratio4      0.900  ± 0.006         0.902       -22.0%   ← confirmed moderate win
+hca_pool_kv_ratio128    1.043  ± 0.051         0.966       -22.0%   ← neutral/slight loss (n=1 was a lucky tail)
 ```
 
-**~22% bit savings with 12% lower MSE on average.** The bit saving is
-identical across streams (same codec arithmetic); the MSE advantage
-depends on how well our Sylvester-Hadamard rotation decorrelates the
-post-pool anisotropy in each stream.
+**−22% bit savings (unchanged, codec arithmetic) with −4 to −9% layer-weighted
+MSE on average** (n=8 CI: ±1.7–2.3 pp). The n=1 HCA "marginal win" did not
+survive passage-level CI — see `reports/v1_5_release/dsv4_stage075/FINDINGS_N8.md`
+for full per-passage tables, layer-weighted recomputation, and revised
+deployment forecast.
+
+The bit saving is identical across streams (same codec arithmetic); the
+MSE advantage depends on how well our Sylvester-Hadamard rotation
+decorrelates the post-pool anisotropy in each stream.
 
 Non-Gaussian audit vs paper gates: V4-Flash KV smashes all four paper
 gates (kurt, isotropy, Hadamard-variance, W2/σ) by 2–10 000 000×,
