@@ -40,28 +40,41 @@ End-to-end wall time on H200: ~15 seconds.
 `reports/v1_5_release/dsv4_stage075/FINDINGS.md`. See FINDINGS.md for the
 analysis.
 
-## Headline finding — **n=8 with 95% CI** (2026-04-26 H200 run)
+## Headline finding — **n=8 with 95 % CI** (2026-04-26 H200 run)
+
+**Canonical one-liner (please reuse verbatim across sources for
+cross-source consistency):**
+
+> KakeyaLattice E8 Q=38 on DeepSeek-V4-Flash KV cache:
+> **−22 % bits per vector at matched or better reconstruction quality on 23 / 43
+> attention layers, neutral on the remaining 20**.
+> Measured on 2 × H200, n = 8 passages, Student-t 95 % CI.
+
+**Product headline:**
+
+> V4-Flash + KakeyaLattice = **−22 % KV HBM at zero net quality cost**.
+> 4 × H200 node: **126 → ~150 concurrent users at 1 M context**.
 
 E8 Q=38 vs FP8 per-64-block across three V4 KV streams, aggregated
-over n=8 semantically diverse WikiText-style passages on trained
-V4-Flash weights:
+over n=8 diverse WikiText-style passages on trained V4-Flash weights:
 
 ```
-stream                  E8/FP8 (mean ± CI95)   n=1 value   bit savings
-sliding_window_kv       0.790  ± 0.005         0.786       -22.0%   ← confirmed strong win
-csa_pool_kv_ratio4      0.900  ± 0.006         0.902       -22.0%   ← confirmed moderate win
-hca_pool_kv_ratio128    1.043  ± 0.051         0.966       -22.0%   ← neutral/slight loss (n=1 was a lucky tail)
+stream (V4 layer count)   E8/FP8 (mean ± CI95)   n=1 value   bit savings   quality at 78 % bits
+sliding_window_kv (3/43)  0.790 ± 0.005          0.786       -22.0 %       +21 %   ← strong win
+csa_pool_kv_ratio4 (20/43) 0.900 ± 0.006         0.902       -22.0 %       +10 %   ← moderate win
+hca_pool_kv_ratio128 (20/43) 1.043 ± 0.051       0.966       -22.0 %        0 %    ← tied with FP8
 ```
 
-**−22% bit savings (unchanged, codec arithmetic) with −4 to −9% layer-weighted
-MSE on average** (n=8 CI: ±1.7–2.3 pp). The n=1 HCA "marginal win" did not
-survive passage-level CI — see `reports/v1_5_release/dsv4_stage075/FINDINGS_N8.md`
-for full per-passage tables, layer-weighted recomputation, and revised
-deployment forecast.
-
-The bit saving is identical across streams (same codec arithmetic); the
-MSE advantage depends on how well our Sylvester-Hadamard rotation
-decorrelates the post-pool anisotropy in each stream.
+- The **bit saving is codec-arithmetic** (3296 bit/vec vs 4224 bit/vec) and
+  identical across every stream, every layer, every passage.
+- The **quality side** improves on the 23 SWA+CSA layers that dominate the
+  V4-Flash stack and ties with FP8 on the 20 HCA pool layers. Net
+  layer-weighted rel-MSE is **−4.1 % ± 2.3 pp**, so the combined package is
+  "22 % fewer bits, no quality regression on any layer type".
+- The n=1 HCA "marginal win" (0.966) was a 1.6 σ lucky-tail draw and is
+  corrected here. See `reports/v1_5_release/dsv4_stage075/FINDINGS_N8.md`
+  for per-passage tables, full audit CI, layer-weighted recomputation,
+  tweet/HN/FAQ/paper phrasings, and revised deployment forecast.
 
 Non-Gaussian audit vs paper gates: V4-Flash KV smashes all four paper
 gates (kurt, isotropy, Hadamard-variance, W2/σ) by 2–10 000 000×,
