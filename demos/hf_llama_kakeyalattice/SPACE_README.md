@@ -59,6 +59,24 @@ fixed by the E8 codec design and do not depend on head_dim.)
 
 Wall-clock latency per config is also reported.
 
+## When to pick KakeyaLattice over HQQ / Quanto / KIVI
+
+- **HQQ / AWQ / GPTQ** are *weight* quantisers. KakeyaLattice is a
+  *KV-cache* quantiser. They are **orthogonal** — stack them.
+- **QuantoQuantizedCache / HQQQuantizedCache** in transformers are
+  per-channel scalar quantisers. At ≤ 1 % |Δppl| KakeyaLattice
+  compresses the KV cache **9 %–38 % harder** across Qwen3-4B,
+  GLM-4-9B-Chat, Gemma-4-E4B, and DeepSeek-R1-Distill-Qwen-1.5B
+  (real vLLM, H200, 128 k context, WikiText-103 n=8; see the
+  [GitHub README](https://github.com/FluffyAIcode/LLM-KV--Cache-compress#headline-numbers)
+  for the full table).
+- **KIVI (2-bit KV)** hits similar bit budgets but cannot gaussianise
+  heavy-tailed KV distributions; KakeyaLattice's Sylvester–Hadamard
+  rotation does, giving lower |Δppl| at matched bits.
+- **SnapKV / H2O / Scissorhands** are *eviction* (which KV to keep),
+  not *quantisation* (how to store). They compose multiplicatively
+  with KakeyaLattice.
+
 ## Caveats
 
 - The cache roundtrips K/V but stores the reconstructed tensor in the
