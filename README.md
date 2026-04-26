@@ -8,7 +8,8 @@ contexts.
 
 [![PyPI](https://img.shields.io/pypi/v/kakeyalattice.svg)](https://pypi.org/project/kakeyalattice/)
 [![HF Space](https://img.shields.io/badge/🤗%20Space-Live%20demo-blue)](https://huggingface.co/spaces/FluffyAIcode/LLM-KA-Cache-Compress)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![DOI — pending](https://img.shields.io/badge/DOI-pending-lightgrey.svg)](CITATION.cff)
 
 ![KakeyaLattice vs TurboQuant — iso-PPL Pareto front, 4 models](assets/hero_pareto.png)
 
@@ -176,6 +177,50 @@ python benchmarks/multimodel_v14_kv_128k_report.py \
 
 Add `--trust-remote-code` for GLM-4-9B-Chat.
 
+## Prior work & peer methods
+
+KakeyaLattice builds on three decades of lattice-quantisation theory
+and is designed to be directly comparable to the strongest KV-cache
+compression baselines published to date. The list below names the work
+each design decision is downstream of, with full arXiv / DOI pointers.
+See [`ACKNOWLEDGMENTS.md`](ACKNOWLEDGMENTS.md) for the complete
+attribution set, including evaluation datasets, infrastructure
+(vLLM, FlashAttention, transformers), and open model-weight releases.
+
+### Theoretical foundations
+
+- **Nested-lattice quantisation** — Zamir, R., & Feder, M. (1996). *On
+  lattice quantization noise.* IEEE Trans. Inf. Theory 42(4), 1152–1159.
+  [doi:10.1109/18.508838](https://doi.org/10.1109/18.508838). The
+  shaping-gain bound that motivates our Sylvester–Hadamard + L²
+  scaling pre-processing.
+- **Closest-point decoders for D4 / E8** — Conway, J. H., & Sloane,
+  N. J. A. (1999). *Sphere Packings, Lattices and Groups* (3rd ed.).
+  Springer.
+  [doi:10.1007/978-1-4757-6568-7](https://doi.org/10.1007/978-1-4757-6568-7).
+  The reference algorithms we specialise in
+  [`kakeyalattice/python/kakeyalattice/lattice_codebooks.py`](kakeyalattice/python/kakeyalattice/lattice_codebooks.py).
+
+### Peer methods — what we benchmark against
+
+| method | paper | role in our benchmarks |
+|:---|:---|:---|
+| **TurboQuant** | [Zandieh et al., 2024, arXiv:2406.17005](https://arxiv.org/abs/2406.17005) | **Primary head-to-head baseline** across all four iso-PPL models (Qwen3-4B, GLM-4-9B-Chat, Gemma-4-E4B, DeepSeek-R1-Distill-Qwen-1.5B); data in [`reports/v1_4_release/kv_128k_isoppl_n8/`](reports/v1_4_release/kv_128k_isoppl_n8/) |
+| **KIVI** | [Liu et al., 2024, arXiv:2402.02750](https://arxiv.org/abs/2402.02750) | Low-bit (2-bit) per-token scalar KV quantiser; comparison documented in [`docs/faq.md`](docs/faq.md#comparisons) |
+| **SmoothQuant-KV** | [Xiao et al., ICML 2023, arXiv:2211.10438](https://arxiv.org/abs/2211.10438) | Per-channel scalar baseline family |
+| **QuantoQuantizedCache** | [HF transformers](https://github.com/huggingface/transformers/blob/main/src/transformers/cache_utils.py) | In-tree reference scalar KV quantiser; the one `transformers` users compare us to first |
+| **HQQ** | [Badri & Shaji, 2023](https://mobiusml.github.io/hqq_blog/) | Weight quantiser — orthogonal, composes with KakeyaLattice KV |
+| **SnapKV** | [Li et al., 2024, arXiv:2404.14469](https://arxiv.org/abs/2404.14469) | Eviction — orthogonal, composes multiplicatively |
+| **H2O** | [Zhang et al., NeurIPS 2023, arXiv:2306.14048](https://arxiv.org/abs/2306.14048) | Eviction — orthogonal, composes multiplicatively |
+| **Scissorhands** | [Liu et al., NeurIPS 2023, arXiv:2305.17118](https://arxiv.org/abs/2305.17118) | Eviction — orthogonal, composes multiplicatively |
+
+All head-to-head numbers in the [Headline numbers](#headline-numbers)
+table above are produced from
+[`benchmarks/multimodel_v14_kv_128k_report.py`](benchmarks/multimodel_v14_kv_128k_report.py),
+which sweeps KakeyaLattice's `q_range` and TurboQuant's `b` on the same
+code path so the comparison is iso-harness, not best-of-our-runs vs
+best-reported-elsewhere.
+
 ## Compliance
 
 All reported numbers come from real vLLM + real Hugging Face weights + real
@@ -185,16 +230,26 @@ and carries a SHA-256 manifest (`reports/v1_4_release/MANIFEST.sha256`).
 
 ## Citation
 
-```
-@techreport{kakeyalattice2026,
-  title  = {KakeyaLattice: Nested-Lattice KV-Cache Compression for Large Language Models},
-  author = {FluffyAIcode},
-  year   = {2026},
-  url    = {https://github.com/FluffyAIcode/LLM-KV--Cache-compress},
-  note   = {Software release v1.5; see reports/paper/kakeyalattice.pdf},
+GitHub renders a **"Cite this repository"** widget in the sidebar
+(sourced from [`CITATION.cff`](CITATION.cff)) that exports BibTeX,
+APA, and CFF. For manual citation:
+
+```bibtex
+@software{kakeyalattice2026,
+  title     = {KakeyaLattice: Nested-Lattice KV-Cache Compression for Large Language Models},
+  author    = {Li, Allen},
+  year      = {2026},
+  version   = {1.5.0},
+  month     = apr,
+  license   = {MIT},
+  url       = {https://github.com/FluffyAIcode/LLM-KV--Cache-compress},
+  note      = {See reports/paper/kakeyalattice.pdf for the companion technical report.},
 }
 ```
 
+See [`ACKNOWLEDGMENTS.md`](ACKNOWLEDGMENTS.md) for the prior work and
+infrastructure this release depends on.
+
 ## License
 
-Apache-2.0 (see [`LICENSE`](LICENSE)).
+MIT — see [`LICENSE`](LICENSE).

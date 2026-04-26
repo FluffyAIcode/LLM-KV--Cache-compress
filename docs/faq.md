@@ -56,27 +56,50 @@ See the [full table in the README](../README.md#headline-numbers) for
 
 ## <a id="comparisons"></a>How does it compare to KIVI, HQQ, QuantoQuantizedCache, and SmoothQuant-KV?
 
-Short answer, by category:
+Short answer, by category. Full citations and links are in
+[`ACKNOWLEDGMENTS.md`](../ACKNOWLEDGMENTS.md#peer-methods-we-compare-against);
+we carry the one-line reference next to each entry here for
+self-containment.
 
-- **vs per-channel scalar quantisers (TurboQuant, SmoothQuant-KV,
-  QuantoQuantizedCache)** — KakeyaLattice wins at tight quality targets
-  (≤ 1 % |Δppl|) by **9 %–38 %** compression ratio across the four models
-  we measure. At very loose targets (≥ 5 % |Δppl|) scalar quantisers
-  catch up because the 32-bit-per-block `qmax` overhead starts to dominate
-  the nested-lattice rate.
-- **vs low-bit KV quantisation (KIVI 2-bit)** — KakeyaLattice at aggressive
-  settings (`variant="e8", q_range=10`, ~3.2 bits/value effective) is in
-  the same bit budget as KIVI-2 but typically a lower |Δppl| because the
-  Hadamard rotation gaussianises heavy-tailed KV distributions before
-  quantisation, which scalar KIVI cannot do.
-- **vs HQQ** — HQQ is a weight quantiser, not a KV quantiser. Orthogonal.
-  You can (and should) stack them: HQQ-quantised weights + KakeyaLattice
-  KV cache.
-- **vs SnapKV / H2O / Scissorhands** — these are eviction (choose *which*
-  KV to keep), not quantisation (choose *how* to store). Orthogonal.
-  Eviction + KakeyaLattice compose and multiply savings.
+- **vs per-channel scalar quantisers** — **TurboQuant** ([Zandieh et al.,
+  2024, arXiv:2406.17005](https://arxiv.org/abs/2406.17005)),
+  **SmoothQuant-KV** ([Xiao et al., ICML 2023,
+  arXiv:2211.10438](https://arxiv.org/abs/2211.10438)), and
+  **`QuantoQuantizedCache`** (Hugging Face transformers in-tree).
+  KakeyaLattice wins at tight quality targets (≤ 1 % |Δppl|) by
+  **9 %–38 %** compression ratio across the four models we measure
+  (see [Headline numbers](../README.md#headline-numbers)). At very
+  loose targets (≥ 5 % |Δppl|) scalar quantisers catch up because
+  the 32-bit-per-block `qmax` overhead starts to dominate the
+  nested-lattice rate. Our benchmark harness
+  ([`benchmarks/multimodel_v14_kv_128k_report.py`](../benchmarks/multimodel_v14_kv_128k_report.py))
+  sweeps KakeyaLattice's `q_range` and TurboQuant's `b` on the same
+  code path so the comparison is iso-harness.
+- **vs low-bit KV quantisation — KIVI** ([Liu et al., 2024,
+  arXiv:2402.02750](https://arxiv.org/abs/2402.02750)) — KIVI is 2-bit
+  per-value scalar with per-token grouping. KakeyaLattice at
+  `variant="e8", q_range=10` sits at a comparable effective bit
+  budget (~3.2 bits/value on head_dim=128) but typically achieves a
+  lower |Δppl| because the Sylvester–Hadamard rotation gaussianises
+  heavy-tailed KV distributions before quantisation — scalar KIVI
+  cannot. A direct iso-bit head-to-head on Qwen3 / DeepSeek-R1-Distill
+  is on the roadmap.
+- **vs HQQ** ([Badri & Shaji, 2023](https://mobiusml.github.io/hqq_blog/))
+  — HQQ is a *weight* quantiser, not a KV quantiser. Orthogonal.
+  You can (and should) stack them: HQQ-quantised weights +
+  KakeyaLattice KV cache.
+- **vs eviction methods** — **SnapKV** ([Li et al., 2024,
+  arXiv:2404.14469](https://arxiv.org/abs/2404.14469)),
+  **H2O** ([Zhang et al., NeurIPS 2023,
+  arXiv:2306.14048](https://arxiv.org/abs/2306.14048)),
+  **Scissorhands** ([Liu et al., NeurIPS 2023,
+  arXiv:2305.17118](https://arxiv.org/abs/2305.17118)) — these are
+  eviction (which KV to keep), not quantisation (how to store).
+  Orthogonal to KakeyaLattice; eviction + KakeyaLattice compose
+  multiplicatively.
 
-See `reports/v1_4_release/kv_128k_isoppl_n8/V14_VS_TQ_ISOPPL_REPORT.md`
+See
+[`reports/v1_4_release/kv_128k_isoppl_n8/V14_VS_TQ_ISOPPL_REPORT.md`](../reports/v1_4_release/kv_128k_isoppl_n8/V14_VS_TQ_ISOPPL_REPORT.md)
 for the full iso-PPL head-to-head vs TurboQuant.
 
 ## <a id="vllm-integration"></a>Does it work with vLLM / SGLang / TensorRT-LLM / llama.cpp?
@@ -209,15 +232,26 @@ use bf16 weights for clean ablation.
 
 ## <a id="citation"></a>How do I cite KakeyaLattice?
 
+GitHub surfaces a **"Cite this repository"** widget in the sidebar
+that exports BibTeX / APA / CFF from
+[`CITATION.cff`](../CITATION.cff). For manual citation:
+
 ```bibtex
-@techreport{kakeyalattice2026,
-  title  = {KakeyaLattice: Nested-Lattice KV-Cache Compression for Large Language Models},
-  author = {FluffyAIcode},
-  year   = {2026},
-  url    = {https://github.com/FluffyAIcode/LLM-KV--Cache-compress},
-  note   = {Software release v1.5; see reports/paper/kakeyalattice.pdf},
+@software{kakeyalattice2026,
+  title     = {KakeyaLattice: Nested-Lattice KV-Cache Compression for Large Language Models},
+  author    = {Li, Allen},
+  year      = {2026},
+  version   = {1.5.0},
+  month     = apr,
+  license   = {MIT},
+  url       = {https://github.com/FluffyAIcode/LLM-KV--Cache-compress},
+  note      = {See reports/paper/kakeyalattice.pdf for the companion technical report.},
 }
 ```
+
+If you use KakeyaLattice in academic work, please also cite the theory
+lineage we build on (Zamir & Feder 1996; Conway & Sloane 1999) — full
+entries in [`ACKNOWLEDGMENTS.md`](../ACKNOWLEDGMENTS.md#theoretical-foundations).
 
 ## <a id="browser-demo"></a>Where can I try it without installing anything?
 
