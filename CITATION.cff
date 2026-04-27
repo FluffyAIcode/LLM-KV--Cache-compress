@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use KakeyaLattice in academic work or in a production deployment, please cite it using the entry below. Preferred citation is the software release; the companion technical report provides the full derivation."
+title: "KakeyaLattice: Nested-Lattice KV-Cache Compression for Large Language Models"
+abstract: "KakeyaLattice is a drop-in subclass of transformers.DynamicCache that compresses the KV cache of modern transformer language models 2.4x-2.8x at under 1 percent perplexity loss using nested D4 / E8 lattice quantisation of Sylvester-Hadamard-rotated, adaptively L2-scaled key/value vectors. Verified on Qwen3, Llama-3, DeepSeek-R1-Distill, GLM-4-9B-Chat, and Gemma-4-E4B with real vLLM prefill and real FlashAttention bfloat16 forward on NVIDIA H200 at 128k context."
+type: software
+authors:
+  - family-names: Li
+    given-names: Allen
+    email: AllenL329@gmail.com
+    affiliation: "Individual researcher"
+repository-code: "https://github.com/FluffyAIcode/LLM-KV--Cache-compress"
+url: "https://huggingface.co/spaces/FluffyAIcode/LLM-KA-Cache-Compress"
+license: MIT
+version: 1.5.0
+date-released: 2026-04-24
+keywords:
+  - KV cache
+  - kv-cache compression
+  - LLM inference
+  - nested lattice quantization
+  - lattice quantization
+  - D4 lattice
+  - E8 lattice
+  - post-training quantization
+  - Sylvester-Hadamard rotation
+  - transformer inference efficiency
+  - vLLM
+  - HuggingFace transformers
+  - DynamicCache
+preferred-citation:
+  type: software
+  title: "KakeyaLattice: Nested-Lattice KV-Cache Compression for Large Language Models"
+  authors:
+    - family-names: Li
+      given-names: Allen
+      email: AllenL329@gmail.com
+      affiliation: "Individual researcher"
+  repository-code: "https://github.com/FluffyAIcode/LLM-KV--Cache-compress"
+  version: 1.5.0
+  date-released: 2026-04-24
+  license: MIT
+  notes: "See reports/paper/kakeyalattice.pdf in the repository for the full technical report covering the codec construction, iso-PPL benchmarks on four model families, and the DeepSeek-V4-Flash Stage 0.75 audit (reports/v1_5_release/dsv4_stage075/FINDINGS_N8.md)."
