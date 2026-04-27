@@ -1,4 +1,16 @@
-# KakeyaLattice — v1.4 KV-Cache Compression
+# KakeyaLattice — Nested-Lattice KV-Cache Compression for LLMs
+
+> **Drop-in `transformers.DynamicCache` subclass. 2.4×–2.8× KV cache
+> compression at <1 % perplexity loss on Qwen3, Llama-3, DeepSeek,
+> GLM-4, and Gemma — real vLLM prefill on NVIDIA H200.**
+> `pip install kakeyalattice`.
+
+[![PyPI](https://img.shields.io/pypi/v/kakeyalattice.svg)](https://pypi.org/project/kakeyalattice/)
+[![Stars](https://img.shields.io/github/stars/FluffyAIcode/LLM-KV--Cache-compress?style=social)](https://github.com/FluffyAIcode/LLM-KV--Cache-compress/stargazers)
+[![HF Space](https://img.shields.io/badge/🤗%20Space-Live%20demo-blue)](https://huggingface.co/spaces/FluffyAIcode/LLM-KA-Cache-Compress)
+
+⭐ **If this helps your inference stack, please give us a star on GitHub
+above — it's the single fastest way to help others find this work.**
 
 A GPU-native lattice-quantisation codec for transformer KV caches.
 Measured across 4 open-source model families (Qwen3, DeepSeek, Gemma 4,
