@@ -1,0 +1,90 @@
+[config] host=Qwen/Qwen2-0.5B seqlen=2048 batch=1 n_passages=8 q_values=[10, 38] device=cuda
+[shards] found 3 V4 shards; needed: 2, 4, 5
+[load] V4 blocks loaded in 0.91s
+[host] loading Qwen/Qwen2-0.5B
+[codec] v14_d4_Q10: bits=2208
+[codec] v14_d4_Q38: bits=3232
+[codec] v15_e8_Q10: bits=2336
+[codec] v15_e8_Q38: bits=3296
+
+[passage 0/8] running…
+  [passage 0] sliding_window_kv      E8Q38/FP8=0.786  kurt=2.80
+  [passage 0] csa_pool_kv_ratio4     E8Q38/FP8=0.902  kurt=2.48
+  [passage 0] hca_pool_kv_ratio128   E8Q38/FP8=0.966  kurt=1.38
+
+[passage 1/8] running…
+  [passage 1] sliding_window_kv      E8Q38/FP8=0.791  kurt=3.18
+  [passage 1] csa_pool_kv_ratio4     E8Q38/FP8=0.901  kurt=2.88
+  [passage 1] hca_pool_kv_ratio128   E8Q38/FP8=1.060  kurt=1.13
+
+[passage 2/8] running…
+  [passage 2] sliding_window_kv      E8Q38/FP8=0.793  kurt=3.26
+  [passage 2] csa_pool_kv_ratio4     E8Q38/FP8=0.890  kurt=2.89
+  [passage 2] hca_pool_kv_ratio128   E8Q38/FP8=1.072  kurt=1.14
+
+[passage 3/8] running…
+  [passage 3] sliding_window_kv      E8Q38/FP8=0.800  kurt=3.44
+  [passage 3] csa_pool_kv_ratio4     E8Q38/FP8=0.909  kurt=3.14
+  [passage 3] hca_pool_kv_ratio128   E8Q38/FP8=1.011  kurt=1.07
+
+[passage 4/8] running…
+  [passage 4] sliding_window_kv      E8Q38/FP8=0.787  kurt=2.32
+  [passage 4] csa_pool_kv_ratio4     E8Q38/FP8=0.890  kurt=2.20
+  [passage 4] hca_pool_kv_ratio128   E8Q38/FP8=1.123  kurt=1.49
+
+[passage 5/8] running…
+  [passage 5] sliding_window_kv      E8Q38/FP8=0.788  kurt=3.31
+  [passage 5] csa_pool_kv_ratio4     E8Q38/FP8=0.911  kurt=2.97
+  [passage 5] hca_pool_kv_ratio128   E8Q38/FP8=0.952  kurt=1.09
+
+[passage 6/8] running…
+  [passage 6] sliding_window_kv      E8Q38/FP8=0.781  kurt=2.91
+  [passage 6] csa_pool_kv_ratio4     E8Q38/FP8=0.898  kurt=2.67
+  [passage 6] hca_pool_kv_ratio128   E8Q38/FP8=1.065  kurt=1.33
+
+[passage 7/8] running…
+  [passage 7] sliding_window_kv      E8Q38/FP8=0.793  kurt=3.66
+  [passage 7] csa_pool_kv_ratio4     E8Q38/FP8=0.902  kurt=3.35
+  [passage 7] hca_pool_kv_ratio128   E8Q38/FP8=1.096  kurt=1.07
+
+[out] reports/v1_5_release/dsv4_stage075/stage075_n8.json
+
+================================================================================================
+AGGREGATE over n=8 passages — mean ± 95% CI half-width
+================================================================================================
+
+[sliding_window_kv]
+  codec                    bits                 rel-MSE          ratio vs FP8
+  v14_d4_Q10               2208  1.814e-02 ± 6.997e-04        17.260 ± 0.106
+  v14_d4_Q38               3232  1.254e-03 ± 4.780e-05         1.193 ± 0.007
+  v15_e8_Q10               2336  1.198e-02 ± 4.629e-04        11.398 ± 0.071
+  v15_e8_Q38               3296  8.303e-04 ± 3.192e-05         0.790 ± 0.005
+  fp8_per64_baseline       4224  1.051e-03 ± 3.700e-05                     —
+    audit excess_kurtosis_abs                            3.112 ±    0.3517
+    audit isotropy_variance_ratio                        109.7 ±     9.632
+    audit hadamard_post_variance_ratio                   11.61 ±     1.246
+    audit rms_wasserstein2_over_sigma_per_dim           0.3585 ±    0.0181
+
+[csa_pool_kv_ratio4]
+  codec                    bits                 rel-MSE          ratio vs FP8
+  v14_d4_Q10               2208  2.098e-02 ± 8.073e-04        19.689 ± 0.139
+  v14_d4_Q38               3232  1.453e-03 ± 5.535e-05         1.364 ± 0.009
+  v15_e8_Q10               2336  1.395e-02 ± 5.304e-04        13.088 ± 0.091
+  v15_e8_Q38               3296  9.596e-04 ± 3.656e-05         0.900 ± 0.006
+  fp8_per64_baseline       4224  1.066e-03 ± 3.541e-05                     —
+    audit excess_kurtosis_abs                            2.822 ±    0.3048
+    audit isotropy_variance_ratio                    7.324e+05 ± 1.368e+05
+    audit hadamard_post_variance_ratio                   17.22 ±     2.609
+    audit rms_wasserstein2_over_sigma_per_dim           0.4592 ±   0.03361
+
+[hca_pool_kv_ratio128]
+  codec                    bits                 rel-MSE          ratio vs FP8
+  v14_d4_Q10               2208  2.979e-02 ± 2.597e-03        22.605 ± 1.114
+  v14_d4_Q38               3232  2.074e-03 ± 1.819e-04         1.574 ± 0.078
+  v15_e8_Q10               2336  1.989e-02 ± 1.763e-03        15.094 ± 0.743
+  v15_e8_Q38               3296  1.375e-03 ± 1.231e-04         1.043 ± 0.051
+  fp8_per64_baseline       4224  1.317e-03 ± 8.330e-05                     —
+    audit excess_kurtosis_abs                            1.212 ±    0.1354
+    audit isotropy_variance_ratio                    1.125e+07 ± 6.426e+06
+    audit hadamard_post_variance_ratio                   434.2 ±     165.8
+    audit rms_wasserstein2_over_sigma_per_dim           0.9116 ±    0.1235

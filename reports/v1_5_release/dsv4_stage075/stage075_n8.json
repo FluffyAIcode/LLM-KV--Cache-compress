@@ -1,0 +1,1575 @@
+{
+  "generated_at": "2026-04-26T05:43:37Z",
+  "config": {
+    "host_model": "Qwen/Qwen2-0.5B",
+    "seqlen": 2048,
+    "batch_size": 1,
+    "n_passages": 8,
+    "q_values": [
+      10,
+      38
+    ],
+    "enable_e8": true,
+    "simulate_fp8": true,
+    "device": "cuda",
+    "dsv4_config": {
+      "hidden_size": 4096,
+      "head_dim": 512,
+      "qk_rope_head_dim": 64,
+      "v4_layers_used": {
+        "0": "SWA",
+        "2": "c4a",
+        "3": "c128a"
+      },
+      "weight_source": "deepseek-ai/DeepSeek-V4-Flash safetensors shards 2/4/5",
+      "trained_weights": true
+    },
+    "passages_sha_first64": [
+      "The history of topology is deeply intertwined with the emergence",
+      "The Italian Renaissance emerged from city-state prosperity in th",
+      "The central dogma of molecular biology describes the unidirectio",
+      "Modern macroeconomic theory distinguishes between short-run dema",
+      "Quantum mechanics emerged in the early twentieth century to reso",
+      "Generative grammar, pioneered by Noam Chomsky in the 1950s, trea",
+      "Western tonal harmony rests on the hierarchical organisation of ",
+      "Reinforced-concrete design combines the compressive strength of "
+    ]
+  },
+  "per_passage": [
+    {
+      "passage_id": 0,
+      "wall_time_sec": 0.46641878690570593,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.799698829650879,
+            "isotropy_variance_ratio": 112.38246154785156,
+            "hadamard_post_variance_ratio": 10.395814895629883,
+            "rms_wasserstein2_over_sigma_per_dim": 0.3416070342063904,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.017546875402331352,
+              "cos_sim": 0.9946945905685425
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.001213100622408092,
+              "cos_sim": 0.999630331993103
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.01158190704882145,
+              "cos_sim": 0.9964872002601624
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008033818448893726,
+              "cos_sim": 0.9997552037239075
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010225395672023296,
+              "cos_sim": 0.999688446521759
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.481017827987671,
+            "isotropy_variance_ratio": 866783.875,
+            "hadamard_post_variance_ratio": 16.22793197631836,
+            "rms_wasserstein2_over_sigma_per_dim": 0.42722082138061523,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.020266558974981308,
+              "cos_sim": 0.9941473603248596
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0014058776432648301,
+              "cos_sim": 0.9995911121368408
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.013466115109622478,
+              "cos_sim": 0.9961066246032715
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0009280595113523304,
+              "cos_sim": 0.999730110168457
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010288174962624907,
+              "cos_sim": 0.9997014403343201
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.3763542175292969,
+            "isotropy_variance_ratio": 10419683.0,
+            "hadamard_post_variance_ratio": 689.2279052734375,
+            "rms_wasserstein2_over_sigma_per_dim": 1.0420786142349243,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.02562492899596691,
+              "cos_sim": 0.9949771165847778
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0017526488518342376,
+              "cos_sim": 0.9996527433395386
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.0170682854950428,
+              "cos_sim": 0.9966224431991577
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0011785670649260283,
+              "cos_sim": 0.9997665882110596
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0012206794926896691,
+              "cos_sim": 0.9997594356536865
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 1,
+      "wall_time_sec": 0.01610786933451891,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.1797332763671875,
+            "isotropy_variance_ratio": 101.30467987060547,
+            "hadamard_post_variance_ratio": 10.263928413391113,
+            "rms_wasserstein2_over_sigma_per_dim": 0.35519272089004517,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.018202250823378563,
+              "cos_sim": 0.9946555495262146
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0012577229645103216,
+              "cos_sim": 0.999627947807312
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.012011061422526836,
+              "cos_sim": 0.9964630603790283
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008326535462401807,
+              "cos_sim": 0.9997536540031433
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010522939264774323,
+              "cos_sim": 0.9996886849403381
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.8785319328308105,
+            "isotropy_variance_ratio": 770093.6875,
+            "hadamard_post_variance_ratio": 19.78571128845215,
+            "rms_wasserstein2_over_sigma_per_dim": 0.4605086147785187,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.021129433065652847,
+              "cos_sim": 0.994206964969635
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0014610752696171403,
+              "cos_sim": 0.9995965957641602
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.014068841002881527,
+              "cos_sim": 0.996135950088501
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0009673842578195035,
+              "cos_sim": 0.9997328519821167
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.00107414904050529,
+              "cos_sim": 0.999704122543335
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.1286072731018066,
+            "isotropy_variance_ratio": 5855119.0,
+            "hadamard_post_variance_ratio": 245.13803100585938,
+            "rms_wasserstein2_over_sigma_per_dim": 0.8549188375473022,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.032340724021196365,
+              "cos_sim": 0.994391918182373
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0022563759703189135,
+              "cos_sim": 0.9996042251586914
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.02163594216108322,
+              "cos_sim": 0.9962077736854553
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0014939772663637996,
+              "cos_sim": 0.9997379779815674
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0014098555548116565,
+              "cos_sim": 0.999754786491394
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 2,
+      "wall_time_sec": 0.015418611466884613,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.263896942138672,
+            "isotropy_variance_ratio": 114.89510345458984,
+            "hadamard_post_variance_ratio": 12.39421558380127,
+            "rms_wasserstein2_over_sigma_per_dim": 0.35409730672836304,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.018148770555853844,
+              "cos_sim": 0.9946390390396118
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0012552065309137106,
+              "cos_sim": 0.9996263980865479
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.011993114836513996,
+              "cos_sim": 0.9964460730552673
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.000830948178190738,
+              "cos_sim": 0.9997526407241821
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010473649017512798,
+              "cos_sim": 0.9996883869171143
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.8910789489746094,
+            "isotropy_variance_ratio": 554255.3125,
+            "hadamard_post_variance_ratio": 17.5070743560791,
+            "rms_wasserstein2_over_sigma_per_dim": 0.4998040497303009,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.020474709570407867,
+              "cos_sim": 0.9942305684089661
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0014143801527097821,
+              "cos_sim": 0.9995989799499512
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.01354936882853508,
+              "cos_sim": 0.9961797595024109
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0009326316067017615,
+              "cos_sim": 0.9997354745864868
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010473495349287987,
+              "cos_sim": 0.9997039437294006
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.1422295570373535,
+            "isotropy_variance_ratio": 27408892.0,
+            "hadamard_post_variance_ratio": 609.6167602539062,
+            "rms_wasserstein2_over_sigma_per_dim": 0.9145137667655945,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.02955535799264908,
+              "cos_sim": 0.9944604635238647
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.002068618079647422,
+              "cos_sim": 0.9996082782745361
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.01957390271127224,
+              "cos_sim": 0.9963034391403198
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0013538640923798084,
+              "cos_sim": 0.9997438192367554
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.001262873294763267,
+              "cos_sim": 0.9997611045837402
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 3,
+      "wall_time_sec": 0.01709304377436638,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.441643714904785,
+            "isotropy_variance_ratio": 111.76399993896484,
+            "hadamard_post_variance_ratio": 12.555041313171387,
+            "rms_wasserstein2_over_sigma_per_dim": 0.3843870460987091,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.018882086500525475,
+              "cos_sim": 0.9946000576019287
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.001304773148149252,
+              "cos_sim": 0.9996239542961121
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.012464288622140884,
+              "cos_sim": 0.9964240789413452
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008634764817543328,
+              "cos_sim": 0.999751091003418
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010799953015521169,
+              "cos_sim": 0.9996887445449829
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.136490821838379,
+            "isotropy_variance_ratio": 983182.5625,
+            "hadamard_post_variance_ratio": 22.728757858276367,
+            "rms_wasserstein2_over_sigma_per_dim": 0.5228063464164734,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.021457625553011894,
+              "cos_sim": 0.9941619634628296
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0014831610023975372,
+              "cos_sim": 0.9995937347412109
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.014255829155445099,
+              "cos_sim": 0.9961178302764893
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.000978713040240109,
+              "cos_sim": 0.9997318983078003
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010765447514131665,
+              "cos_sim": 0.9997056722640991
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.0696649551391602,
+            "isotropy_variance_ratio": 12650492.0,
+            "hadamard_post_variance_ratio": 195.86167907714844,
+            "rms_wasserstein2_over_sigma_per_dim": 0.6444050669670105,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.025661412626504898,
+              "cos_sim": 0.9945605993270874
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.001803591032512486,
+              "cos_sim": 0.999613881111145
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.017104310914874077,
+              "cos_sim": 0.9963556528091431
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0011807185364887118,
+              "cos_sim": 0.9997473359107971
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0011678201844915748,
+              "cos_sim": 0.9997509717941284
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 4,
+      "wall_time_sec": 0.015574836172163486,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.323552131652832,
+            "isotropy_variance_ratio": 85.54820251464844,
+            "hadamard_post_variance_ratio": 9.426308631896973,
+            "rms_wasserstein2_over_sigma_per_dim": 0.3208625912666321,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.016661562025547028,
+              "cos_sim": 0.9947084784507751
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0011531615164130926,
+              "cos_sim": 0.9996309280395508
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.011006120592355728,
+              "cos_sim": 0.996492862701416
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0007627581362612545,
+              "cos_sim": 0.9997559785842896
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0009686773410066962,
+              "cos_sim": 0.9996901154518127
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.203956365585327,
+            "isotropy_variance_ratio": 526987.6875,
+            "hadamard_post_variance_ratio": 15.33621597290039,
+            "rms_wasserstein2_over_sigma_per_dim": 0.39361098408699036,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.01951461471617222,
+              "cos_sim": 0.9942178726196289
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.001356622320599854,
+              "cos_sim": 0.9995952248573303
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.013022531755268574,
+              "cos_sim": 0.9961386322975159
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008942409767769277,
+              "cos_sim": 0.9997332096099854
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010044501395896077,
+              "cos_sim": 0.999701201915741
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.4889719486236572,
+            "isotropy_variance_ratio": 1833383.625,
+            "hadamard_post_variance_ratio": 462.86407470703125,
+            "rms_wasserstein2_over_sigma_per_dim": 1.1407948732376099,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.034176770597696304,
+              "cos_sim": 0.9944116473197937
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.002380924765020609,
+              "cos_sim": 0.9996076226234436
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.022964725270867348,
+              "cos_sim": 0.9962253570556641
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0015872935764491558,
+              "cos_sim": 0.999738335609436
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0014131374191492796,
+              "cos_sim": 0.9997684359550476
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 5,
+      "wall_time_sec": 0.015461861155927181,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.307788848876953,
+            "isotropy_variance_ratio": 122.25059509277344,
+            "hadamard_post_variance_ratio": 13.979297637939453,
+            "rms_wasserstein2_over_sigma_per_dim": 0.36593902111053467,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.018724652007222176,
+              "cos_sim": 0.9946839213371277
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.001293432549573481,
+              "cos_sim": 0.9996298551559448
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.012364376336336136,
+              "cos_sim": 0.9964785575866699
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008563544251956046,
+              "cos_sim": 0.9997549653053284
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010866319062188268,
+              "cos_sim": 0.9996892213821411
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.9670772552490234,
+            "isotropy_variance_ratio": 729873.3125,
+            "hadamard_post_variance_ratio": 14.477258682250977,
+            "rms_wasserstein2_over_sigma_per_dim": 0.45885923504829407,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.02208707295358181,
+              "cos_sim": 0.9941292405128479
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0015301689272746444,
+              "cos_sim": 0.9995905160903931
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.014688072726130486,
+              "cos_sim": 0.9960923194885254
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.00101224344689399,
+              "cos_sim": 0.9997290968894958
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0011111166095361114,
+              "cos_sim": 0.9997036457061768
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.0899804830551147,
+            "isotropy_variance_ratio": 13968080.0,
+            "hadamard_post_variance_ratio": 329.85772705078125,
+            "rms_wasserstein2_over_sigma_per_dim": 0.9301213026046753,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.029217328876256943,
+              "cos_sim": 0.9950988292694092
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0020554938819259405,
+              "cos_sim": 0.9996516704559326
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.01959911547601223,
+              "cos_sim": 0.9966931343078613
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0013594782212749124,
+              "cos_sim": 0.999769926071167
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0014282104093581438,
+              "cos_sim": 0.9997589588165283
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 6,
+      "wall_time_sec": 0.015431362204253674,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.9122259616851807,
+            "isotropy_variance_ratio": 118.4281997680664,
+            "hadamard_post_variance_ratio": 11.657437324523926,
+            "rms_wasserstein2_over_sigma_per_dim": 0.358871728181839,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.017700258642435074,
+              "cos_sim": 0.9947431087493896
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0012244918616488576,
+              "cos_sim": 0.9996336102485657
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.011684057302772999,
+              "cos_sim": 0.9965190887451172
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008104208973236382,
+              "cos_sim": 0.9997574687004089
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010372463148087263,
+              "cos_sim": 0.9996895790100098
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 2.6660139560699463,
+            "isotropy_variance_ratio": 837691.875,
+            "hadamard_post_variance_ratio": 13.087885856628418,
+            "rms_wasserstein2_over_sigma_per_dim": 0.4439104497432709,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.020555738359689713,
+              "cos_sim": 0.9941933155059814
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0014238564763218164,
+              "cos_sim": 0.9995953440666199
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.013667354360222816,
+              "cos_sim": 0.9961379170417786
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.000941650418099016,
+              "cos_sim": 0.9997323751449585
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0010484206723049283,
+              "cos_sim": 0.9997028112411499
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.3282850980758667,
+            "isotropy_variance_ratio": 11523444.0,
+            "hadamard_post_variance_ratio": 280.3143615722656,
+            "rms_wasserstein2_over_sigma_per_dim": 0.8253528475761414,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.029348477721214294,
+              "cos_sim": 0.9945496320724487
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.002042320091277361,
+              "cos_sim": 0.9996178150177002
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.019687123596668243,
+              "cos_sim": 0.9963223338127136
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0013494068989530206,
+              "cos_sim": 0.9997472763061523
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0012673481833189726,
+              "cos_sim": 0.9997631311416626
+            }
+          }
+        }
+      ]
+    },
+    {
+      "passage_id": 7,
+      "wall_time_sec": 0.015407491475343704,
+      "results": [
+        {
+          "stream": "sliding_window_kv",
+          "shape": [
+            1,
+            2048,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.6640617847442627,
+            "isotropy_variance_ratio": 111.40986633300781,
+            "hadamard_post_variance_ratio": 12.20547866821289,
+            "rms_wasserstein2_over_sigma_per_dim": 0.3871803879737854,
+            "num_vectors": 2048,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.019268782809376717,
+              "cos_sim": 0.9946690797805786
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0013315505348145962,
+              "cos_sim": 0.9996286630630493
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.012733160518109798,
+              "cos_sim": 0.9964654445648193
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0008825691184028983,
+              "cos_sim": 0.9997538328170776
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.001112668076530099,
+              "cos_sim": 0.9996896982192993
+            }
+          }
+        },
+        {
+          "stream": "csa_pool_kv_ratio4",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 3.350904703140259,
+            "isotropy_variance_ratio": 590625.0,
+            "hadamard_post_variance_ratio": 18.635723114013672,
+            "rms_wasserstein2_over_sigma_per_dim": 0.46678173542022705,
+            "num_vectors": 512,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.02237890288233757,
+              "cos_sim": 0.9941674470901489
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.0015524945920333266,
+              "cos_sim": 0.9995924234390259
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.014861050061881542,
+              "cos_sim": 0.9961200952529907
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0010217925300821662,
+              "cos_sim": 0.999731719493866
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0011331996647641063,
+              "cos_sim": 0.9997032880783081
+            }
+          }
+        },
+        {
+          "stream": "hca_pool_kv_ratio128",
+          "shape": [
+            1,
+            16,
+            512
+          ],
+          "dtype": "torch.bfloat16",
+          "audit": {
+            "excess_kurtosis_abs": 1.072939395904541,
+            "isotropy_variance_ratio": 6302012.5,
+            "hadamard_post_variance_ratio": 660.8864135742188,
+            "rms_wasserstein2_over_sigma_per_dim": 0.9407779574394226,
+            "num_vectors": 16,
+            "D": 512
+          },
+          "codecs": {
+            "v14_d4_Q10": {
+              "bits_per_vector": 2208,
+              "rel_mse": 0.03239401429891586,
+              "cos_sim": 0.9943537712097168
+            },
+            "v14_d4_Q38": {
+              "bits_per_vector": 3232,
+              "rel_mse": 0.00223497929982841,
+              "cos_sim": 0.9996063113212585
+            },
+            "v15_e8_Q10": {
+              "bits_per_vector": 2336,
+              "rel_mse": 0.02152401953935623,
+              "cos_sim": 0.9962072372436523
+            },
+            "v15_e8_Q38": {
+              "bits_per_vector": 3296,
+              "rel_mse": 0.0014964031288400292,
+              "cos_sim": 0.9997364282608032
+            },
+            "fp8_per64_baseline": {
+              "bits_per_vector": 4224,
+              "rel_mse": 0.0013650893233716488,
+              "cos_sim": 0.9997595548629761
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "aggregate_by_stream": {
+    "sliding_window_kv": {
+      "audit": {
+        "excess_kurtosis_abs": {
+          "mean": 3.111575186252594,
+          "std": 0.4206323859564307,
+          "ci95_hw": 0.3517133547770749,
+          "n": 8
+        },
+        "isotropy_variance_ratio": {
+          "mean": 109.74788856506348,
+          "std": 11.519174835213784,
+          "ci95_hw": 9.631801451389789,
+          "n": 8
+        },
+        "hadamard_post_variance_ratio": {
+          "mean": 11.609690308570862,
+          "std": 1.4896392187604632,
+          "ci95_hw": 1.2455674468489735,
+          "n": 8
+        },
+        "rms_wasserstein2_over_sigma_per_dim": {
+          "mean": 0.35851722955703735,
+          "std": 0.021647986659035782,
+          "ci95_hw": 0.018101045630869436,
+          "n": 8
+        },
+        "num_vectors": {
+          "mean": 2048.0,
+          "std": 0.0,
+          "ci95_hw": 0.0,
+          "n": 8
+        },
+        "D": {
+          "mean": 512.0,
+          "std": 0.0,
+          "ci95_hw": 0.0,
+          "n": 8
+        }
+      },
+      "codecs": {
+        "v14_d4_Q10": {
+          "bits_per_vector": 2208,
+          "rel_mse": {
+            "mean": 0.01814190484583378,
+            "std": 0.0008367908194775012,
+            "ci95_hw": 0.0006996857973641013,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9946742281317711,
+            "std": 4.398237703310729e-05,
+            "ci95_hw": 3.6776030314952115e-05,
+            "n": 8
+          }
+        },
+        "v14_d4_Q38": {
+          "bits_per_vector": 3232,
+          "rel_mse": {
+            "mean": 0.0012541799660539255,
+            "std": 5.716376244326441e-05,
+            "ci95_hw": 4.779769540304202e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9996289610862732,
+            "std": 2.9499353197924622e-06,
+            "ci95_hw": 2.4665995352223266e-06,
+            "n": 8
+          }
+        },
+        "v15_e8_Q10": {
+          "bits_per_vector": 2336,
+          "rel_mse": {
+            "mean": 0.011979760834947228,
+            "std": 0.0005535817058380716,
+            "ci95_hw": 0.0004628794296492694,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9964720457792282,
+            "std": 2.9321275046363312e-05,
+            "ci95_hw": 2.451709463466269e-05,
+            "n": 8
+          }
+        },
+        "v15_e8_Q38": {
+          "bits_per_vector": 3296,
+          "rel_mse": {
+            "mean": 0.0008303203285322525,
+            "std": 3.817103972618013e-05,
+            "ci95_hw": 3.1916858724269526e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9997543543577194,
+            "std": 1.9921433042035233e-06,
+            "ci95_hw": 1.6657381317060144e-06,
+            "n": 8
+          }
+        },
+        "fp8_per64_baseline": {
+          "bits_per_vector": 4224,
+          "rel_mse": {
+            "mean": 0.0010509271669434384,
+            "std": 4.424661074781494e-05,
+            "ci95_hw": 3.6996970331336544e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9996891096234322,
+            "std": 6.399325689457058e-07,
+            "ci95_hw": 5.350820292718001e-07,
+            "n": 8
+          }
+        }
+      },
+      "ratios_vs_fp8": {
+        "v14_d4_Q10": {
+          "mean": 17.260468671162812,
+          "std": 0.12638338503870883,
+          "ci95_hw": 0.10567594370788959,
+          "n": 8
+        },
+        "v14_d4_Q38": {
+          "mean": 1.1932693828978758,
+          "std": 0.008368134299107169,
+          "ci95_hw": 0.006997047031630478,
+          "n": 8
+        },
+        "v15_e8_Q10": {
+          "mean": 11.397690929158168,
+          "std": 0.08468256942231976,
+          "ci95_hw": 0.07080764957016805,
+          "n": 8
+        },
+        "v15_e8_Q38": {
+          "mean": 0.7899826095204807,
+          "std": 0.0055835031257427245,
+          "ci95_hw": 0.004668667181434451,
+          "n": 8
+        }
+      }
+    },
+    "csa_pool_kv_ratio4": {
+      "audit": {
+        "excess_kurtosis_abs": {
+          "mean": 2.821883976459503,
+          "std": 0.3645424032784262,
+          "ci95_hw": 0.3048135043715658,
+          "n": 8
+        },
+        "isotropy_variance_ratio": {
+          "mean": 732436.6640625,
+          "std": 163660.96679425446,
+          "ci95_hw": 136845.7341827906,
+          "n": 8
+        },
+        "hadamard_post_variance_ratio": {
+          "mean": 17.22331988811493,
+          "std": 3.1201126687379364,
+          "ci95_hw": 2.608893966899495,
+          "n": 8
+        },
+        "rms_wasserstein2_over_sigma_per_dim": {
+          "mean": 0.4591877795755863,
+          "std": 0.04019972190784546,
+          "ci95_hw": 0.03361314897607123,
+          "n": 8
+        },
+        "num_vectors": {
+          "mean": 512.0,
+          "std": 0.0,
+          "ci95_hw": 0.0,
+          "n": 8
+        },
+        "D": {
+          "mean": 512.0,
+          "std": 0.0,
+          "ci95_hw": 0.0,
+          "n": 8
+        }
+      },
+      "codecs": {
+        "v14_d4_Q10": {
+          "bits_per_vector": 2208,
+          "rel_mse": {
+            "mean": 0.020983082009479403,
+            "std": 0.000965445027096721,
+            "ci95_hw": 0.0008072604979308548,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9941818416118622,
+            "std": 3.5843998230245624e-05,
+            "ci95_hw": 2.997109420739906e-05,
+            "n": 8
+          }
+        },
+        "v14_d4_Q38": {
+          "bits_per_vector": 3232,
+          "rel_mse": {
+            "mean": 0.0014534545480273664,
+            "std": 6.620042240075887e-05,
+            "ci95_hw": 5.535373268344118e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9995942413806915,
+            "std": 2.863859859136569e-06,
+            "ci95_hw": 2.3946272143977423e-06,
+            "n": 8
+          }
+        },
+        "v15_e8_Q10": {
+          "bits_per_vector": 2336,
+          "rel_mse": {
+            "mean": 0.01394739537499845,
+            "std": 0.0006343838150275402,
+            "ci95_hw": 0.0005304424177712424,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9961286410689354,
+            "std": 2.6312057247085326e-05,
+            "ci95_hw": 2.2000925830797514e-05,
+            "n": 8
+          }
+        },
+        "v15_e8_Q38": {
+          "bits_per_vector": 3296,
+          "rel_mse": {
+            "mean": 0.0009595894734957255,
+            "std": 4.372189947804871e-05,
+            "ci95_hw": 3.655823102561429e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9997320920228958,
+            "std": 1.94287371790488e-06,
+            "ci95_hw": 1.6245411814374983e-06,
+            "n": 8
+          }
+        },
+        "fp8_per64_baseline": {
+          "bits_per_vector": 4224,
+          "rel_mse": {
+            "mean": 0.0010655059886630625,
+            "std": 4.235014956402639e-05,
+            "ci95_hw": 3.54112371652178e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9997032657265663,
+            "std": 1.46033551864484e-06,
+            "ci95_hw": 1.2210650475588848e-06,
+            "n": 8
+          }
+        }
+      },
+      "ratios_vs_fp8": {
+        "v14_d4_Q10": {
+          "mean": 19.68899782259195,
+          "std": 0.16615165303374477,
+          "ci95_hw": 0.13892833086872186,
+          "n": 8
+        },
+        "v14_d4_Q38": {
+          "mean": 1.363840123703185,
+          "std": 0.010791025257801144,
+          "ci95_hw": 0.009022956438020237,
+          "n": 8
+        },
+        "v15_e8_Q10": {
+          "mean": 13.087502694758037,
+          "std": 0.10855524729184955,
+          "ci95_hw": 0.09076887914100393,
+          "n": 8
+        },
+        "v15_e8_Q38": {
+          "mean": 0.9004255962636896,
+          "std": 0.0075529871558369524,
+          "ci95_hw": 0.006315458675696769,
+          "n": 8
+        }
+      }
+    },
+    "hca_pool_kv_ratio128": {
+      "audit": {
+        "excess_kurtosis_abs": {
+          "mean": 1.2121291160583496,
+          "std": 0.16193296697091758,
+          "ci95_hw": 0.13540086061810278,
+          "n": 8
+        },
+        "isotropy_variance_ratio": {
+          "mean": 11245138.265625,
+          "std": 7685637.082100419,
+          "ci95_hw": 6426374.411466787,
+          "n": 8
+        },
+        "hadamard_post_variance_ratio": {
+          "mean": 434.22086906433105,
+          "std": 198.25535878858332,
+          "ci95_hw": 165.7719654265705,
+          "n": 8
+        },
+        "rms_wasserstein2_over_sigma_per_dim": {
+          "mean": 0.9116204082965851,
+          "std": 0.14774606350234554,
+          "ci95_hw": 0.12353842781591994,
+          "n": 8
+        },
+        "num_vectors": {
+          "mean": 16.0,
+          "std": 0.0,
+          "ci95_hw": 0.0,
+          "n": 8
+        },
+        "D": {
+          "mean": 512.0,
+          "std": 0.0,
+          "ci95_hw": 0.0,
+          "n": 8
+        }
+      },
+      "codecs": {
+        "v14_d4_Q10": {
+          "bits_per_vector": 2208,
+          "rel_mse": {
+            "mean": 0.029789876891300082,
+            "std": 0.0031053373600096177,
+            "ci95_hw": 0.0025965395368218206,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9946004971861839,
+            "std": 0.00028132562283313573,
+            "ci95_hw": 0.00023523147977873746,
+            "n": 8
+          }
+        },
+        "v14_d4_Q38": {
+          "bits_per_vector": 3232,
+          "rel_mse": {
+            "mean": 0.0020743689965456724,
+            "std": 0.0002174986633302129,
+            "ci95_hw": 0.00018186232704231754,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9996203184127808,
+            "std": 2.015430390144935e-05,
+            "ci95_hw": 1.6852097163792027e-05,
+            "n": 8
+          }
+        },
+        "v15_e8_Q10": {
+          "bits_per_vector": 2336,
+          "rel_mse": {
+            "mean": 0.01989467814564705,
+            "std": 0.00210848357355042,
+            "ci95_hw": 0.0017630164863781717,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9963671714067459,
+            "std": 0.00018849716590052043,
+            "ci95_hw": 0.00015761261566699707,
+            "n": 8
+          }
+        },
+        "v15_e8_Q38": {
+          "bits_per_vector": 3296,
+          "rel_mse": {
+            "mean": 0.0013749635982094333,
+            "std": 0.00014718147480342856,
+            "ci95_hw": 0.0001230663448475251,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9997484609484673,
+            "std": 1.2932596548127007e-05,
+            "ci95_hw": 1.0813639343479632e-05,
+            "n": 8
+          }
+        },
+        "fp8_per64_baseline": {
+          "bits_per_vector": 4224,
+          "rel_mse": {
+            "mean": 0.0013168767327442765,
+            "std": 9.962216809858628e-05,
+            "ci95_hw": 8.329945130698702e-05,
+            "n": 8
+          },
+          "cos_sim": {
+            "mean": 0.9997595474123955,
+            "std": 5.221393855980777e-06,
+            "ci95_hw": 4.3658881508225685e-06,
+            "n": 8
+          }
+        }
+      },
+      "ratios_vs_fp8": {
+        "v14_d4_Q10": {
+          "mean": 22.604807979228458,
+          "std": 1.3324791369794646,
+          "ci95_hw": 1.1141574521702475,
+          "n": 8
+        },
+        "v14_d4_Q38": {
+          "mean": 1.5739315443343278,
+          "std": 0.09307020908690444,
+          "ci95_hw": 0.07782100608665346,
+          "n": 8
+        },
+        "v15_e8_Q10": {
+          "mean": 15.093749223555076,
+          "std": 0.8887637802879068,
+          "ci95_hw": 0.7431431844189788,
+          "n": 8
+        },
+        "v15_e8_Q38": {
+          "mean": 1.0430402372519307,
+          "std": 0.06117175216984147,
+          "ci95_hw": 0.05114899111804311,
+          "n": 8
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,94 @@
+[config] host=Qwen/Qwen2-0.5B seqlen=2048 batch=1 n_passages=8 q_values=[38, 44, 50, 56, 62, 68, 76] device=cuda
+[shards] found 3 V4 shards
+[load] V4 blocks loaded in 1.02s
+[codec] E8 Q= 38: bits/vec=3296  CR vs FP8= 1.28  CR vs bf16= 2.49
+[codec] E8 Q= 44: bits/vec=3360  CR vs FP8= 1.26  CR vs bf16= 2.44
+[codec] E8 Q= 50: bits/vec=3488  CR vs FP8= 1.21  CR vs bf16= 2.35
+[codec] E8 Q= 56: bits/vec=3552  CR vs FP8= 1.19  CR vs bf16= 2.31
+[codec] E8 Q= 62: bits/vec=3616  CR vs FP8= 1.17  CR vs bf16= 2.27
+[codec] E8 Q= 68: bits/vec=3680  CR vs FP8= 1.15  CR vs bf16= 2.23
+[codec] E8 Q= 76: bits/vec=3808  CR vs FP8= 1.11  CR vs bf16= 2.15
+
+[passage 0/8]
+  wall=0.46s
+
+[passage 1/8]
+  wall=0.02s
+
+[passage 2/8]
+  wall=0.02s
+
+[passage 3/8]
+  wall=0.02s
+
+[passage 4/8]
+  wall=0.02s
+
+[passage 5/8]
+  wall=0.02s
+
+[passage 6/8]
+  wall=0.02s
+
+[passage 7/8]
+  wall=0.02s
+
+[out] reports/v1_5_release/dsv4_stage075/stage075_qsweep_fine_n8.json
+
+====================================================================================================
+MAX USABLE COMPRESSION — n=8 passages, 95 % CI
+====================================================================================================
+
+[sliding_window_kv]  FP8 baseline rel-MSE = 1.051e-03 ± 3.700e-05
+     Q  bits  CR_fp8  CR_bf16           E8 rel-MSE (mean±CI)   E8/FP8
+    38  3296   1.282    2.485     8.303e-04 ± 3.19e-05   0.790x  [A]
+    44  3360   1.257    2.438     6.194e-04 ± 2.38e-05   0.589x  [A]
+    50  3488   1.211    2.349     4.794e-04 ± 1.84e-05   0.456x  [A]
+    56  3552   1.189    2.306     3.824e-04 ± 1.47e-05   0.364x  [A]
+    62  3616   1.168    2.265     3.119e-04 ± 1.20e-05   0.297x  [A]
+    68  3680   1.148    2.226     2.593e-04 ± 1.00e-05   0.247x  [A]
+    76  3808   1.109    2.151     2.075e-04 ± 7.99e-06   0.197x  [A]
+  Thresholds (point estimate):
+    A_no_regression_point           Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    B_plus5pct_point                Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    C_plus20pct_point               Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+  Thresholds (CI95-conservative):
+    A_no_regression_ci95_conservative   Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    B_plus5pct_ci95_conservative        Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    C_plus20pct_ci95_conservative       Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+
+[csa_pool_kv_ratio4]  FP8 baseline rel-MSE = 1.066e-03 ± 3.541e-05
+     Q  bits  CR_fp8  CR_bf16           E8 rel-MSE (mean±CI)   E8/FP8
+    38  3296   1.282    2.485     9.596e-04 ± 3.66e-05   0.901x  [A]
+    44  3360   1.257    2.438     7.158e-04 ± 2.74e-05   0.672x  [A]
+    50  3488   1.211    2.349     5.541e-04 ± 2.11e-05   0.520x  [A]
+    56  3552   1.189    2.306     4.421e-04 ± 1.70e-05   0.415x  [A]
+    62  3616   1.168    2.265     3.604e-04 ± 1.39e-05   0.338x  [A]
+    68  3680   1.148    2.226     2.999e-04 ± 1.16e-05   0.282x  [A]
+    76  3808   1.109    2.151     2.402e-04 ± 9.09e-06   0.225x  [A]
+  Thresholds (point estimate):
+    A_no_regression_point           Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    B_plus5pct_point                Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    C_plus20pct_point               Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+  Thresholds (CI95-conservative):
+    A_no_regression_ci95_conservative   Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    B_plus5pct_ci95_conservative        Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    C_plus20pct_ci95_conservative       Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+
+[hca_pool_kv_ratio128]  FP8 baseline rel-MSE = 1.317e-03 ± 8.330e-05
+     Q  bits  CR_fp8  CR_bf16           E8 rel-MSE (mean±CI)   E8/FP8
+    38  3296   1.282    2.485     1.375e-03 ± 1.23e-04   1.044x  [B]
+    44  3360   1.257    2.438     1.020e-03 ± 9.02e-05   0.775x  [A]
+    50  3488   1.211    2.349     7.934e-04 ± 7.19e-05   0.602x  [A]
+    56  3552   1.189    2.306     6.355e-04 ± 5.77e-05   0.483x  [A]
+    62  3616   1.168    2.265     5.173e-04 ± 4.63e-05   0.393x  [A]
+    68  3680   1.148    2.226     4.281e-04 ± 3.90e-05   0.325x  [A]
+    76  3808   1.109    2.151     3.410e-04 ± 3.00e-05   0.259x  [A]
+  Thresholds (point estimate):
+    A_no_regression_point           Q>= 44  bits=3360  CR vs FP8=1.26x  CR vs bf16=2.44x  saving vs FP8=20.5%
+    B_plus5pct_point                Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+    C_plus20pct_point               Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%
+  Thresholds (CI95-conservative):
+    A_no_regression_ci95_conservative   Q>= 44  bits=3360  CR vs FP8=1.26x  CR vs bf16=2.44x  saving vs FP8=20.5%
+    B_plus5pct_ci95_conservative        Q>= 44  bits=3360  CR vs FP8=1.26x  CR vs bf16=2.44x  saving vs FP8=20.5%
+    C_plus20pct_ci95_conservative       Q>= 38  bits=3296  CR vs FP8=1.28x  CR vs bf16=2.49x  saving vs FP8=22.0%

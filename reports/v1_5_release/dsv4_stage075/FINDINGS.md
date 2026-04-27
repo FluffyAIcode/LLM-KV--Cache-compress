@@ -1,5 +1,18 @@
 # Stage 0.75 Findings — DeepSeek-V4-Flash with **trained** weights
 
+> **Canonical n=8 one-liner** (supersedes this file's n=1 TL;DR):
+> *KakeyaLattice E8 Q=38 on DeepSeek-V4-Flash KV cache: −22 % bits per
+> vector at matched or better reconstruction quality on 23 / 43
+> attention layers, neutral on the remaining 20. Measured on 2 × H200,
+> n = 8 passages, Student-t 95 % CI.*
+>
+> **See [`FINDINGS_N8.md`](FINDINGS_N8.md)** — n=8 passage audit
+> (2026-04-26 H200) that closes half of Caveat 1 below with Student-t
+> 95 % confidence intervals, and includes tweet / HN / FAQ / paper
+> phrasings. The n=8 numbers supersede the n=1 tables in this file:
+> SWA and CSA wins confirmed to ±1 %, HCA "marginal win" corrected to
+> "statistically tied with FP8".
+
 **Run date**: 2026-04-25
 **Hardware**: NVIDIA H200 (141 GiB HBM), vast.ai
 **V4 weights**: `deepseek-ai/DeepSeek-V4-Flash` safetensors shards 2, 4, 5 (one representative layer of each attention type, FP8-E4M3 dequantised via E8M0 block scales to FP32)
