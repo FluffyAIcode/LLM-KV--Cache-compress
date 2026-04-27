@@ -1,8 +1,10 @@
-# KakeyaLattice — Nested-Lattice KV-Cache Compression for LLMs
+# KakeyaLattice — Discrete Kakeya Cover for LLM KV-Cache Compression
 
-> **Drop-in `transformers.DynamicCache` subclass. 2.4×–2.8× KV cache
-> compression at <1 % perplexity loss on Qwen3, Llama-3, DeepSeek,
-> GLM-4, and Gemma — real vLLM prefill on NVIDIA H200.**
+> **A D4 / E8 nested-lattice codec that realises a discrete *Kakeya
+> cover* over the direction sphere of transformer KV activations.
+> 2.4×–2.8× compression at <1 % perplexity loss on Qwen3, Llama-3,
+> DeepSeek, GLM-4, and Gemma — real vLLM prefill on NVIDIA H200.
+> Drop-in `transformers.DynamicCache` subclass.**
 > `pip install kakeyalattice`.
 
 [![PyPI](https://img.shields.io/pypi/v/kakeyalattice.svg)](https://pypi.org/project/kakeyalattice/)
@@ -21,6 +23,60 @@ deployment-relevant quality thresholds (|Δppl| ≤ 2 %).
 
 [Release notes, full comparison tables, and reproducibility commands
 are on the v1.4 Release page.](https://github.com/FluffyAIcode/LLM-KV--Cache-compress/releases/tag/v1.4)
+
+## Why "Kakeya"? — what makes this codec different
+
+Most KV-cache quantisers (TurboQuant, KIVI, SmoothQuant-KV, Quanto,
+HQQ) allocate bits **per scalar channel**. KakeyaLattice allocates
+bits **per direction on the sphere**. That difference is the whole
+project, and it is why we carry the Kakeya name.
+
+**The classical Kakeya problem** asks for the minimum measure of a
+set in $\R^D$ that contains a unit segment in every direction.
+Besicovitch (1919) showed this measure can be zero; Wolff, Tao,
+Dvir, Wang–Zahl have since pushed the Kakeya maximal-function
+conjecture deep into real analysis.
+
+**The KV-cache analogue.** A codec that reconstructs every vector
+$x_i$ to $\ell_2$-error $\varepsilon$ must cover a **tube of radius
+$\varepsilon$** around every direction in
+$\Theta = \{x_i / \|x_i\|\} \subset S^{D-1}$. The minimum bit-cost
+of such a tube-union is exactly what the Kakeya maximal-function
+conjecture bounds. KakeyaLattice's codebook **realises the discrete
+version of that cover** explicitly: the tensor-product
+$D_4^{\otimes D/4}$ (or $E_8^{\otimes D/8}$) Voronoi cells, scaled
+adaptively per-vector by $q_{\mathrm{max}} / q_{\mathrm{range}}$,
+tile $\R^D$ so that every direction in $\Theta$ is $\varepsilon$-covered
+at a known bit budget.
+
+Full derivation in
+[`reports/paper/kakeyalattice.pdf`](reports/paper/kakeyalattice.pdf)
+§1 "The codec as a discrete Kakeya cover" and §2
+"Design philosophy: the Kakeya–Brascamp–Lieb–Tropp chain".
+
+The practical consequences of this framing:
+
+1. **Bit-per-direction, not bit-per-channel.** Rotating KV into the
+   Hadamard basis and quantising in the D4/E8 Voronoi tessellation
+   directly minimises the *tube-cover cost*, which is what matters
+   for attention reconstruction — not per-channel dynamic range,
+   which is what scalar quantisers minimise.
+2. **Provable shaping-gain.** D4 gives +0.37 dB shaping gain over
+   $\mathbb{Z}^4$; E8 gives +0.65 dB over $\mathbb{Z}^8$ and
+   +0.29 dB over $D_4$. These are classical lattice-coding bounds
+   (Zamir–Feder 1996), not empirical measurements.
+3. **Unconditional bit-rate bound.** The Voronoi optimum holds at
+   the block dimension without any assumption about the source
+   distribution — which is why the codec still works on the
+   heavy-tailed, non-Gaussian KV of DeepSeek-V4-Flash where
+   scalar per-channel quantisers fail.
+
+KakeyaLattice is the first open-source KV-cache codec to **name
+itself after the geometric object it covers**. Everything else in
+the stack — Sylvester–Hadamard rotation, per-vector $q_{\mathrm{max}}$,
+the Conway–Sloane closest-point decoder — is standard lattice-coding
+engineering in service of making the discrete Kakeya cover actually
+run on a GPU.
 
 ## What's in the box
 
