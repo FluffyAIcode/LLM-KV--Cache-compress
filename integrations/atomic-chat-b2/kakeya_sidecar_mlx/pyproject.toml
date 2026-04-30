@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kakeya-sidecar-mlx"
+version = "0.1.0"
+description = "B2 sidecar: OpenAI-compatible local inference for Atomic-Chat, powered by MLX + DFlash + KakeyaLattice E8 KV-cache compression."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "KakeyaLattice x Atomic-Chat (B2) integration" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "sse-starlette>=1.8",
+]
+
+[project.optional-dependencies]
+mlx = [
+    "mlx>=0.18",
+    "mlx-lm>=0.20",
+    "kakeyalattice-mlx>=0.1",
+]
+dflash = [
+    "mlx>=0.18",
+    "mlx-lm>=0.20",
+    "kakeyalattice-mlx>=0.1",
+]
+dev = [
+    "pytest>=7",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+kakeya-sidecar-mlx = "kakeya_sidecar_mlx.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kakeya_sidecar_mlx*"]
