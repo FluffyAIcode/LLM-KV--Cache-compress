@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# Node / TS
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Rust
+target/
+Cargo.lock
