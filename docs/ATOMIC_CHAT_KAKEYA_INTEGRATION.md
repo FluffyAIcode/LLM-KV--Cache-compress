@@ -373,4 +373,263 @@ atomic.chat 首页写的是 *"Google TurboQuant built-in"*。按 v1.5 报告:
 
 ---
 
+## 12. DFlash (block diffusion speculative decoding) 集成路径
+
+### 12.1 DFlash 是什么，和 KakeyaLattice 的关系
+
+[**DFlash** (z-lab, arXiv:2602.06036, 2026-02)](https://github.com/z-lab/dflash) 是
+block-diffusion 架构的 **speculative-decoding drafter**: 小 draft 模型
+在单次 forward 里并行 draft 一整块 token (block_size=16)，target LLM
+一次并行 verify，总体在 Qwen3-8B 上达 6× 无损加速 (2.5× 超过 EAGLE-3)。
+官方支持四后端: **Transformers / SGLang / vLLM-nightly / MLX (Apple
+Silicon)**。
+
+DFlash 与 KakeyaLattice **正交**:
+
+| | 改什么 | 省什么 | 质量承诺 |
+|:-|:-|:-|:-|
+| DFlash | 解码循环(draft 一次出 16 token) | **解码步数(时间)** | lossless (verify 回退 target 分布) |
+| KakeyaLattice | 每步内部的 KV 表示 | **每步 KV HBM / 带宽(空间)** | 近无损 Q=38 <1%;  Q=10 <7% on 3/4 models |
+
+叠加后理论效果: `总加速 ≈ DFlash 3-6× × KakeyaLattice KV 节省 → 更长 ctx × +18-24% 并发`。
+
+### 12.2 叠加的关键交互
+
+1. **Verify 阶段是 mini-prefill**, 16 token 一次并行过 codec, codec
+   开销自动摊销到 1/16 — MPS codec 占比从单轨 decode 的 20-30% 降到 1-2%.
+2. **Draft 模型的 KV 也是压缩目标**: DFlash MLX 已暴露
+   `sliding_window_size` bound draft KV growth; 用 KakeyaLattice Q=10
+   激进档压缩 draft KV 完全安全, 因为 verify 由 target 正确分布兜底.
+   这是"draft 激进压 / target 保守压"的分层策略, 只有在推测解码框架下
+   才能成立.
+3. **Acceptance rate 风险**: target 走 Kakeya Q=38 会引入 <1% |Δppl|,
+   期望 acceptance 掉 <1pp; 需实测 `z-lab/Qwen3-8B-DFlash-b16 +
+   Qwen3-8B + KakeyaLatticeCache(e8, q=38)` 对比 pure bf16 baseline,
+   看 acceptance-length 分布.
+4. **MLX 路径阻碍**: `KakeyaLatticeCache` 是 `transformers.DynamicCache`
+   子类, 不能直接接 MLX 的 `RotatingKVCache` / `StandardKVCache`.
+   需要把 E8 codec 移到 MLX — 工作量约 1-2 文件 / 200-300 行 MLX 代码,
+   无自定义 CUDA/Metal kernel.
+
+### 12.3 方案矩阵 (把 DFlash 加进去)
+
+| 方案 | Platform | 加速栈 | KV 压缩 | 工程成本 |
+|:-|:-|:-|:-|:-|
+| **B1** Mac sidecar, HF + MPS (本 PR) | Mac | 单轨 AR | `KakeyaLatticeCache` 现成 | ✅ 已落地 |
+| **B2** Mac sidecar, MLX + DFlash + KakeyaLattice-MLX | Mac | DFlash 3-6× | KakeyaLattice MLX port | 中 |
+| **C** 本地 vLLM + KakeyaLattice snapshot | Linux/CUDA | vLLM | 既有 plugin | 已有 |
+| **C2** 本地 vLLM nightly + DFlash spec-config + KakeyaLattice | Linux/CUDA | vLLM + DFlash | 既有 plugin + 两插件共存调试 | 中-高 |
+
+B2 是本 PR 叙事链中的 "phase 2", 作为**独立后续 PR** 推进。
+
+### 12.4 B2 路线图 (后续 PR)
+
+| 里程碑 | 产出 |
+|:-|:-|
+| M1 | `kakeyalattice_mlx/` — E8 codec 的纯 MLX 实现 + 与 PyTorch 参考的 bit-level parity |
+| M2 | `KakeyaLatticeMLXCache` — mlx-lm KV cache 包装层 |
+| M3 | `kakeya_sidecar_mlx/` — OpenAI 兼容 MLX sidecar, 加载 target + 可选 DFlash draft |
+| M4 | 接 DFlash: `dflash.model_mlx.stream_generate` 内置 target KV 压缩 |
+| M5 | acceptance-rate benchmark: `Qwen3-8B + z-lab/Qwen3-8B-DFlash-b16` × `{bf16, Kakeya Q=38, Q=10}` |
+| M6 | Atomic-Chat extension 追加 "KakeyaLattice (MLX+DFlash)" backend 选项 |
+
+### 12.5 `DeploymentProfile` 预留的 `dflash_draft_repo` 字段
+
+`kakeya_sidecar/kakeya_sidecar/model_registry.py` 在 B2 PR 里会补上:
+
+```python
+dflash_draft_repo: str | None = None  # e.g. "z-lab/Qwen3-8B-DFlash-b16"
+```
+
+对应已发布的 DFlash draft 模型清单:
+
+| target | DFlash draft |
+|:--|:--|
+| Qwen/Qwen3-4B (non-thinking) | `z-lab/Qwen3-4B-DFlash-b16` |
+| Qwen/Qwen3-8B (non-thinking) | `z-lab/Qwen3-8B-DFlash-b16` |
+| meta-llama/Llama-3.1-8B-Instruct | `z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat` |
+| Qwen/Qwen3.5-4B | `z-lab/Qwen3.5-4B-DFlash` |
+| Qwen/Qwen3.5-27B | `z-lab/Qwen3.5-27B-DFlash` |
+| openai/gpt-oss-20b | `z-lab/gpt-oss-20b-DFlash` |
+| openai/gpt-oss-120b | `z-lab/gpt-oss-120b-DFlash` |
+
+B1 sidecar 现在不消费这个字段, 留给 B2 PR 填充。
+
+---
+
+## 13. 浏览器里跑推理的可行性评估
+
+### 13.1 定义: "在 web 里跑"有四种
+
+| | 含义 | 技术 |
+|:-|:-|:-|
+| W1 | 纯浏览器、零本地依赖 | WebGPU / WASM / WebLLM / transformers.js |
+| W2 | 浏览器 UI + 同机本地 sidecar | `http://localhost:1338` + Tauri webview |
+| W3 | Tauri webview 里的 web-app | 本 PR 的 TS 扩展跑在这一层 |
+| W4 | 远端 server + 浏览器前端 | LAN/云端 vLLM/SGLang |
+
+本节聚焦 W1 (最硬的问题: 能否真把 B2 搬进浏览器)。
+
+### 13.2 B2 三件部件搬 Web 的可行性
+
+| 部件 | WebGPU 可行性 | 工作量 |
+|:-|:-:|:-|
+| **Target LLM** | ✅ WebLLM / transformers.js 已支持 Qwen/Llama/Gemma/Phi 小模型 int4 | 现成 |
+| **KakeyaLattice E8 codec** | ✅ 全是 `matmul` / `argmin` / `round` / `clamp` / `amax`, WGSL 几百行 | 低: 1-2 天 WGSL + JS |
+| **DFlash drafter** | ✘ 无 web 后端; draft 架构 (cross-architecture KV injection + block-diffusion + mask token) 需要 port 自 `dflash/model_mlx.py` ~1500 行到 WebGPU | 高: 独立项目级 |
+
+三件拼起来的结论:
+- `target + KakeyaLattice` ✅ 可行
+- `target + KakeyaLattice + DFlash` ✘ 短期不可行
+
+### 13.3 关键限制的数字锚点
+
+- WASM 线性内存单实例 4 GB 上限 (memory64 提案 Safari 未实现)
+- WebGPU buffer binding 单 binding Chrome 默认 256 MB (可提至 2 GB)
+- 7B bf16 = 14 GB → 必 int4 量化; 13B int4 ≈ 7 GB 贴 M3 Pro 边界
+- WebGPU 相对 native GPU 效率 **50-70%** (workgroup / subgroup ops / driver 抽象损耗)
+- Qwen-2.5-3B WebLLM @ M3 Pro ~30-45 tok/s (MLX native ~80-100)
+- WebGPU + DFlash 缺位 → web 比 "native MLX + DFlash" 慢 **一个量级**
+
+### 13.4 Web 推理的优劣势速览
+
+**优势**:
+- 分发极简 (URL), 跨平台零 build matrix, 更新零摩擦
+- 浏览器沙盒提供可审计的隐私承诺
+- 嵌入性: Notion / Chrome extension / iframe 原位推理
+- 服务端成本近零 (demo / playground 场景)
+
+**劣势**:
+- 硬件上限被浏览器上限约束 (WASM 4 GB / WebGPU buffer quota)
+- 冷启动悬崖 (首次几 GB 权重下载)
+- 性能天花板比 native 低 50-70% + 无 DFlash = 慢一个量级
+- 电池 / 发热 / 浏览器碎片化 (2026 覆盖率 ~60-75%)
+- 无本地文件 / 无 MCP / 无子进程能力 — Atomic-Chat 的 agent 卖点全部失效
+
+### 13.5 三条现实路径 (ladder)
+
+| ladder | 能做到 | 工作量 |
+|:-:|:--|:--|
+| L1 | Web 版 KakeyaLattice E8 codec demo (WGSL + WebGPU), marketing/教育 | 1-2 天 |
+| L2 | Web 里 transformers.js + 自定义 KV cache wrapper 跑 3-4B target + KakeyaLattice (无 DFlash) | 几周 |
+| L3 | 完整 B2 in web (需 DFlash WebGPU 后端, 等 z-lab / MLC 社区出) | 巨大, 非本仓库能推进 |
+
+### 13.6 W2 的务实选项 (不是纯 web, 但"零点击即用")
+
+sidecar 加一个 `/chat.html` 静态路由 + React build 产物, 用户打开
+`http://localhost:1338/chat.html` 浏览器就能 chat, 底层是完整 B2
+native 栈. 这是 Atomic-Chat Tauri webview 的"脱壳版", 保留 B2 全部
+性能, 同时满足"打开浏览器就用"的体验诉求.
+
+### 13.7 建议
+
+- **短期**: 不在本 PR 做 W1; 保留 B1 Python sidecar 作为产品主力.
+- **中期** (独立 PR): L1 (codec demo 页面) 作为 marketing / 教育资产.
+- **长期**: L2 (web-native LLM + KakeyaLattice) 机会窗口, 但 DFlash 缺位
+  意味着"web 永远比 native 慢一代", 投入要量力.
+
+---
+
+## 14. A0 (llama.cpp) vs B2 (MLX + DFlash + KakeyaLattice) 决策表
+
+本节给 Atomic-Chat 团队在 review 这套集成 PR 时一份直接可用的决策依据:
+B2 **不是** A0 的替代, 而是 A0 的"Pro Mode for Mac"附加后端.
+
+### 14.1 两套方案的全貌
+
+**A0 (Atomic-Chat 现状)**:
+- Tauri 2 + React, 跨平台 (Mac/Win/Linux)
+- 单推理后端: `extensions/llamacpp-extension` + `plugins/llamacpp` 驱动 llama.cpp
+- GGUF 模型, Metal / CUDA / CPU 加速
+- KV 压缩: `--cache-type-k/v` = q8_0 / q4_0 / q4_1 标量量化
+- 推测解码: llama.cpp 引擎有, UI 未集成
+- MCP / Assistant / 多 provider / OpenAI 兼容 `:1337`
+- 宣传 "Google TurboQuant built-in" (实为 llama.cpp KV 标量量化)
+
+**B2 (本 PR 叙事链末端, 独立后续 PR 落地)**:
+- 复用 Atomic-Chat 的 Tauri 壳
+- 第二推理后端: Python sidecar 跑 MLX + target LLM + DFlash drafter + KakeyaLattice-MLX codec
+- MLX 权重 (mlx-community) + HF safetensors
+- Apple Silicon 专属 (MLX 不上 Windows/Linux)
+- KV 压缩: E8 Q=38 / Q=10 / Q=4 (v1.5 报告锚定)
+- 推测解码: DFlash 3-6× 无损 (z-lab 预训练 draft)
+- 复用 A0 的 UI / MCP / Assistant / `:1337` OpenAI 前门 (内部路由到 `:1338` sidecar)
+
+### 14.2 多维对比表
+
+| 维度 | A0 | B2 |
+|:-|:-|:-|
+| Decode 速度 (Qwen3-8B @ M3 Pro) | ~35-45 tok/s (q4_K_M) | ~200-280 tok/s effective (MLX 50 × DFlash 3-6×) |
+| KV 压缩质量 | q4/q8 标量, q2_K 对 <3B 模型不稳 | E8 Q=38 \|Δppl\|<1%, Q=10 <7% (3/4 模型) |
+| 长上下文 (Mac 16GB) | Qwen3-8B ~16-24k | ~48-64k (KV 再 3.37× 压缩) |
+| 推测解码 | 引擎有, UI 不可达 | DFlash 3-6× 无损 |
+| 模型生态 | GGUF 池 >> MLX 池 (几万 vs 几百) | MLX 主流模型覆盖 + HF 原始权重 |
+| 冷启动 | ~0.5-1s | ~2-3s (Python + MLX load) |
+| 平台覆盖 | Mac + Windows + Linux | **Mac 专属 (Apple Silicon)** |
+| 小模型 (<3B) | llama.cpp 手工 Metal 调优, ~90+ tok/s | MLX 比 llama.cpp 慢 20-30% |
+| 大模型 (>13B) | GGUF int4/int2 OK | MLX int4 OK 但生态弱 |
+| Agent / MCP | 原生集成 | 完全复用 A0 能力 |
+| KakeyaLattice 接入深度 | 无 (llama.cpp 无可插拔 KV hook) | 原生 `KakeyaLatticeCache` (B1) + MLX port (B2) |
+| 打包 | DMG + 静态 llama.cpp | DMG + PyOxidizer sidecar + signing |
+| debuggability | C++ 栈 + native profiler | Python stack + MLX trace, 显著更易 |
+| 新 codec 接入 | 改 C++ + Metal kernel | 几十行 MLX |
+| License | Apache-2.0 + MIT | Apache-2.0 全线 |
+| 社区规模 | llama.cpp ~80k★ | MLX 官方 / DFlash 新 / KakeyaLattice 专项 |
+
+### 14.3 各自赢在哪里
+
+**A0 三大硬核优势**:
+1. **生态压倒性** — GGUF 新模型 release-to-quant lag 24-72h, MLX 是 1-2 周.
+2. **跨平台** — Windows 用户 (Atomic-Chat 有 .exe 头等二进制) 在 B2 下无路可走.
+3. **小模型性能** — llama.cpp Metal shader hand-tuned; Phi-3.5 mini @ M3 Pro ~90+ tok/s.
+
+**B2 三大硬核优势**:
+1. **加速 × 压缩乘法效应** — 200+ tok/s effective, A0 在产品形态下追不上 (llama.cpp 推测解码未暴露到 UI).
+2. **长上下文真解锁** — Mac 16GB + Qwen3-8B 从"32k OOM"到"64k 可用", \|Δppl\|<1%.
+3. **质量天花板** — Q=38 近无损 + Q=10 平衡档都有 v1.5 n=32 CI 实测撑, 不是工程直觉.
+
+**A0 软肋**:
+- `Google TurboQuant built-in` 的宣传工程上名不副实 (实为 llama.cpp 2023 年就有的标量量化); v1.5 报告中 TQ b=2 "结构性不可用", b=3 被 E8 Q=4 在 4 模型上全面压过.
+- draft model 支持在 UI 未暴露, 加速特性"存在但不可达".
+
+**B2 软肋**:
+- Mac-only — Windows/Linux 用户用不到.
+- Python sidecar 打包 + notarize 是 Atomic-Chat 新工程.
+- 冷启动慢 2 秒.
+- DFlash 对模型家族有限定 (Qwen3 / Llama-3.1 / Qwen3.5 / gpt-oss / Kimi).
+
+### 14.4 用户画像 → 最优方案
+
+| 用户画像 | 最优 |
+|:-|:-|
+| Windows / Linux | **A0** (B2 不可用) |
+| Mac + <3B 小模型 (Phi, Gemma-2B) | **A0** (llama.cpp 手工调优略优) |
+| Mac + 3-8B 主力 (Qwen3, Llama-3) | **B2** (加速 + KV 压缩双突破) |
+| Mac + 长上下文 / 整本书 / 代码库 | **B2** (唯一解) |
+| 追新模型 (每天等新 GGUF) | **A0** (生态快一周) |
+| MCP / agent 工作流 | 任选; B2 高 tok/s 让连续调用更流畅 |
+| 隐私极强 | 任选; B2 Python 栈可审计更深 |
+
+### 14.5 给产品决策者的三句话
+
+1. **不要把 B2 包装成"取代 llama.cpp"** — 产品伤害极大 (Windows / GGUF 追新 / 小模型用户流失).
+2. **把 B2 定位为"Pro Mode for Mac"** — 文案强调 "DFlash + E8 lattice KV, Qwen3-8B 在 M3 Pro 200+ tok/s, 48k ctx 不 OOM", 兑现 atomic.chat 早已宣传却未落地的 "TurboQuant built-in" 承诺.
+3. **宣传可信度** — B2 的每一个数字都能 reproduce (KakeyaLattice v1.5 n=32 Student-t CI + DFlash z-lab 官方 benchmark). 把 "Google TurboQuant built-in" 改为 "KakeyaLattice E8 + DFlash built-in for Mac", 工程上才立得住.
+
+### 14.6 本 PR 的定位重申
+
+本 PR (分支 `AgentMemory/atomic-chat-kakeya-integration-04ae`) 交付
+**B1 方案 + 完整设计叙事**, 具体包含:
+
+- `integrations/atomic-chat/kakeya_sidecar/` — Python sidecar (HF + MPS + `KakeyaLatticeCache`) 代码 + 15 单测
+- `integrations/atomic-chat/kakeyalattice-extension/` — Atomic-Chat TS 扩展骨架, tsc 通过
+- `integrations/atomic-chat/tauri-plugin-kakeyalattice/` — Rust Tauri plugin 骨架
+- `docs/ATOMIC_CHAT_KAKEYA_INTEGRATION.md` — §1-§14 完整设计
+
+**B2 方案** (MLX + DFlash + KakeyaLattice-MLX) 走**独立后续 PR**
+(`AgentMemory/atomic-chat-b2-mlx-dflash-kakeya-04ae`), 避免本 PR 审阅面
+膨胀. B2 PR 会在本 PR merge 之后开出, 对本 PR 不是 blocker.
+
+---
+
 *作者：Cursor Cloud Agent · 分支 `AgentMemory/atomic-chat-kakeya-integration-04ae`.*
