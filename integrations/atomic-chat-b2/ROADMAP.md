@@ -2,7 +2,7 @@
 
 **Branch**: `AgentMemory/atomic-chat-b2-mlx-dflash-kakeya-04ae`
 **Parent PR**: #57 (B1 — HF + MPS sidecar, in review)
-**Status**: M1-M3 骨架 + 测试 (本 PR); M4-M6 follow-up
+**Status**: M1-M4 已落 (PRs #58, M4); M5-M6 后续
 
 ## 动机
 
@@ -51,11 +51,23 @@ OpenAI 兼容 MLX sidecar，接口与 B1 完全一致 (`/v1/models`,
 **本 PR 只给骨架 + 纯逻辑单测**: model_registry_mlx, channel parsing,
 routing mock。真正的 MLX 模型加载 + generate 需要 M4 接入 DFlash。
 
-### M4 — DFlash 集成 (follow-up PR)
+### M4 — DFlash 集成 (✅ 本 PR)
 
 接 `dflash.model_mlx.stream_generate`，把 target LLM 的 KV 替换为
 `KakeyaLatticeMLXCache`，draft LLM 保留默认 `RotatingKVCache`（Phase 2
 再压缩 draft KV）。
+
+**本 PR 交付**:
+- `cache_injection.py` — 三种注入策略（kwarg / model.make_cache /
+  module-level make_prompt_cache）+ 特性检测 + `FALLBACK_NATIVE_MLX`
+  兜底，适配 dflash API 在 2026 年多次变动的实际情况
+- `engine_mlx.py` — `chat()` / `chat_stream()` 打通，两条路径：
+  DFlash + Kakeya KV，以及 native MLX + Kakeya KV 兜底
+- `server.py` — `/v1/chat/completions` 正式打开，stream + non-stream
+  两模式；`x_kakeya` 响应字段带 `dflash_used` /
+  `injection_strategy` / `acceptance_length_mean`
+- **32 sidecar 单测 全绿**（含 8 条 cache_injection 策略测试 + 4 条
+  engine routing 测试，均用 stub 替身模拟 MLX / dflash）
 
 **阻碍**:
 - `dflash.model_mlx` 的 target / draft KV 接口需要 dflash patch 或我方 wrapper

@@ -1,29 +1,65 @@
-"""B2 FastAPI server — same route shape as B1, MLX-specific metadata.
+"""B2 FastAPI server — M4 opens /v1/chat/completions.
 
-Endpoints:
+Route shape mirrors B1 (PR #57):
+  GET  /health
+  GET  /v1/models
+  POST /v1/chat/completions      (stream + non-stream)
+  GET  /v1/kakeya/stats
 
-    GET  /health
-    GET  /v1/models
-    POST /v1/chat/completions           (stream + non-stream — **503 until M4**)
-    GET  /v1/kakeya/stats
-
-Until the M4 PR lands, ``/v1/chat/completions`` returns HTTP 503 with
-a body pointing at ``ROADMAP.md``. This is deliberate — better a clean
-503 than a half-working chat that diverges from B1.
+The B2-specific surface additions:
+  - /v1/models entries carry ``x_kakeya.dflash_draft_repo`` and
+    ``x_kakeya.dflash_available``.
+  - /health reports the MLX backend variant and whether DFlash is
+    enabled on this engine instance.
+  - /v1/chat/completions response ``x_kakeya`` carries ``dflash_used``,
+    ``injection_strategy``, and ``acceptance_length_mean``.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
+import uuid
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from .engine_mlx import MLXEngine, MLXEngineConfig
 from .model_registry_mlx import MODEL_REGISTRY_MLX
 
 log = logging.getLogger("kakeya_sidecar_mlx.server")
+
+
+# ---------------------------------------------------------------------------
+# request / response schemas (subset of OpenAI spec + x_kakeya extension)
+# ---------------------------------------------------------------------------
+
+
+class _ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    role: str
+    content: Any
+
+
+class _ChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    model: str
+    messages: list[_ChatMessage]
+    stream: bool = False
+    temperature: float = 0.7
+    top_p: float = 1.0
+    max_tokens: int | None = None
+    stop: Any | None = None
+    x_kakeya_override: dict[str, Any] | None = Field(
+        default=None, alias="x_kakeya_override",
+    )
+
+
+# ---------------------------------------------------------------------------
+# app factory
+# ---------------------------------------------------------------------------
 
 
 def create_app(
@@ -32,7 +68,7 @@ def create_app(
     lazy_engine: bool = True,
     engine_instance: MLXEngine | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="kakeya-sidecar-mlx", version="0.1.0")
+    app = FastAPI(title="kakeya-sidecar-mlx", version="0.2.0")
 
     state: dict[str, Any] = {
         "engine": engine_instance,
@@ -55,7 +91,8 @@ def create_app(
             "ok": True,
             "engine_loaded": state["engine"] is not None,
             "variant": "B2 (MLX + DFlash + KakeyaLattice)",
-            "milestone": "M1-M3 skeleton; /v1/chat/completions disabled until M4",
+            "dflash_enabled": state["cfg"].enable_dflash,
+            "milestone": "M4 — chat completions live (DFlash + KV compression)",
         }
 
     # ------------------------------------------------------------- /models
@@ -91,16 +128,66 @@ def create_app(
     # --------------------------------------------------- /chat/completions
 
     @app.post("/v1/chat/completions")
-    def chat_completions(_body: dict[str, Any]) -> JSONResponse:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "B2 sidecar is at M1-M3 skeleton stage. "
-                "Chat completion will be enabled in the M4 PR "
-                "(DFlash integration). For now please use the B1 "
-                "sidecar on :1338."
-            ),
+    def chat_completions(req: _ChatCompletionRequest):
+        messages = [m.model_dump(exclude_none=True) for m in req.messages]
+        cid = f"chatcmpl-{uuid.uuid4().hex[:16]}"
+        created = int(time.time())
+
+        try:
+            eng = engine()
+        except Exception as e:  # pragma: no cover
+            raise HTTPException(500, f"engine init failed: {e}") from e
+
+        max_tokens = req.max_tokens or 512
+        stop = (
+            [req.stop] if isinstance(req.stop, str)
+            else (req.stop if isinstance(req.stop, list) else None)
         )
+
+        if req.stream:
+            return StreamingResponse(
+                _sse_stream(
+                    eng, req, cid, created,
+                    messages, max_tokens, stop,
+                ),
+                media_type="text/event-stream",
+            )
+
+        try:
+            text, stats = eng.chat(
+                req.model,
+                messages,
+                max_tokens=max_tokens,
+                temperature=req.temperature,
+                top_p=req.top_p,
+                stop=stop,
+                override=req.x_kakeya_override,
+            )
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        except NotImplementedError as e:
+            raise HTTPException(501, str(e)) from e
+        except Exception as e:  # pragma: no cover
+            log.exception("chat failed")
+            raise HTTPException(500, str(e)) from e
+
+        return JSONResponse({
+            "id": cid,
+            "object": "chat.completion",
+            "created": created,
+            "model": req.model,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": stats.get("generated_chars", 0),
+                "total_tokens": stats.get("generated_chars", 0),
+            },
+            "x_kakeya": stats,
+        })
 
     # ------------------------------------------------- /v1/kakeya/stats
 
@@ -119,3 +206,55 @@ def create_app(
         }
 
     return app
+
+
+# ---------------------------------------------------------------------------
+# SSE helper
+# ---------------------------------------------------------------------------
+
+
+def _sse_stream(eng, req, cid: str, created: int,
+                messages, max_tokens: int, stop):
+    def chunk(delta: dict[str, Any], finish_reason: str | None = None) -> str:
+        payload = {
+            "id": cid,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": req.model,
+            "choices": [{
+                "index": 0,
+                "delta": delta,
+                "finish_reason": finish_reason,
+            }],
+        }
+        return f"data: {json.dumps(payload)}\n\n"
+
+    yield chunk({"role": "assistant"})
+    try:
+        for piece in eng.chat_stream(
+            req.model,
+            messages,
+            max_tokens=max_tokens,
+            temperature=req.temperature,
+            top_p=req.top_p,
+            stop=stop,
+            override=req.x_kakeya_override,
+        ):
+            if piece:
+                yield chunk({"content": piece})
+    except KeyError as e:
+        yield chunk({"content": f"[error] {e}"}, finish_reason="stop")
+        yield "data: [DONE]\n\n"
+        return
+    except NotImplementedError as e:
+        yield chunk({"content": f"[error] {e}"}, finish_reason="stop")
+        yield "data: [DONE]\n\n"
+        return
+    except Exception as e:  # pragma: no cover
+        log.exception("stream failed")
+        yield chunk({"content": f"[error] {e}"}, finish_reason="stop")
+        yield "data: [DONE]\n\n"
+        return
+
+    yield chunk({}, finish_reason="stop")
+    yield "data: [DONE]\n\n"

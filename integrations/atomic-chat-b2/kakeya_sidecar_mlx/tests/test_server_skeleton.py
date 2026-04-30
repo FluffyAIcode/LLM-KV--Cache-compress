@@ -27,6 +27,8 @@ def test_health_reports_b2_variant(app) -> None:
     body = r.json()
     assert body["ok"] is True
     assert "B2" in body["variant"]
+    # M4: health carries explicit milestone status.
+    assert "M4" in body["milestone"]
 
 
 def test_models_exposes_dflash_metadata(app) -> None:
@@ -46,15 +48,27 @@ def test_models_exposes_dflash_metadata(app) -> None:
     assert xk["q_range"] == 38
 
 
-def test_chat_returns_503_until_m4(app) -> None:
-    c = TestClient(app)
-    r = c.post("/v1/chat/completions", json={
-        "model": "qwen3-8b@e8-q38",
+def test_chat_unknown_model_returns_404(app, monkeypatch) -> None:
+    """M4 note: /v1/chat/completions is live; we validate its routing
+    by pointing it at a model that doesn't exist in the MLX registry.
+    The KeyError path is platform-agnostic — no mlx/mlx-lm required.
+    """
+    from kakeya_sidecar_mlx import server as srv_mod
+
+    class _FakeEngine:
+        def chat(self, *_a, **_kw):
+            raise KeyError("unknown MLX model id 'nonexistent-9000b'")
+
+    monkeypatch.setattr(srv_mod, "MLXEngine", lambda *a, **kw: _FakeEngine())
+
+    # Force the app to build a fresh engine via the monkey-patched ctor.
+    app2 = srv_mod.create_app(lazy_engine=True)
+    c2 = TestClient(app2)
+    r = c2.post("/v1/chat/completions", json={
+        "model": "nonexistent-9000b@e8-q10",
         "messages": [{"role": "user", "content": "hi"}],
     })
-    assert r.status_code == 503
-    body = r.json()
-    assert "M4" in body["detail"] or "M1-M3" in body["detail"]
+    assert r.status_code == 404
 
 
 def test_stats_no_engine(app) -> None:
