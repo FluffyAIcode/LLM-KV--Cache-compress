@@ -1,0 +1,27 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "variant": "e8",
+  "q_range": 38,
+  "gpu": "NVIDIA H200",
+  "torch": "2.12.0+cu130",
+  "num_hidden_layers": 36,
+  "head_dim": 128,
+  "num_kv_heads": 8,
+  "input_tokens": 46,
+  "max_new_tokens": 128,
+  "seq_len_final": 174,
+  "bf16_kv_bytes": 25509888,
+  "int8_kv_bytes": 13153536,
+  "real_compression_ratio": 1.9393939393939394,
+  "per_vector_expected_ratio": 1.9393939393939394,
+  "bytes_saved_pct": 48.4375,
+  "storage_devices": [
+    "cuda:0"
+  ],
+  "codec_fired": 4608,
+  "skip_fired": 0,
+  "decode_time_bf16_s": 8.528635629918426,
+  "decode_time_int8_s": 10.816533057950437,
+  "text_bf16": "<think>\nOkay, so I need to explain why nested-lattice quantization achieves a shaping gain over scalar quantization and how the E8 lattice improves on D4 for compressing transformer KV caches. Let me start by recalling what I know about these concepts.\n\nFirst, scalar quantization. From what I remember, scalar quantization is a method where each data point is mapped to a quantized value, usually by dividing the data into intervals and assigning each interval a representative value. This is a simple approach, but it might not be the most efficient in terms of preserving the structure of the data, especially in high-dimensional spaces. The problem",
+  "text_int8": "<think>\nOkay, so I need to explain why nested-lattice quantization achieves a shaping gain over scalar quantization and how the E8 lattice improves on D4 for compressing transformer KV caches. Let me start by recalling what I know about these concepts.\n\nFirst, scalar quantization. From what I remember, scalar quantization is a method where each data point is mapped to a quantized value from a set of possible values. It's a simple approach where each sample is quantized independently. The main idea is to reduce the number of bits needed to represent the data by grouping similar values together. However, this might not be optimal"
+}
