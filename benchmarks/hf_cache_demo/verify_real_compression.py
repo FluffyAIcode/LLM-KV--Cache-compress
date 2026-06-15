@@ -35,9 +35,10 @@ def dyn_bytes(cache):
 
 def storage_devices(qc):
     devs = set()
-    for entries in qc._k_quant_entries + qc._v_quant_entries:
-        for (q, n, m) in entries:
-            devs.add(str(q.device)); 
+    for buf_list in (qc._k_codes, qc._v_codes):
+        for t in buf_list:
+            if t is not None:
+                devs.add(str(t.device))
     return devs
 
 

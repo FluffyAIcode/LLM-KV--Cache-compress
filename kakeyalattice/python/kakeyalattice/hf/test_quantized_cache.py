@@ -193,3 +193,38 @@ class TestGenerationCompatibility:
         v2 = _bf16(1, 8, 32, 128)
         out_k2, out_v2 = qc.update(k2, v2, layer_idx=0)
         assert out_k2.shape == (1, 8, 48, 128)
+
+
+class TestContiguousBufferLayout:
+    """The persistent KV state must be a single contiguous tensor per
+    layer (not a Python list of per-call chunks), and the K/V returned
+    to attention must be contiguous + SDPA-ready."""
+
+    def test_storage_is_single_tensor_per_layer(self):
+        qc = KakeyaLatticeQuantizedCache(
+            variant="e8", q_range=38,
+            num_hidden_layers=2, head_dim=128, device="cpu",
+        )
+        # Two updates should grow ONE buffer, not append two list entries.
+        qc.update(_bf16(1, 8, 16, 128), _bf16(1, 8, 16, 128), layer_idx=0)
+        qc.update(_bf16(1, 8, 32, 128), _bf16(1, 8, 32, 128), layer_idx=0)
+        codes = qc._k_codes[0]
+        assert isinstance(codes, torch.Tensor), "K codes must be a single Tensor"
+        assert codes.shape[-2] == 48, "buffer must grow along seq dim"
+        assert codes.is_contiguous(), "persistent codes buffer must be contiguous"
+        assert qc._k_norms[0].shape[-2] == 48
+        assert qc._k_qmax[0].shape[-2] == 48
+        # No stale list attributes should remain.
+        assert not hasattr(qc, "_k_quant_entries")
+
+    def test_returned_kv_is_contiguous(self):
+        qc = KakeyaLatticeQuantizedCache(
+            variant="e8", q_range=38,
+            num_hidden_layers=2, head_dim=128, device="cpu",
+            out_dtype=torch.bfloat16,
+        )
+        out_k, out_v = qc.update(_bf16(1, 8, 16, 128), _bf16(1, 8, 16, 128), layer_idx=0)
+        assert out_k.is_contiguous() and out_v.is_contiguous()
+        out_k2, out_v2 = qc.update(_bf16(1, 8, 8, 128), _bf16(1, 8, 8, 128), layer_idx=0)
+        assert out_k2.is_contiguous() and out_v2.is_contiguous()
+        assert out_k2.shape == (1, 8, 24, 128)
