@@ -1,0 +1,26 @@
+{
+  "name": "@atomic-chat/kakeyalattice-extension",
+  "version": "0.1.0",
+  "description": "Atomic-Chat extension that routes local inference through the KakeyaLattice v1.5 sidecar (E8 nested-lattice KV-cache compression).",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc -w -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@atomic-chat/core": "*",
+    "@tauri-apps/api": ">=2.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
