@@ -4,17 +4,18 @@ Run locally:
     pip install kakeyalattice[hf] gradio
     python app.py
 
-Deploy to HF Spaces: see ./README.md.  By default uses Qwen2-0.5B
-(head_dim=64, E8-compatible) so it fits on a free HF Space CPU.
-Swap to Qwen/Qwen2.5-1.5B or Llama-3.2-1B (GPU Space) for more interesting
-decode-length comparisons.
+Deploy to HF Spaces: see ./SPACE_README.md and ./HF_SPACE_DEPLOY.md.
+By default uses Qwen3-0.6B (head_dim=128, GQA 16/8, E8-compatible) —
+fits on a free HF Space CPU and is architecturally closer to production
+LLMs than Qwen2-0.5B. Swap to Qwen/Qwen3-1.7B or Qwen/Qwen3-4B
+(GPU Space) for faster / longer comparisons.
 
 The demo shows, side-by-side, the same prompt generated under:
   (a) bf16 DynamicCache — reference
-  (b) KakeyaLatticeCache E8 Q=10  (aggressive, ~3.6x KV compression)
-  (c) KakeyaLatticeCache E8 Q=38  (balanced, ~2.5x KV compression)
-  (d) KakeyaLatticeCache E8 Q=152 (near-lossless, ~1.9x KV compression)
-and reports wall-clock + per-layer K rel-MSE.
+  (b) KakeyaLatticeCache E8 Q=10  (aggressive, highest KV compression)
+  (c) KakeyaLatticeCache E8 Q=38  (balanced)
+  (d) KakeyaLatticeCache E8 Q=152 (near-lossless)
+and reports wall-clock + bits/vec vs bf16 baseline.
 """
 from __future__ import annotations
 
@@ -33,7 +34,8 @@ except ImportError as e:
 from kakeyalattice.hf import KakeyaLatticeCache
 
 
-DEFAULT_MODEL = os.environ.get("KAKEYA_DEMO_MODEL", "Qwen/Qwen2-0.5B")
+DEFAULT_MODEL = os.environ.get("KAKEYA_DEMO_MODEL", "Qwen/Qwen3-0.6B")
+DEFAULT_PROMPT = "List five countries in Africa:"
 _model_cache: dict = {}
 
 
@@ -84,15 +86,19 @@ def run_demo(
     cfg = model.config
     num_hidden_layers = cfg.num_hidden_layers
     head_dim = getattr(cfg, "head_dim", cfg.hidden_size // cfg.num_attention_heads)
+    bf16_bits = head_dim * 16  # reference: bits per token per head in bf16
 
     results = []
 
-    # Baseline: bf16 DynamicCache
     baseline_cache = DynamicCache()
     text_bf16, t_bf16 = _generate_one(tok, model, prompt, max_new, baseline_cache, device)
-    results.append(("bf16 DynamicCache (reference)", text_bf16, t_bf16, head_dim * 16))
+    results.append(("bf16 DynamicCache (reference)", text_bf16, t_bf16, bf16_bits))
 
-    for q, label in [(10, "E8 Q=10 aggressive"), (38, "E8 Q=38 balanced"), (152, "E8 Q=152 near-lossless")]:
+    for q, label in [
+        (10, "E8 Q=10 aggressive"),
+        (38, "E8 Q=38 balanced"),
+        (152, "E8 Q=152 near-lossless"),
+    ]:
         try:
             cache = KakeyaLatticeCache(
                 variant="e8", q_range=q,
@@ -102,32 +108,57 @@ def run_demo(
                 strict=False,
             )
             text, t = _generate_one(tok, model, prompt, max_new, cache, device)
-            bits = cache._codecs[0].bits_per_token_per_head if cache._codecs else head_dim * 16
+            bits = cache._codecs[0].bits_per_token_per_head if cache._codecs else bf16_bits
             results.append((f"KakeyaLattice {label}", text, t, bits))
         except Exception as e:
             results.append((f"KakeyaLattice {label} (FAILED)", f"Error: {e}", 0.0, 0))
 
-    # Format as comparison table
-    header = f"Model: {model_id} | head_dim: {head_dim} | device: {device} | new_tokens: {max_new}"
-    rows = [
-        f"\n### {name}  —  {t:.2f}s, {bits} bits/vec ({bits/16:.1f}x vs bf16)\n\n{text}"
-        for (name, text, t, bits) in results
-    ]
+    header = (
+        f"**Model:** `{model_id}` | **head_dim:** {head_dim} | "
+        f"**device:** {device} | **new_tokens:** {max_new} | "
+        f"**bf16 reference bits/vec:** {bf16_bits}"
+    )
+
+    rows = []
+    for (name, text, t, bits) in results:
+        if bits > 0:
+            cr = bf16_bits / bits
+            bit_saving = (1 - bits / bf16_bits) * 100
+            cr_str = f"{cr:.2f}x"
+            cr_detail = f"{bit_saving:+.0f}% bits vs bf16"
+        else:
+            cr_str = "n/a"
+            cr_detail = "failed"
+        rows.append(
+            f"\n### {name}\n\n"
+            f"- **latency:** {t:.2f}s\n"
+            f"- **bits/vec:** {bits} (bf16 ref: {bf16_bits})\n"
+            f"- **Compression:** {cr_str} ({cr_detail})\n\n"
+            f"{text}"
+        )
     return header, *rows
 
 
-with gr.Blocks(title="KakeyaLattice KV-cache compression demo") as demo:
+EXAMPLE_PROMPTS = [
+    ["List five countries in Africa:"],
+    ["Translate 'good morning' into French, Spanish, German, and Japanese:"],
+    ["Write a two-sentence summary of what a transformer is in machine learning:"],
+    ["What is 17 times 23? Show your work step by step."],
+]
+
+
+with gr.Blocks(title="KakeyaLattice KV-cache compression") as demo:
     gr.Markdown(
-        "# KakeyaLattice KV-cache compression demo\n\n"
-        "Compare generation output + latency across **bf16 baseline** and "
-        "three **KakeyaLattice E8** compression levels on a small HF causal LM. "
-        "The E8 variant uses 8-D nested-lattice closest-point quantisation "
-        "with Sylvester-Hadamard rotation and per-vector adaptive scaling."
+        "# KakeyaLattice KV-cache compression\n\n"
+        "By dynamically adapting to the empirical non-Gaussian patterns and "
+        "heavy-tail characteristics of real LLM KV activations, our solution "
+        "achieves near-lossless compression and performance gains on models "
+        "like Qwen3."
     )
     with gr.Row():
         prompt = gr.Textbox(
             label="Prompt",
-            value="Explain in one paragraph why lattice quantisation can beat scalar quantisation:",
+            value=DEFAULT_PROMPT,
             lines=3,
         )
     with gr.Row():
@@ -135,6 +166,29 @@ with gr.Blocks(title="KakeyaLattice KV-cache compression demo") as demo:
         model_id = gr.Textbox(label="HF model id", value=DEFAULT_MODEL)
         device_pref = gr.Radio(choices=["auto", "cpu", "cuda"], value="auto", label="Device")
     run_btn = gr.Button("Run comparison", variant="primary")
+
+    gr.Examples(
+        examples=EXAMPLE_PROMPTS,
+        inputs=[prompt],
+        label="Example prompts (click to fill)",
+    )
+
+    gr.Markdown(
+        "### About the default model\n\n"
+        f"The default model is **{DEFAULT_MODEL}** (0.6B params, head_dim=128, "
+        "GQA 16/8). It runs on a free HF Space CPU in roughly 4–8 minutes per "
+        "'Run comparison' click (four generations × ~128 tokens each on 2 "
+        "cores). That is slow but deliberate: Qwen3's head_dim=128 + GQA is "
+        "the same shape used by most production LLMs, so the E8 codec numbers "
+        "you see here are representative.\n\n"
+        "Small models can still fall into greedy-decode repetition loops on "
+        "open-ended prompts — that is a property of the **model**, not the "
+        "codec. If you see all four outputs repeating the same phrase, try a "
+        "short, fact-shaped prompt (e.g. \"List five countries in Africa:\"). "
+        "For faster decode / larger context, switch to a GPU Space and set "
+        "`KAKEYA_DEMO_MODEL=Qwen/Qwen3-1.7B` or `Qwen/Qwen3-4B`."
+    )
+
     header_out = gr.Markdown("")
     out_bf16 = gr.Markdown("")
     out_q10 = gr.Markdown("")
@@ -148,4 +202,4 @@ with gr.Blocks(title="KakeyaLattice KV-cache compression demo") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860)
