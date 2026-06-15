@@ -1,10 +1,23 @@
 # KakeyaLattice — Discrete Kakeya Cover for LLM KV-Cache Compression
 
 > **A D4 / E8 nested-lattice codec that realises a discrete *Kakeya
-> cover* over the direction sphere of transformer KV activations.
-> 2.4×–2.8× compression at <1 % perplexity loss on Qwen3, Llama-3,
-> DeepSeek, GLM-4, and Gemma — real vLLM prefill on NVIDIA H200.
-> Drop-in `transformers.DynamicCache` subclass.**
+> cover* over the direction sphere of transformer KV activations.**
+>
+> Two `transformers.DynamicCache` subclasses ship together:
+>
+> - **`KakeyaLatticeQuantizedCache`** — stores **int8 lattice indices**.
+>   **Real ~1.94× HBM compression** (measured at the tensor-byte
+>   level; see [`reports/v1_5_release/hbm_savings/REAL_HBM_PROOF.md`](reports/v1_5_release/hbm_savings/REAL_HBM_PROOF.md)).
+> - **`KakeyaLatticeCache`** — stores reconstructed bf16. **Zero HBM
+>   savings**; use as a reconstruction-quality probe.
+>
+> At the **codec bit-rate level** (a Q=38 lattice vector needs ~6.3
+> bits per coordinate, vs 16 bits for bf16), the achievable ceiling
+> is **2.4×–2.8× compression at <1 % perplexity loss** on Qwen3,
+> Llama-3, DeepSeek, GLM-4, and Gemma. The current int8
+> implementation hits **1.94×** of that ceiling; the gap to 2.4× is
+> bit-packed int storage, the v1.6 work item.
+>
 > `pip install kakeyalattice`.
 
 [![PyPI](https://img.shields.io/pypi/v/kakeyalattice.svg)](https://pypi.org/project/kakeyalattice/)
@@ -137,7 +150,41 @@ pip install -e kakeyalattice          # pure-Python, PyTorch-only
 pip install -e vllm_backend             # installs the vllm.general_plugins entry point
 ```
 
-Use the codec directly:
+### Path A — Real HBM savings on any HF causal LM
+
+Use `KakeyaLatticeQuantizedCache` whenever HBM compression is the goal.
+The cache stores int8 lattice indices between attention reads; the
+persistent KV state is ~1.94× smaller than the bf16 DynamicCache it
+replaces (proof: [`reports/v1_5_release/hbm_savings/REAL_HBM_PROOF.md`](reports/v1_5_release/hbm_savings/REAL_HBM_PROOF.md)).
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from kakeyalattice.hf import KakeyaLatticeQuantizedCache
+
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B")
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen3-0.6B", torch_dtype=torch.bfloat16,
+).cuda().eval()
+
+cache = KakeyaLatticeQuantizedCache(
+    variant="e8", q_range=38,          # int8 ceiling: E8 Q<=63, D4 Q<=127
+    num_hidden_layers=model.config.num_hidden_layers,
+    head_dim=model.config.head_dim,
+    device="cuda",
+)
+
+inputs = tok("Hello world", return_tensors="pt").to("cuda")
+out = model.generate(**inputs, max_new_tokens=256, past_key_values=cache)
+print(tok.decode(out[0], skip_special_tokens=True))
+```
+
+### Path B — Reconstruction-quality probe (zero HBM win, useful for codec research)
+
+Use `KakeyaLatticeCache` if you want to measure the codec's
+reconstruction error in isolation without changing the storage
+format. Output is bit-identical to Path A; only the persistent
+storage between calls differs.
 
 ```python
 import torch
@@ -145,7 +192,7 @@ from kakeyalattice import V14KakeyaZamirLatticeGPU
 
 cb = V14KakeyaZamirLatticeGPU(D=128, q_range=38, device="cuda")
 K = torch.randn(2048, 8, 128, device="cuda", dtype=torch.float32) * 0.3
-K_hat = cb.roundtrip(K)       # encode + decode round-trip, bits known in advance
+K_hat = cb.roundtrip(K)       # encode + decode round-trip
 print(cb.bits_per_token_per_head)   # 832 bits for D=128, Q=38
 ```
 
