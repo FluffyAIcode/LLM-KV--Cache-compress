@@ -200,7 +200,7 @@ def main():
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     tok = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, torch_dtype=dtype, trust_remote_code=True,
+        args.model, dtype=dtype, trust_remote_code=True,
     ).to(device)
     model.eval()
     cfg = model.config
