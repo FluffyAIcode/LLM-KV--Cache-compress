@@ -43,11 +43,14 @@ Design decisions
    overriding ``update`` is more direct and avoids hidden
    dequantization paths.
 
-2. **Lazy concat.** We store new tokens' (q_lat, norms, qmax) as a
-   per-call entry in a list, not a single tensor concatenated each
-   call. On read we cat once. This matches DynamicCache's actual
-   storage pattern (``key_cache: list[Tensor]``) and avoids
-   quadratic-cost concatenation during long-prefill prompt fills.
+2. **Single contiguous buffer per layer.** Each layer keeps ONE
+   contiguous tensor per component (codes, norms, qmax) for K and V,
+   grown by a single ``torch.cat`` on the seq dim per ``update()`` —
+   exactly how ``DynamicCache`` grows ``key_cache[layer]``. The
+   persistent KV state is therefore a single contiguous, SDPA-ready
+   buffer, and the read path is amortized-linear (the earlier
+   list-of-per-call-chunks design re-cat-ed the entire history every
+   call, which is quadratic over a generation).
 
 3. **Single decode per attention read.** The attention layer calls
    ``cache.update(new_k, new_v, layer_idx)`` once per layer per
@@ -366,14 +369,23 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
         if self._supports_lattice:
             self._init_codecs()
 
-        # Per-layer per-call storage of (q_lat, norms, qmax) tuples for
-        # K and V separately.  Each list grows by one entry per update().
-        self._k_quant_entries: list[list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]] = [
-            [] for _ in range(self.num_hidden_layers)
-        ]
-        self._v_quant_entries: list[list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]] = [
-            [] for _ in range(self.num_hidden_layers)
-        ]
+        # Per-layer storage: ONE contiguous tensor per component (codes,
+        # norms, qmax) for K and V, grown by a single cat per update()
+        # exactly like transformers.DynamicCache grows its key/value
+        # tensors.  This keeps the persistent KV state a single
+        # contiguous, SDPA-ready buffer (not a Python list of per-call
+        # chunks) and makes the read path O(N) per step instead of
+        # re-cat-ing the whole history every call.
+        #   _k_codes[L] : int8/int16 [B, n_kv, S, D]   (lattice indices)
+        #   _k_norms[L] : float16     [B, n_kv, S, 1]
+        #   _k_qmax[L]  : float16     [B, n_kv, S, 1]
+        # None until the first update() for that layer.
+        self._k_codes: list[torch.Tensor | None] = [None] * self.num_hidden_layers
+        self._k_norms: list[torch.Tensor | None] = [None] * self.num_hidden_layers
+        self._k_qmax: list[torch.Tensor | None] = [None] * self.num_hidden_layers
+        self._v_codes: list[torch.Tensor | None] = [None] * self.num_hidden_layers
+        self._v_norms: list[torch.Tensor | None] = [None] * self.num_hidden_layers
+        self._v_qmax: list[torch.Tensor | None] = [None] * self.num_hidden_layers
         # For boundary layers and incompatible models we store raw bf16
         # like normal DynamicCache.  We re-use the parent's key_cache /
         # value_cache slots for those layers; the int-storage layers
@@ -420,17 +432,14 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
         Used by tests to verify real HBM savings.
         """
         total = 0
-        # quantized layers
-        for entries in self._k_quant_entries:
-            for q_lat, n, m in entries:
-                total += q_lat.element_size() * q_lat.numel()
-                total += n.element_size() * n.numel()
-                total += m.element_size() * m.numel()
-        for entries in self._v_quant_entries:
-            for q_lat, n, m in entries:
-                total += q_lat.element_size() * q_lat.numel()
-                total += n.element_size() * n.numel()
-                total += m.element_size() * m.numel()
+        # quantized layers: one contiguous tensor per component.
+        for buf_list in (
+            self._k_codes, self._k_norms, self._k_qmax,
+            self._v_codes, self._v_norms, self._v_qmax,
+        ):
+            for t in buf_list:
+                if t is not None:
+                    total += t.element_size() * t.numel()
         # fallback bf16 layers (boundary + non-supports_lattice).
         # Transformers >=5 uses cache.layers[i].keys/.values; older
         # versions use cache.key_cache / cache.value_cache.
@@ -487,26 +496,35 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
         k_q, k_norms, k_qmax = encode_to_indices(codec, key_states)
         v_q, v_norms, v_qmax = encode_to_indices(codec, value_states)
 
-        # Append to per-layer storage.  Each entry corresponds to one
-        # update() call.  At read time we cat along the seq dim (axis -2
-        # of the bf16 shape == axis -2 of (q, norms, qmax) since they
-        # share the leading shape [batch, nkv, seq]).
-        self._k_quant_entries[layer_idx].append((k_q, k_norms, k_qmax))
-        self._v_quant_entries[layer_idx].append((v_q, v_norms, v_qmax))
+        # Grow the single contiguous per-layer buffers by ONE cat along
+        # the seq dim (axis -2), exactly like DynamicCache.update.  This
+        # is amortized-linear over a generation (vs the old list +
+        # full-history re-cat which was quadratic).
+        k_q_all = self._append(self._k_codes, layer_idx, k_q)
+        k_n_all = self._append(self._k_norms, layer_idx, k_norms)
+        k_m_all = self._append(self._k_qmax, layer_idx, k_qmax)
+        v_q_all = self._append(self._v_codes, layer_idx, v_q)
+        v_n_all = self._append(self._v_norms, layer_idx, v_norms)
+        v_m_all = self._append(self._v_qmax, layer_idx, v_qmax)
 
-        # Concat across all stored entries (cheap: views, then one cat
-        # on dim -2 for each component).  Returning concatenated bf16
-        # K/V matches DynamicCache.update's contract.
-        k_q_all = torch.cat([e[0] for e in self._k_quant_entries[layer_idx]], dim=-2)
-        k_n_all = torch.cat([e[1] for e in self._k_quant_entries[layer_idx]], dim=-2)
-        k_m_all = torch.cat([e[2] for e in self._k_quant_entries[layer_idx]], dim=-2)
-        v_q_all = torch.cat([e[0] for e in self._v_quant_entries[layer_idx]], dim=-2)
-        v_n_all = torch.cat([e[1] for e in self._v_quant_entries[layer_idx]], dim=-2)
-        v_m_all = torch.cat([e[2] for e in self._v_quant_entries[layer_idx]], dim=-2)
-
+        # Decode the contiguous buffers to bf16 for attention.  torch.cat
+        # / our decode produce contiguous output; we assert it so the
+        # SDPA / FlashAttention path always receives a contiguous,
+        # batched KV tensor.
         k_bf = decode_from_indices(codec, k_q_all, k_n_all, k_m_all, self.out_dtype)
         v_bf = decode_from_indices(codec, v_q_all, v_n_all, v_m_all, self.out_dtype)
-        return k_bf, v_bf
+        return k_bf.contiguous(), v_bf.contiguous()
+
+    @staticmethod
+    def _append(
+        buffers: list[torch.Tensor | None], layer_idx: int, new: torch.Tensor,
+    ) -> torch.Tensor:
+        """Append ``new`` along the seq dim (-2) to the single contiguous
+        per-layer buffer, returning the grown buffer."""
+        cur = buffers[layer_idx]
+        grown = new if cur is None else torch.cat([cur, new], dim=-2)
+        buffers[layer_idx] = grown
+        return grown
 
     # transformers' generation loop calls get_seq_length to size the
     # attention mask.  DynamicCache infers this from key_cache[layer].shape[-2].
@@ -516,10 +534,10 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
             self._supports_lattice
             and layer_idx < len(self._codecs)
             and self._codecs[layer_idx] is not None
-            and layer_idx < len(self._k_quant_entries)
-            and len(self._k_quant_entries[layer_idx]) > 0
+            and layer_idx < len(self._k_codes)
+            and self._k_codes[layer_idx] is not None
         ):
-            return sum(e[0].shape[-2] for e in self._k_quant_entries[layer_idx])
+            return self._k_codes[layer_idx].shape[-2]
         # Fall back to parent's bf16 length (boundary / unsupported layers).
         try:
             return super().get_seq_length(layer_idx)

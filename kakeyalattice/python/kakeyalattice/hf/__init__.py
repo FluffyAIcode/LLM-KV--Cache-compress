@@ -32,12 +32,24 @@ def __getattr__(name):
     if name == "decode_from_indices":
         from .quantized_cache import decode_from_indices
         return decode_from_indices
+    if name == "KakeyaLatticePackedCache":
+        from .packed_cache import KakeyaLatticePackedCache
+        return KakeyaLatticePackedCache
+    if name == "TurboQuantPackedCache":
+        from .packed_cache import TurboQuantPackedCache
+        return TurboQuantPackedCache
+    if name == "TurboQuantCodec":
+        from .turboquant import TurboQuantCodec
+        return TurboQuantCodec
     raise AttributeError(f"module 'kakeyalattice.hf' has no attribute {name!r}")
 
 
 __all__ = [
     "KakeyaLatticeCache",
     "KakeyaLatticeQuantizedCache",
+    "KakeyaLatticePackedCache",
+    "TurboQuantPackedCache",
+    "TurboQuantCodec",
     "encode_to_indices",
     "decode_from_indices",
 ]

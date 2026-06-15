@@ -1,0 +1,273 @@
+{
+  "generated_at": "2026-06-15T12:40:30Z",
+  "config": {
+    "model": "Qwen/Qwen3-4B",
+    "ctx_len": 2048,
+    "n_passages": 4,
+    "n_eval": 32,
+    "variants": [
+      "e8_q38",
+      "e8_q37",
+      "e8_q10",
+      "d4_q38"
+    ],
+    "device": "cuda",
+    "dtype": "torch.bfloat16",
+    "num_hidden_layers": 36,
+    "head_dim": 128
+  },
+  "bf16_reference": {
+    "mean_ppl": 1.155815732188461,
+    "mean_decode_wall_time_sec": 2.404730313748587,
+    "layer0_audit_mean": {
+      "excess_kurtosis_abs": 1.2086109817028046,
+      "isotropy_variance_ratio": 87347.205078125
+    }
+  },
+  "codecs": {
+    "e8_q38": {
+      "variant": "e8",
+      "q_range": 38,
+      "mean_ppl": 1.156136812272227,
+      "abs_rel_delta_ppl": 0.0002777952184109268,
+      "mean_decode_wall_time_sec": 2.4980066647403874,
+      "decode_slowdown_vs_bf16": 1.0387886951224887,
+      "mean_k0_rel_mse": 9.21902283153031e-05,
+      "bits_per_vector": 848,
+      "supports_lattice": true,
+      "per_passage": [
+        {
+          "ppl": 1.136409181603345,
+          "decode_wall_time_sec": 2.423745826119557,
+          "input_len": 981,
+          "n_new_tokens": 32,
+          "passage_idx": 0,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 848,
+          "k0_rel_mse_vs_bf16": 9.329490421805531e-05
+        },
+        {
+          "ppl": 1.1021103351249564,
+          "decode_wall_time_sec": 2.4407680579461157,
+          "input_len": 1242,
+          "n_new_tokens": 32,
+          "passage_idx": 1,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 848,
+          "k0_rel_mse_vs_bf16": 9.213083103531972e-05
+        },
+        {
+          "ppl": 1.1841341839579378,
+          "decode_wall_time_sec": 2.4352966090664268,
+          "input_len": 1461,
+          "n_new_tokens": 32,
+          "passage_idx": 2,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 848,
+          "k0_rel_mse_vs_bf16": 9.101884643314406e-05
+        },
+        {
+          "ppl": 1.201893548402669,
+          "decode_wall_time_sec": 2.69221616582945,
+          "input_len": 901,
+          "n_new_tokens": 32,
+          "passage_idx": 3,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 848,
+          "k0_rel_mse_vs_bf16": 9.231633157469332e-05
+        }
+      ]
+    },
+    "e8_q37": {
+      "variant": "e8",
+      "q_range": 37,
+      "mean_ppl": 1.1553347065666193,
+      "abs_rel_delta_ppl": 0.00041617846897699056,
+      "mean_decode_wall_time_sec": 2.5300393677898683,
+      "decode_slowdown_vs_bf16": 1.0521094000956577,
+      "mean_k0_rel_mse": 9.726393909659237e-05,
+      "bits_per_vector": 832,
+      "supports_lattice": true,
+      "per_passage": [
+        {
+          "ppl": 1.1336523358357478,
+          "decode_wall_time_sec": 2.465303872944787,
+          "input_len": 981,
+          "n_new_tokens": 32,
+          "passage_idx": 0,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 9.848644549492747e-05
+        },
+        {
+          "ppl": 1.1015407944728262,
+          "decode_wall_time_sec": 2.4634506290312856,
+          "input_len": 1242,
+          "n_new_tokens": 32,
+          "passage_idx": 1,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 9.724048140924424e-05
+        },
+        {
+          "ppl": 1.1826039074476211,
+          "decode_wall_time_sec": 2.5467569050379097,
+          "input_len": 1461,
+          "n_new_tokens": 32,
+          "passage_idx": 2,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 9.595516894478351e-05
+        },
+        {
+          "ppl": 1.2035417885102826,
+          "decode_wall_time_sec": 2.6446460641454905,
+          "input_len": 901,
+          "n_new_tokens": 32,
+          "passage_idx": 3,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 9.737366053741425e-05
+        }
+      ]
+    },
+    "e8_q10": {
+      "variant": "e8",
+      "q_range": 10,
+      "mean_ppl": 1.1555230798807532,
+      "abs_rel_delta_ppl": 0.00025319979609006546,
+      "mean_decode_wall_time_sec": 2.6534084314480424,
+      "decode_slowdown_vs_bf16": 1.1034120609191334,
+      "mean_k0_rel_mse": 0.0013367840147111565,
+      "bits_per_vector": 608,
+      "supports_lattice": true,
+      "per_passage": [
+        {
+          "ppl": 1.13168259915814,
+          "decode_wall_time_sec": 2.5236465968191624,
+          "input_len": 981,
+          "n_new_tokens": 32,
+          "passage_idx": 0,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 608,
+          "k0_rel_mse_vs_bf16": 0.0013545539695769548
+        },
+        {
+          "ppl": 1.1033472739017656,
+          "decode_wall_time_sec": 2.6112378099933267,
+          "input_len": 1242,
+          "n_new_tokens": 32,
+          "passage_idx": 1,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 608,
+          "k0_rel_mse_vs_bf16": 0.0013345270417630672
+        },
+        {
+          "ppl": 1.1830236891911905,
+          "decode_wall_time_sec": 2.7392381608951837,
+          "input_len": 1461,
+          "n_new_tokens": 32,
+          "passage_idx": 2,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 608,
+          "k0_rel_mse_vs_bf16": 0.001319407019764185
+        },
+        {
+          "ppl": 1.204038757271917,
+          "decode_wall_time_sec": 2.739511158084497,
+          "input_len": 901,
+          "n_new_tokens": 32,
+          "passage_idx": 3,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 608,
+          "k0_rel_mse_vs_bf16": 0.001338648027740419
+        }
+      ]
+    },
+    "d4_q38": {
+      "variant": "d4",
+      "q_range": 38,
+      "mean_ppl": 1.1552518897663873,
+      "abs_rel_delta_ppl": 0.00048783072108401517,
+      "mean_decode_wall_time_sec": 1.9279644507914782,
+      "decode_slowdown_vs_bf16": 0.8017383237399675,
+      "mean_k0_rel_mse": 0.00013971133375889622,
+      "bits_per_vector": 832,
+      "supports_lattice": true,
+      "per_passage": [
+        {
+          "ppl": 1.13438625862124,
+          "decode_wall_time_sec": 2.0598039170727134,
+          "input_len": 981,
+          "n_new_tokens": 32,
+          "passage_idx": 0,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 0.0001417725143255666
+        },
+        {
+          "ppl": 1.1003375253182024,
+          "decode_wall_time_sec": 1.9196776589378715,
+          "input_len": 1242,
+          "n_new_tokens": 32,
+          "passage_idx": 1,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 0.00013947609113529325
+        },
+        {
+          "ppl": 1.1825169276081429,
+          "decode_wall_time_sec": 1.8616054551675916,
+          "input_len": 1461,
+          "n_new_tokens": 32,
+          "passage_idx": 2,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 0.00013766657502856106
+        },
+        {
+          "ppl": 1.2037668475179635,
+          "decode_wall_time_sec": 1.8707707719877362,
+          "input_len": 901,
+          "n_new_tokens": 32,
+          "passage_idx": 3,
+          "codec_fired_layers": 36,
+          "skip_fired_layers": 0,
+          "supports_lattice": true,
+          "bits_per_vector": 832,
+          "k0_rel_mse_vs_bf16": 0.00013993015454616398
+        }
+      ]
+    }
+  }
+}

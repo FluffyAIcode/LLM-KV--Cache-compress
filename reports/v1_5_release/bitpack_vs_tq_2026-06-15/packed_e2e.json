@@ -1,0 +1,36 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "gpu": "NVIDIA H200",
+  "head_dim": 128,
+  "layers": 36,
+  "seq": 129,
+  "bf16_kv_bytes": 18874368,
+  "runs": [
+    {
+      "name": "D4_Q38_packed",
+      "seq": 129,
+      "time_s": 5.889021072071046,
+      "text": "<think>\nOkay, so I need to summarize the core idea of nested-lattice quantization for KV caches and explain why E8 improves on scalar quantization. Let me start by recalling what I know about quantization in the context of large language models, especially for key-value (KV) caches.\n\nFirst, I remember that in transformer models, especially those with long sequences, the KV cache is used to store the keys and values for the tokens that have already been processed. This",
+      "kv_bytes": 7667712,
+      "lossless": true,
+      "real_cr": 2.4615384615384617
+    },
+    {
+      "name": "E8_Q38_packed",
+      "seq": 129,
+      "time_s": 7.529538627946749,
+      "text": "<think>\nOkay, so I need to summarize the core idea of nested-lattice quantization for KV caches and explain why E8 improves on scalar quantisation. Let me start by recalling what I know about quantization in the context of large language models, especially with KV caches.\n\nFirst, I remember that in transformer models, especially when dealing with long sequences, the key-value (KV) caches are used to store the keys and values from previous tokens to avoid recomputing them",
+      "kv_bytes": 7952484,
+      "lossless": true,
+      "real_cr": 2.3733927663356504
+    },
+    {
+      "name": "TurboQuant_b4_packed",
+      "seq": 129,
+      "time_s": 4.3504684790968895,
+      "text": "<think>\nOkay, the user is asking about nested-lattice quantization for KV caches and why E8 is better than scalar quantization. Let me start by recalling what I know about these topics.\n\nFirst, nested-lattice quantization. I remember that in machine learning, especially with large models like those used in transformers, KV caches (key-value caches) are important for efficient decoding. The problem is that these caches can be memory-intensive, so quantization is used to reduce",
+      "kv_bytes": 5013504,
+      "real_cr": 3.764705882352941
+    }
+  ]
+}
