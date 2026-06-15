@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kakeyalattice"
-version = "1.6.0"
+version = "1.6.1"
 description = "Nested-lattice KV-cache compression for LLM inference: Zamir-Feder D4 and E8 variants with shaping gain over scalar quantisation."
 readme = "README.md"
 # NOTE: we intentionally declare the license only via classifier

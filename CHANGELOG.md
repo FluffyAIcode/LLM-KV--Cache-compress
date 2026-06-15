@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.6.1 — 2026-06-15
+
+**Drop-in support for heterogeneous per-layer head_dim (Gemma-4) + bit-packing
+adopted as the unified compression-ratio standard.**
+
+### Fixed
+- **Per-layer head_dim.** Models whose layers expose different K/V head dims now
+  work drop-in. Gemma-4-26B mixes `sliding_attention` (head_dim=256) and
+  `full_attention` (head_dim=512) layers, which raised
+  `AssertionError: expected last dim 256, got 512`. Each layer's codec is now
+  built lazily from the head_dim actually observed at that layer
+  (`KakeyaLatticeQuantizedCache`, `KakeyaLatticeCache`, `TurboQuantPackedCache`).
+- **Attention-mask sizes.** The int-storage caches keep their compressed state
+  outside `self.layers`, so transformers-5's `DynamicCache.get_mask_sizes` fell
+  through to `(query_length, 0)` and corrupted Gemma-4's sliding-window /
+  multimodal blockwise mask during multi-step decode (CUDA device-side assert).
+  `get_mask_sizes` is now overridden to report the true cache length.
+- Verified on H200: **Gemma-4-26B generates end-to-end** with
+  `KakeyaLatticePackedCache` (E8 Q=38), real CR **2.44×**, lossless; per-layer
+  codecs 256 (sliding) / 512 (full). Qwen3-4B regression unchanged.
+
+### Changed
+- **Bit-packing is now the unified comparison standard.** All compression-ratio
+  comparisons (KakeyaLattice and the TurboQuant baseline) use the bit-packed
+  caches (`KakeyaLatticePackedCache`, `TurboQuantPackedCache`). Qwen3-4B in this
+  standard: **D4 2.46× / E8 2.37×** (the int8 `KakeyaLatticeQuantizedCache` 1.94×
+  remains available as the simpler, dependency-free storage option). README and
+  reports updated accordingly.
+
 ## v1.6.0 — 2026-06-15
 
 **fix codec.roundtrip bug — contiguous, directly-SDPA-feedable K/V decode.**

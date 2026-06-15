@@ -1,5 +1,13 @@
 # Real-compression verification — KakeyaLattice on NVIDIA H200 (2026-06-15)
 
+> **Note (v1.6.1): the unified comparison standard is now bit-packing.** The
+> 1.94× below is the **int8** `KakeyaLatticeQuantizedCache`. The same Qwen3-4B
+> under the bit-packed `KakeyaLatticePackedCache` (the standard as of v1.6) is
+> **D4 2.46× / E8 2.37×** — see
+> [`../bitpack_vs_tq_2026-06-15/`](../bitpack_vs_tq_2026-06-15/)
+> (`qwen3_4b_packed_e2e.json`). Reconstruction is bit-identical between the two
+> storage formats, so quality is unchanged; only the byte count differs.
+
 **Question:** does the current compression algorithm have a *real* compression
 effect (fewer real bytes), or is it only a reconstruction-quality probe?
 

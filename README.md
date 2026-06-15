@@ -3,20 +3,29 @@
 > **A D4 / E8 nested-lattice codec that realises a discrete *Kakeya
 > cover* over the direction sphere of transformer KV activations.**
 >
-> Two `transformers.DynamicCache` subclasses ship together:
+> Three `transformers.DynamicCache` subclasses ship together:
 >
+> - **`KakeyaLatticePackedCache`** — stores **bit-packed lattice codes**.
+>   **Real ~2.4× HBM compression** (D4 Q=38 ≈ 2.46×, E8 Q=38 ≈ 2.37×;
+>   measured end-to-end on Qwen3-4B / H200). **This is the unified
+>   comparison standard** for all reported compression ratios as of v1.6.
 > - **`KakeyaLatticeQuantizedCache`** — stores **int8 lattice indices**.
->   **Real ~1.94× HBM compression** (measured at the tensor-byte
->   level; see [`reports/v1_5_release/hbm_savings/REAL_HBM_PROOF.md`](reports/v1_5_release/hbm_savings/REAL_HBM_PROOF.md)).
+>   Simpler, dependency-free storage; **real ~1.94× HBM compression**
+>   (the int8-vs-6.3-bit overhead). Bit-identical reconstruction to the
+>   packed cache — use it when you prefer the simplest storage type.
 > - **`KakeyaLatticeCache`** — stores reconstructed bf16. **Zero HBM
 >   savings**; use as a reconstruction-quality probe.
 >
 > At the **codec bit-rate level** (a Q=38 lattice vector needs ~6.3
 > bits per coordinate, vs 16 bits for bf16), the achievable ceiling
 > is **2.4×–2.8× compression at <1 % perplexity loss** on Qwen3,
-> Llama-3, DeepSeek, GLM-4, and Gemma. The current int8
-> implementation hits **1.94×** of that ceiling; the gap to 2.4× is
-> bit-packed int storage, the v1.6 work item.
+> Llama-3, DeepSeek, GLM-4, and Gemma. **`KakeyaLatticePackedCache`
+> realises that ceiling as real bytes** (v1.6); the int8 cache trades
+> ~25 % of it for a plain storage type. **All compression-ratio
+> comparisons in this repo now use the bit-packed caches** (both for
+> KakeyaLattice and for the TurboQuant baseline) so the numbers are
+> apples-to-apples; see
+> [`reports/v1_5_release/bitpack_vs_tq_2026-06-15/`](reports/v1_5_release/bitpack_vs_tq_2026-06-15/).
 >
 > `pip install kakeyalattice`.
 
