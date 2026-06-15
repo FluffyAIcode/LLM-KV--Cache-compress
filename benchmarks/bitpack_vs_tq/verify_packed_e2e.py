@@ -1,11 +1,21 @@
-"""End-to-end REAL bit-packed storage on a live model.
+"""End-to-end REAL bit-packed storage on a live model (per-operating-point CR).
 
-Generates with the bit-packed caches on Qwen3-4B and reports the real packed
-KV footprint vs bf16 DynamicCache:
-  * KakeyaLatticePackedCache (D4 Q=38)  -> ~2.46x
-  * KakeyaLatticePackedCache (E8 Q=38)  -> ~2.42x
-  * TurboQuantPackedCache    (b=4)      -> ~3.76x  (lower quality; see iso-ppl)
-Also verifies the pack->unpack cycle is lossless (so quality == unpacked cache).
+Generates with the bit-packed caches on Qwen3-4B and reports the real packed KV
+footprint vs bf16 DynamicCache, and verifies pack->unpack is lossless.
+
+!!! NOT A FAIR HEAD-TO-HEAD !!!
+The points below (D4/E8 @ Q=38, TurboQuant @ b=4) are at DIFFERENT bit budgets /
+quality, so their raw CRs are NOT comparable: TurboQuant b=4 shows a higher CR
+ONLY because it is a much more aggressive, much lower-quality point
+(|Δppl| ~4.8% vs ~0.2% for KakeyaLattice Q=38). Comparing CR across unmatched
+quality is meaningless.
+
+>>> The canonical KakeyaLattice-vs-TurboQuant comparison is ISO-QUALITY (matched
+    |Δppl|) and lives in `compare_real_cr.py`. At |Δppl| <= 2% on Qwen3-4B the
+    real-byte winners are E8 +7.7% / D4 +5.0% over TurboQuant. <<<
+
+This script is only a sanity check that each packed cache works end-to-end and
+hits its expected real CR at its own operating point.
 """
 from __future__ import annotations
 import argparse, json, time
@@ -80,6 +90,8 @@ def main():
 
     print(f"model={args.model} layers={L} head_dim={hd} seq={seqA}")
     print(f"bf16 DynamicCache KV bytes = {base_bytes:,} ({base_bytes/2**20:.2f} MiB)")
+    print("NOTE: per-operating-point raw CR — NOT quality-matched. Do not rank "
+          "codecs by these numbers. Iso-quality comparison: compare_real_cr.py.")
     print(f"{'cache':<26} {'KV MiB':>9} {'real CR':>9} {'lossless':>9} {'time(s)':>8}")
     rows = []
     for r in runs:
@@ -96,7 +108,12 @@ def main():
     with open(args.out, "w") as f:
         json.dump({"model": args.model, "gpu": torch.cuda.get_device_name(0),
                    "head_dim": hd, "layers": L, "seq": seqA,
-                   "bf16_kv_bytes": base_bytes, "runs": rows}, f, indent=2)
+                   "bf16_kv_bytes": base_bytes, "runs": rows,
+                   "note": ("per-operating-point raw CR, NOT quality-matched; "
+                            "ranking codecs by these is meaningless. Iso-quality "
+                            "(matched |Dppl|) comparison is in compare_real_cr.py."),
+                   "iso_quality_comparison": "benchmarks/bitpack_vs_tq/compare_real_cr.py"},
+                  f, indent=2)
     print(f"[out] {args.out}")
 
 

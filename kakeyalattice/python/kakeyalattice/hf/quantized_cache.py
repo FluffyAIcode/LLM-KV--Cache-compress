@@ -364,10 +364,15 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
                 UserWarning, stacklevel=2,
             )
 
-        # One codec per layer.
-        self._codecs: list[Any | None] = []
-        if self._supports_lattice:
-            self._init_codecs()
+        # Per-layer codecs are built LAZILY on the first update() for each
+        # layer, keyed by the head_dim actually observed there. This makes the
+        # cache drop-in for models with heterogeneous per-layer head_dim — e.g.
+        # Gemma-4's sliding(head_dim=256) / full(global_head_dim=512) hybrid
+        # attention — instead of assuming a single config.head_dim everywhere.
+        # ``head_dim`` above is kept as the declared default (for the int8
+        # ceiling warning and back-compat); the real per-layer dim governs.
+        self._codecs: list[Any | None] = [None] * self.num_hidden_layers
+        self._raw_layers: set[int] = set()   # layers kept as raw bf16 (incompat)
 
         # Per-layer storage: ONE contiguous tensor per component (codes,
         # norms, qmax) for K and V, grown by a single cat per update()
@@ -397,22 +402,49 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
 
     # ----- codec management -----
 
-    def _init_codecs(self) -> None:
+    def _codec_cls(self):
         if self.variant == "d4":
             from kakeyalattice import V14KakeyaZamirLatticeGPU as CodecCls
         else:
             from kakeyalattice import V15KakeyaZamirE8GPU as CodecCls
+        return CodecCls
 
-        self._codecs = []
-        for layer_idx in range(self.num_hidden_layers):
-            if self._is_boundary_layer(layer_idx):
-                self._codecs.append(None)
-            else:
-                self._codecs.append(CodecCls(
-                    D=self.head_dim,
-                    q_range=self.q_range,
-                    device=str(self.device),
-                ))
+    def _get_codec(self, layer_idx: int, observed_dim: int):
+        """Return the per-layer codec, building it lazily from the head_dim
+        actually seen at this layer. Returns None when the layer should stay
+        raw bf16 (boundary layer, or incompatible dim with strict=False)."""
+        if self._is_boundary_layer(layer_idx) or layer_idx in self._raw_layers:
+            return None
+        codec = self._codecs[layer_idx]
+        if codec is not None:
+            if codec.D_shape != observed_dim:
+                raise ValueError(
+                    f"layer {layer_idx} head_dim changed "
+                    f"{codec.D_shape} -> {observed_dim} between updates"
+                )
+            return codec
+        # First time we see this layer: validate the observed head_dim.
+        bd = self._block_dim
+        is_pow2 = observed_dim > 0 and (observed_dim & (observed_dim - 1)) == 0
+        if (observed_dim % bd != 0) or not is_pow2:
+            msg = (
+                f"KakeyaLatticeQuantizedCache(variant={self.variant!r}): layer "
+                f"{layer_idx} head_dim={observed_dim} is incompatible "
+                f"(need a power of 2 divisible by {bd})."
+            )
+            if self.strict:
+                raise ValueError(
+                    msg + " Pass strict=False to keep this layer as raw bf16."
+                )
+            warnings.warn(msg + " strict=False: layer kept as raw bf16.",
+                          UserWarning, stacklevel=2)
+            self._raw_layers.add(layer_idx)
+            return None
+        codec = self._codec_cls()(
+            D=observed_dim, q_range=self.q_range, device=str(self.device),
+        )
+        self._codecs[layer_idx] = codec
+        return codec
 
     def _is_boundary_layer(self, layer_idx: int) -> bool:
         if self.boundary <= 0:
@@ -471,13 +503,11 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
         """Encode new K/V to int indices, append to per-layer storage,
         return the decoded bf16 of ALL stored entries for this layer.
         """
-        # Fallback: codec disabled (incompatible model with strict=False,
-        # or boundary layer).  Behave exactly like DynamicCache.
-        if (
-            not self._supports_lattice
-            or layer_idx >= len(self._codecs)
-            or self._codecs[layer_idx] is None
-        ):
+        # Lazily resolve the per-layer codec from the OBSERVED head_dim, so
+        # heterogeneous-head_dim models (e.g. Gemma-4 sliding=256 / full=512)
+        # work drop-in. None => raw bf16 (boundary / incompatible layer).
+        codec = self._get_codec(layer_idx, key_states.shape[-1])
+        if codec is None:
             self.skip_fired_per_layer[layer_idx] = (
                 self.skip_fired_per_layer.get(layer_idx, 0) + 1
             )
@@ -485,7 +515,15 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
                 key_states, value_states, layer_idx, *args, **kwargs
             )
 
-        codec = self._codecs[layer_idx]
+        # K and V of a layer share its head_dim (one codec per layer). Guard
+        # the rare case they differ so we fail loud rather than mis-encode.
+        if value_states.shape[-1] != key_states.shape[-1]:
+            raise ValueError(
+                f"layer {layer_idx}: K head_dim {key_states.shape[-1]} != "
+                f"V head_dim {value_states.shape[-1]}; per-layer codec assumes "
+                f"K and V share head_dim."
+            )
+
         self.codec_fired_per_layer[layer_idx] = (
             self.codec_fired_per_layer.get(layer_idx, 0) + 1
         )
@@ -531,10 +569,7 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
     # We override to use our int storage instead.
     def get_seq_length(self, layer_idx: int = 0) -> int:
         if (
-            self._supports_lattice
-            and layer_idx < len(self._codecs)
-            and self._codecs[layer_idx] is not None
-            and layer_idx < len(self._k_codes)
+            layer_idx < len(self._k_codes)
             and self._k_codes[layer_idx] is not None
         ):
             return self._k_codes[layer_idx].shape[-2]
@@ -543,6 +578,24 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
             return super().get_seq_length(layer_idx)
         except Exception:
             return 0
+
+    def get_mask_sizes(self, query_length: int, layer_idx: int) -> tuple[int, int]:
+        """(kv_length, kv_offset) for attention-mask construction.
+
+        transformers' container ``DynamicCache.get_mask_sizes`` delegates to
+        ``self.layers[layer_idx]``, but this cache stores its compressed state
+        OUTSIDE ``self.layers`` — so the parent would fall through to
+        ``(query_length, 0)`` and corrupt the mask (this is what crashed
+        Gemma-4's sliding/blockwise mask during multi-step decode). We report
+        the true length from our own buffers instead.
+
+        Note: we use full-attention sizing (offset 0). For sequences within the
+        model's sliding window (e.g. Gemma-4's 1024) this is exact; for longer
+        sequences, sliding-window layers would attend beyond the window (a
+        quality, not correctness, deviation — proper per-layer sliding eviction
+        is a follow-up).
+        """
+        return self.get_seq_length(layer_idx) + query_length, 0
 
     # ----- diagnostics -----
 

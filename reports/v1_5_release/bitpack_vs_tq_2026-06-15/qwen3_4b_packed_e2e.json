@@ -1,0 +1,36 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "gpu": "NVIDIA H200",
+  "head_dim": 128,
+  "layers": 36,
+  "seq": 97,
+  "bf16_kv_bytes": 14155776,
+  "runs": [
+    {
+      "name": "D4_Q38_packed",
+      "seq": 97,
+      "time_s": 4.173479269025847,
+      "text": "<think>\nOkay, so I need to summarize the core idea of nested-lattice quantization for KV caches and explain why E8 improves on scalar quantization. Let me start by recalling what I know about quantization in the context of large language models, especially for key-value (KV) caches.\n\nFirst, I remember",
+      "kv_bytes": 5750784,
+      "lossless": true,
+      "real_cr": 2.4615384615384617
+    },
+    {
+      "name": "E8_Q38_packed",
+      "seq": 97,
+      "time_s": 5.274471077835187,
+      "text": "<think>\nOkay, so I need to summarize the core idea of nested-lattice quantization for KV caches and explain why E8 improves on scalar quantisation. Let me start by recalling what I know about quantization in the context of large language models, especially with KV caches.\n\nFirst, I remember that in transformer models",
+      "kv_bytes": 5964228,
+      "lossless": true,
+      "real_cr": 2.3734464879612247
+    },
+    {
+      "name": "TurboQuant_b4_packed",
+      "seq": 97,
+      "time_s": 2.8658362310379744,
+      "text": "<think>\nOkay, the user is asking about nested-lattice quantization for KV caches and why E8 is better than scalar quantization. Let me start by recalling what I know about these topics.\n\nFirst, nested-lattice quantization. I remember that in machine learning, especially with large models like those used in transformers",
+      "kv_bytes": 3760128,
+      "real_cr": 3.764705882352941
+    }
+  ]
+}
