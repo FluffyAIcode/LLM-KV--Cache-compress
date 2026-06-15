@@ -130,23 +130,29 @@ def main():
         results.append(rec)
         print(f"  {fam} {param:>4}: ppl={mean_ppl:7.3f} |Δppl|={dppl*100:6.3f}%  realCR={real_cr:.3f}x", flush=True)
 
-    # iso-ppl Pareto
+    # iso-ppl Pareto (record the winning operating point per codec family)
     pareto = {}
     for T in [0.005, 0.01, 0.02, 0.05]:
         row = {}
         for fam in ("d4", "e8", "tq"):
             feas = [r for r in results if r["family"] == fam and r["abs_rel_delta_ppl"] <= T]
-            row[fam] = max((r["real_cr"] for r in feas), default=None)
+            best = max(feas, key=lambda r: r["real_cr"], default=None)
+            row[fam] = {"real_cr": best["real_cr"], "param": best["param"]} if best else None
         pareto[f"{T*100:.1f}%"] = row
 
-    print("\n=== iso-ppl REAL-byte compression ratio ===")
-    print(f"{'|Δppl|≤':>8} {'D4':>8} {'E8':>8} {'TQ':>8} {'D4 vs TQ':>10} {'E8 vs TQ':>10}")
+    def _cr(cell):
+        return cell["real_cr"] if cell else None
+
+    print("\n=== iso-ppl REAL-byte compression ratio (winning Q / b annotated) ===")
+    print(f"{'|Δppl|≤':>8} {'D4':>14} {'E8':>14} {'TurboQuant':>14} {'D4 vs TQ':>10} {'E8 vs TQ':>10}")
     for T, row in pareto.items():
-        d4, e8, tq = row["d4"], row["e8"], row["tq"]
+        d4, e8, tq = _cr(row["d4"]), _cr(row["e8"]), _cr(row["tq"])
         def adv(x, y):
             return f"{(x/y-1)*100:+.1f}%" if (x and y) else "—"
-        f = lambda v: f"{v:.2f}x" if v else "oor"
-        print(f"{T:>8} {f(d4):>8} {f(e8):>8} {f(tq):>8} {adv(d4,tq):>10} {adv(e8,tq):>10}")
+        def cell(c, lbl):
+            return f"{c['real_cr']:.2f}x({lbl}={c['param']})" if c else "oor"
+        print(f"{T:>8} {cell(row['d4'],'Q'):>14} {cell(row['e8'],'Q'):>14} "
+              f"{cell(row['tq'],'b'):>14} {adv(d4,tq):>10} {adv(e8,tq):>10}")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as fh:

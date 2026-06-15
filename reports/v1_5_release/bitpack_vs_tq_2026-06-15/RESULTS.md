@@ -68,12 +68,22 @@ Qwen3-4B, `packed_e2e.json`). TurboQuant b=4 = 3.76× (but lower quality).
 4.7%; TQ b3 4.92×/77%. High-Q low-CR: D4 Q152 1.88×, E8 Q152 1.56× via fallback.)
 
 ## Iso-ppl Pareto — REAL-byte compression ratio (best feasible CR per codec)
+Each cell is the densest operating point whose mean |Δppl| ≤ the row threshold;
+the winning **TurboQuant b** (and D4/E8 Q) is annotated in parentheses.
+
 | \|Δppl\| ≤ | D4 | E8 | TurboQuant | D4 vs TQ | E8 vs TQ |
 |---:|---:|---:|---:|---:|---:|
-| 0.5% | 2.13× | 2.37× | 2.21× | −3.3% | **+7.6%** |
-| 1.0% | 3.20× | 3.28× | 3.05× | **+5.0%** | **+7.7%** |
-| 2.0% | 3.20× | 3.28× | 3.05× | **+5.0%** | **+7.7%** |
-| 5.0% | 3.56× | 3.88× | 3.76× | −5.6% | **+2.9%** |
+| 0.5% | 2.13× (Q=76) | 2.37× (Q=38) | 2.21× (**b=7**) | −3.3% | **+7.6%** |
+| 1.0% | 3.20× (Q=15) | 3.28× (Q=10) | 3.05× (**b=5**) | **+5.0%** | **+7.7%** |
+| 2.0% | 3.20× (Q=15) | 3.28× (Q=10) | 3.05× (**b=5**) | **+5.0%** | **+7.7%** |
+| 5.0% | 3.56× (Q=10) | 3.88× (Q=6)  | 3.77× (**b=4**) | −5.6% | **+2.9%** |
+
+**TurboQuant bit budget used:** the sweep covered **b ∈ {3,4,5,6,7,8}**. The
+iso-ppl winner is **b=7** at ≤0.5%, **b=5** at the 1–2% production band, and
+**b=4** only at the loose 5% target. **b=2 (and b=3) are excluded** as
+non-competitive: TurboQuant at b≤3 is catastrophic for KV (b=3 here gives
+|Δppl|=77% at ppl 32.6; archived repo data shows b=2 |Δppl| in the tens-of-
+thousands of %), so they never appear on the iso-ppl Pareto.
 
 ## Reading the result
 - **Conclusion holds in direction, shrinks in size.** At the deployment-relevant
