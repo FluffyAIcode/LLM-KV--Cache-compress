@@ -1,6 +1,15 @@
 # Bit-packed KakeyaLattice (D4 & E8) vs TurboQuant — REAL-byte iso-ppl
 # Qwen3-4B on NVIDIA H200, 2026-06-15
 
+> **Comparison standard (v1.6.1):** all codec-vs-codec comparisons are
+> **(1) bit-packed** (real `kv_storage_bytes`, not int8) **and (2) iso-quality**
+> — i.e. each codec is taken at the operating point that meets a fixed |Δppl|
+> threshold, then we compare real bytes. **Never rank codecs by raw CR at
+> unmatched bit budgets** (e.g. "TurboQuant b=4 = 3.77× vs E8 Q=38 = 2.37×" is
+> meaningless — b=4 has |Δppl| ≈ 4.8 % vs ≈ 0.2 %). The iso-ppl Pareto below is
+> the canonical result; the per-fixed-point table in `qwen3_4b_packed_e2e.json`
+> is only an end-to-end sanity check, not a head-to-head.
+
 ## What this answers
 Does the README's iso-ppl compression advantage of KakeyaLattice over TurboQuant
 (bit-rate numbers, e.g. Qwen3-4B **+26.9%** at |Δppl|≤2%) **survive when measured

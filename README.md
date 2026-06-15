@@ -22,9 +22,13 @@
 > Llama-3, DeepSeek, GLM-4, and Gemma. **`KakeyaLatticePackedCache`
 > realises that ceiling as real bytes** (v1.6); the int8 cache trades
 > ~25 % of it for a plain storage type. **All compression-ratio
-> comparisons in this repo now use the bit-packed caches** (both for
-> KakeyaLattice and for the TurboQuant baseline) so the numbers are
-> apples-to-apples; see
+> comparisons in this repo use (1) the bit-packed caches** (both for
+> KakeyaLattice and the TurboQuant baseline) **and (2) iso-quality
+> matching** — each codec is taken at the operating point meeting a fixed
+> |Δppl| threshold, then real bytes are compared. (Raw CR at unmatched bit
+> budgets is never used to rank codecs — a lower-bit point trivially shows a
+> higher CR at worse quality.) Iso-ppl result on Qwen3-4B (|Δppl| ≤ 2 %):
+> **E8 +7.7 %, D4 +5.0 %** real-byte advantage over TurboQuant; see
 > [`reports/v1_5_release/bitpack_vs_tq_2026-06-15/`](reports/v1_5_release/bitpack_vs_tq_2026-06-15/).
 >
 > `pip install kakeyalattice`.

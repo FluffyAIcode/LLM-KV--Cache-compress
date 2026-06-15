@@ -22,12 +22,15 @@ adopted as the unified compression-ratio standard.**
   codecs 256 (sliding) / 512 (full). Qwen3-4B regression unchanged.
 
 ### Changed
-- **Bit-packing is now the unified comparison standard.** All compression-ratio
-  comparisons (KakeyaLattice and the TurboQuant baseline) use the bit-packed
-  caches (`KakeyaLatticePackedCache`, `TurboQuantPackedCache`). Qwen3-4B in this
-  standard: **D4 2.46× / E8 2.37×** (the int8 `KakeyaLatticeQuantizedCache` 1.94×
-  remains available as the simpler, dependency-free storage option). README and
-  reports updated accordingly.
+- **Bit-packing + iso-quality is now the unified comparison standard.** All
+  codec-vs-codec comparisons (KakeyaLattice and the TurboQuant baseline) use the
+  bit-packed caches (`KakeyaLatticePackedCache`, `TurboQuantPackedCache`) **and**
+  match quality (each codec taken at the operating point meeting a fixed |Δppl|
+  threshold, then real bytes compared). Raw CR at unmatched bit budgets is never
+  used to rank codecs. Iso-ppl result on Qwen3-4B (|Δppl| ≤ 2 %): **E8 +7.7 %,
+  D4 +5.0 %** real-byte advantage over TurboQuant. The int8
+  `KakeyaLatticeQuantizedCache` (1.94×) remains as the simpler, dependency-free
+  storage option. README and reports updated accordingly.
 
 ## v1.6.0 — 2026-06-15
 
