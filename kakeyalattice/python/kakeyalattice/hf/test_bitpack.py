@@ -170,3 +170,49 @@ class TestTurboQuantCodec:
     def test_bit_budget(self):
         codec = TurboQuantCodec(D=128, bits_b=4, device="cpu")
         assert codec.bits_per_token_per_head == 128 * 4 + 32
+
+
+class TestPackedCaches:
+    """End-to-end packed caches: lossless packing + real packed-byte ratios."""
+
+    def _bf16(self, *shape):
+        torch.manual_seed(0)
+        return torch.randn(*shape, dtype=torch.bfloat16)
+
+    @pytest.mark.parametrize("variant,Q,lo,hi", [
+        ("d4", 38, 2.3, 2.6), ("e8", 38, 2.3, 2.55), ("d4", 10, 3.0, 3.7),
+    ])
+    def test_kakeya_packed_ratio_and_lossless(self, variant, Q, lo, hi):
+        from kakeyalattice.hf import KakeyaLatticePackedCache
+        from transformers import DynamicCache
+        B, NKV, S, D = 1, 8, 256, 128
+        k, v = self._bf16(B, NKV, S, D), self._bf16(B, NKV, S, D)
+        dyn = DynamicCache(); dyn.update(k, v, layer_idx=0)
+        base = 0
+        if hasattr(dyn, "layers"):
+            for layer in dyn.layers:
+                base += layer.keys.element_size() * layer.keys.numel()
+                base += layer.values.element_size() * layer.values.numel()
+        qc = KakeyaLatticePackedCache(variant=variant, q_range=Q,
+                                      num_hidden_layers=1, head_dim=D, device="cpu")
+        qc.update(k, v, layer_idx=0)
+        ratio = base / qc.kv_storage_bytes()
+        assert lo <= ratio <= hi, f"{variant} Q={Q}: packed ratio {ratio:.3f} not in [{lo},{hi}]"
+        assert qc.packed_pack_unpack_ok()
+
+    def test_turboquant_packed_ratio(self):
+        from kakeyalattice.hf import TurboQuantPackedCache
+        from transformers import DynamicCache
+        B, NKV, S, D = 1, 8, 256, 128
+        k, v = self._bf16(B, NKV, S, D), self._bf16(B, NKV, S, D)
+        dyn = DynamicCache(); dyn.update(k, v, layer_idx=0)
+        base = 0
+        for layer in dyn.layers:
+            base += layer.keys.element_size() * layer.keys.numel()
+            base += layer.values.element_size() * layer.values.numel()
+        tq = TurboQuantPackedCache(bits_b=4, num_hidden_layers=1, head_dim=D, device="cpu")
+        tq.update(k, v, layer_idx=0)
+        ratio = base / tq.kv_storage_bytes()
+        # b=4: per-vec 128*4+32 = 544 bits = 68 bytes -> 256/68 = 3.76x
+        assert 3.6 <= ratio <= 3.9, f"TQ b=4 packed ratio {ratio:.3f} unexpected"
+        assert tq.get_seq_length(0) == S
