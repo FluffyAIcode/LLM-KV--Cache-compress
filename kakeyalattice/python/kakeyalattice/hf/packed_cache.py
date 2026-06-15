@@ -190,6 +190,11 @@ class TurboQuantPackedCache(_DynamicCache):
         except Exception:
             return 0
 
+    def get_mask_sizes(self, query_length: int, layer_idx: int) -> tuple[int, int]:
+        """True (kv_length, kv_offset) from our buffers — see
+        KakeyaLatticeQuantizedCache.get_mask_sizes for rationale."""
+        return self.get_seq_length(layer_idx) + query_length, 0
+
     def kv_storage_bytes(self) -> int:
         total = 0
         for sym_list, n_list, m_list in (

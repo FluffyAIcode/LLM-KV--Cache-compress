@@ -579,6 +579,24 @@ class KakeyaLatticeQuantizedCache(_DynamicCache):
         except Exception:
             return 0
 
+    def get_mask_sizes(self, query_length: int, layer_idx: int) -> tuple[int, int]:
+        """(kv_length, kv_offset) for attention-mask construction.
+
+        transformers' container ``DynamicCache.get_mask_sizes`` delegates to
+        ``self.layers[layer_idx]``, but this cache stores its compressed state
+        OUTSIDE ``self.layers`` — so the parent would fall through to
+        ``(query_length, 0)`` and corrupt the mask (this is what crashed
+        Gemma-4's sliding/blockwise mask during multi-step decode). We report
+        the true length from our own buffers instead.
+
+        Note: we use full-attention sizing (offset 0). For sequences within the
+        model's sliding window (e.g. Gemma-4's 1024) this is exact; for longer
+        sequences, sliding-window layers would attend beyond the window (a
+        quality, not correctness, deviation — proper per-layer sliding eviction
+        is a follow-up).
+        """
+        return self.get_seq_length(layer_idx) + query_length, 0
+
     # ----- diagnostics -----
 
     def __repr__(self) -> str:

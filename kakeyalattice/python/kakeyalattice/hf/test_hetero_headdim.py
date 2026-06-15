@@ -51,6 +51,16 @@ class TestQuantizedHetero:
         with pytest.raises(ValueError):
             qc.update(_bf16(B, NKV, S, 320), _bf16(B, NKV, S, 320), layer_idx=0)  # 320 not pow2
 
+    def test_get_mask_sizes_reports_true_length(self):
+        # Regression for the Gemma-4 sliding/blockwise mask device-assert:
+        # get_mask_sizes must report the real cache length, not (query_length,0).
+        qc = KakeyaLatticeQuantizedCache(
+            variant="e8", q_range=38, num_hidden_layers=2, head_dim=DIM0, device="cpu")
+        assert qc.get_mask_sizes(query_length=5, layer_idx=0) == (5, 0)   # empty layer
+        qc.update(_bf16(B, NKV, S, DIM0), _bf16(B, NKV, S, DIM0), layer_idx=0)
+        # after S stored tokens, a 1-token query sees kv_length = S + 1
+        assert qc.get_mask_sizes(query_length=1, layer_idx=0) == (S + 1, 0)
+
     def test_nonstrict_falls_back_to_raw(self):
         qc = KakeyaLatticeQuantizedCache(
             variant="e8", q_range=38, num_hidden_layers=1, head_dim=256,
