@@ -173,12 +173,12 @@ class KakeyaLatticeCache(_DynamicCache):
                 warnings.warn(msg, UserWarning, stacklevel=2)
                 logger.warning(msg)
 
-        # One codec instance per layer. Codec has no cross-layer state
-        # but per-layer instantiation allows future per-layer Q sweeps
-        # without re-architecting.
-        self._codecs: list[Any | None] = []
-        if self._supports_lattice:
-            self._init_codecs()
+        # Per-layer codecs are built LAZILY on first update(), keyed by the
+        # head_dim actually observed at each layer — so models with
+        # heterogeneous per-layer head_dim (e.g. Gemma-4 sliding=256 / full=512)
+        # work drop-in. ``head_dim`` is the declared default for back-compat.
+        self._codecs: list[Any | None] = [None] * self.num_hidden_layers
+        self._raw_layers: set[int] = set()
 
         # Fire counters for sanity / audit.
         self.codec_fired_per_layer: dict[int, int] = {}
@@ -186,23 +186,45 @@ class KakeyaLatticeCache(_DynamicCache):
 
     # ----- codec management -----
 
-    def _init_codecs(self) -> None:
+    def _codec_cls(self):
         if self.variant == "d4":
             from kakeyalattice import V14KakeyaZamirLatticeGPU as CodecCls
         else:
             from kakeyalattice import V15KakeyaZamirE8GPU as CodecCls
+        return CodecCls
 
-        self._codecs = []
-        for layer_idx in range(self.num_hidden_layers):
-            if self._is_boundary_layer(layer_idx):
-                self._codecs.append(None)
-            else:
-                codec = CodecCls(
-                    D=self.head_dim,
-                    q_range=self.q_range,
-                    device=str(self.device),
+    def _get_codec(self, layer_idx: int, observed_dim: int):
+        """Lazily build/return the per-layer codec from the observed head_dim.
+        Returns None for raw bf16 (boundary / incompatible-with-strict=False)."""
+        if self._is_boundary_layer(layer_idx) or layer_idx in self._raw_layers:
+            return None
+        codec = self._codecs[layer_idx]
+        if codec is not None:
+            if codec.D_shape != observed_dim:
+                raise ValueError(
+                    f"layer {layer_idx} head_dim changed "
+                    f"{codec.D_shape} -> {observed_dim} between updates"
                 )
-                self._codecs.append(codec)
+            return codec
+        bd = self._block_dim
+        is_pow2 = observed_dim > 0 and (observed_dim & (observed_dim - 1)) == 0
+        if (observed_dim % bd != 0) or not is_pow2:
+            msg = (
+                f"KakeyaLatticeCache(variant={self.variant!r}): layer "
+                f"{layer_idx} head_dim={observed_dim} is incompatible "
+                f"(need a power of 2 divisible by {bd})."
+            )
+            if self.strict:
+                raise ValueError(msg + " Pass strict=False to keep raw bf16.")
+            warnings.warn(msg + " strict=False: layer kept as raw bf16.",
+                          UserWarning, stacklevel=2)
+            self._raw_layers.add(layer_idx)
+            return None
+        codec = self._codec_cls()(
+            D=observed_dim, q_range=self.q_range, device=str(self.device),
+        )
+        self._codecs[layer_idx] = codec
+        return codec
 
     def _is_boundary_layer(self, layer_idx: int) -> bool:
         if self.boundary <= 0:
@@ -239,13 +261,10 @@ class KakeyaLatticeCache(_DynamicCache):
         """Roundtrip K and V through the per-layer codec, then delegate
         to ``DynamicCache.update`` to concat with existing cache state.
         """
-        # Fast path: codec disabled (strict=False on incompatible model,
-        # or boundary layer).
-        if (
-            not self._supports_lattice
-            or layer_idx >= len(self._codecs)
-            or self._codecs[layer_idx] is None
-        ):
+        # Lazily resolve the per-layer codec from the observed head_dim so
+        # heterogeneous-head_dim models work drop-in. None => raw bf16.
+        codec = self._get_codec(layer_idx, key_states.shape[-1])
+        if codec is None:
             self.skip_fired_per_layer[layer_idx] = (
                 self.skip_fired_per_layer.get(layer_idx, 0) + 1
             )
@@ -253,7 +272,6 @@ class KakeyaLatticeCache(_DynamicCache):
                 key_states, value_states, layer_idx, *args, **kwargs
             )
 
-        codec = self._codecs[layer_idx]
         k_rt = self._roundtrip(key_states, codec)
         v_rt = self._roundtrip(value_states, codec)
         self.codec_fired_per_layer[layer_idx] = (

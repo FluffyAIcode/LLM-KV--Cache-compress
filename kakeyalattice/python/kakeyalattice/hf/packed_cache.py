@@ -120,11 +120,11 @@ class TurboQuantPackedCache(_DynamicCache):
         if not is_pow2:
             raise ValueError(f"head_dim must be a power of 2, got {head_dim}")
 
-        self._codecs: list[Any | None] = [
-            None if self._is_boundary_layer(i)
-            else TurboQuantCodec(D=self.head_dim, bits_b=self.bits_b, device=str(self.device))
-            for i in range(self.num_hidden_layers)
-        ]
+        self._TQCodec = TurboQuantCodec
+        # Lazy per-layer codecs keyed by observed head_dim (drop-in for
+        # heterogeneous-head_dim models like Gemma-4).
+        self._codecs: list[Any | None] = [None] * self.num_hidden_layers
+        self._raw_layers: set[int] = set()
         self._k_sym: list[torch.Tensor | None] = [None] * self.num_hidden_layers
         self._k_norms: list[torch.Tensor | None] = [None] * self.num_hidden_layers
         self._k_qmax: list[torch.Tensor | None] = [None] * self.num_hidden_layers
@@ -146,11 +146,29 @@ class TurboQuantPackedCache(_DynamicCache):
         buffers[layer_idx] = grown
         return grown
 
+    def _get_codec(self, layer_idx: int, observed_dim: int):
+        if self._is_boundary_layer(layer_idx) or layer_idx in self._raw_layers:
+            return None
+        codec = self._codecs[layer_idx]
+        if codec is not None:
+            if codec.D_shape != observed_dim:
+                raise ValueError(
+                    f"layer {layer_idx} head_dim changed "
+                    f"{codec.D_shape} -> {observed_dim} between updates")
+            return codec
+        is_pow2 = observed_dim > 0 and (observed_dim & (observed_dim - 1)) == 0
+        if not is_pow2:
+            self._raw_layers.add(layer_idx)
+            return None
+        codec = self._TQCodec(D=observed_dim, bits_b=self.bits_b, device=str(self.device))
+        self._codecs[layer_idx] = codec
+        return codec
+
     def update(self, key_states, value_states, layer_idx, *args, **kwargs):
-        if layer_idx >= len(self._codecs) or self._codecs[layer_idx] is None:
+        codec = self._get_codec(layer_idx, key_states.shape[-1])
+        if codec is None:
             self.skip_fired_per_layer[layer_idx] = self.skip_fired_per_layer.get(layer_idx, 0) + 1
             return super().update(key_states, value_states, layer_idx, *args, **kwargs)
-        codec = self._codecs[layer_idx]
         self.codec_fired_per_layer[layer_idx] = self.codec_fired_per_layer.get(layer_idx, 0) + 1
         ks, kn, km = codec.encode_to_symbols(key_states)
         vs, vn, vm = codec.encode_to_symbols(value_states)
@@ -165,11 +183,7 @@ class TurboQuantPackedCache(_DynamicCache):
         return k_bf.contiguous(), v_bf.contiguous()
 
     def get_seq_length(self, layer_idx: int = 0) -> int:
-        if (
-            layer_idx < len(self._codecs)
-            and self._codecs[layer_idx] is not None
-            and self._k_sym[layer_idx] is not None
-        ):
+        if layer_idx < len(self._k_sym) and self._k_sym[layer_idx] is not None:
             return self._k_sym[layer_idx].shape[-2]
         try:
             return super().get_seq_length(layer_idx)
