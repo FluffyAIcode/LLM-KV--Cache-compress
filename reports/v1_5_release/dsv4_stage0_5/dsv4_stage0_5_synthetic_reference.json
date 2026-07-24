@@ -1,0 +1,161 @@
+{
+  "note": "Synthetic Gaussian hidden-state input + random-init DSV4 weights. These numbers are a CI smoke reference, NOT a claim about V4-Flash real KV distribution.  Real host-model runs go through run_dsv4_stage0_5.py on vast.ai.",
+  "config": {
+    "device": "cuda",
+    "seed": 20260424,
+    "hidden_shape": [
+      1,
+      2048,
+      4096
+    ],
+    "dsv4_config": {
+      "hidden_size": 4096,
+      "head_dim": 512,
+      "qk_rope_head_dim": 64,
+      "csa_compress_ratio": 4,
+      "hca_compress_ratio": 128,
+      "simulate_fp8": true,
+      "seed": 20260424
+    }
+  },
+  "results": {
+    "sliding_window_kv": {
+      "shape": [
+        1,
+        2048,
+        512
+      ],
+      "audit": {
+        "excess_kurtosis_abs": 97.4804916381836,
+        "isotropy_variance_ratio": 1.3902863264083862,
+        "hadamard_post_variance_ratio": 1.2536637783050537,
+        "rms_wasserstein2_over_sigma_per_dim": 0.0667094811797142,
+        "num_vectors": 2048,
+        "D": 512
+      },
+      "codecs": {
+        "fp8_baseline": {
+          "bits_per_vector": 4224,
+          "rel_mse": 0.0004974847543053329,
+          "cos_sim": 0.9997531175613403
+        },
+        "v14_d4_Q10": {
+          "bits_per_vector": 2208,
+          "rel_mse": 0.009811721742153168,
+          "cos_sim": 0.9951469302177429,
+          "wall_time_sec": 0.02454559877514839
+        },
+        "v14_d4_Q38": {
+          "bits_per_vector": 3232,
+          "rel_mse": 0.0006787661113776267,
+          "cos_sim": 0.9996615648269653,
+          "wall_time_sec": 0.0005850736051797867
+        },
+        "v15_e8_Q10": {
+          "bits_per_vector": 2336,
+          "rel_mse": 0.006487588863819838,
+          "cos_sim": 0.9967821836471558,
+          "wall_time_sec": 0.0007089320570230484
+        },
+        "v15_e8_Q38": {
+          "bits_per_vector": 3296,
+          "rel_mse": 0.00044994597556069493,
+          "cos_sim": 0.9997757077217102,
+          "wall_time_sec": 0.0005943961441516876
+        }
+      }
+    },
+    "csa_pool_kv_ratio4": {
+      "shape": [
+        1,
+        512,
+        512
+      ],
+      "audit": {
+        "excess_kurtosis_abs": 0.32924115657806396,
+        "isotropy_variance_ratio": 1.493666172027588,
+        "hadamard_post_variance_ratio": 1.5155925750732422,
+        "rms_wasserstein2_over_sigma_per_dim": 0.10518710315227509,
+        "num_vectors": 512,
+        "D": 512
+      },
+      "codecs": {
+        "fp8_baseline": {
+          "bits_per_vector": 4224,
+          "rel_mse": 0.0006274728802964091,
+          "cos_sim": 0.9996887445449829
+        },
+        "v14_d4_Q10": {
+          "bits_per_vector": 2208,
+          "rel_mse": 0.011438113637268543,
+          "cos_sim": 0.9943555593490601,
+          "wall_time_sec": 0.004582501947879791
+        },
+        "v14_d4_Q38": {
+          "bits_per_vector": 3232,
+          "rel_mse": 0.0007906375685706735,
+          "cos_sim": 0.999606728553772,
+          "wall_time_sec": 0.0006149299442768097
+        },
+        "v15_e8_Q10": {
+          "bits_per_vector": 2336,
+          "rel_mse": 0.007551968563348055,
+          "cos_sim": 0.996260404586792,
+          "wall_time_sec": 0.0008035358041524887
+        },
+        "v15_e8_Q38": {
+          "bits_per_vector": 3296,
+          "rel_mse": 0.0005224346532486379,
+          "cos_sim": 0.9997400045394897,
+          "wall_time_sec": 0.0006046835333108902
+        }
+      }
+    },
+    "hca_pool_kv_ratio128": {
+      "shape": [
+        1,
+        16,
+        512
+      ],
+      "audit": {
+        "excess_kurtosis_abs": 0.7277247905731201,
+        "isotropy_variance_ratio": 13.722135543823242,
+        "hadamard_post_variance_ratio": 9.617380142211914,
+        "rms_wasserstein2_over_sigma_per_dim": 0.1562589406967163,
+        "num_vectors": 16,
+        "D": 512
+      },
+      "codecs": {
+        "fp8_baseline": {
+          "bits_per_vector": 4224,
+          "rel_mse": 0.0006570503464899957,
+          "cos_sim": 0.999697208404541
+        },
+        "v14_d4_Q10": {
+          "bits_per_vector": 2208,
+          "rel_mse": 0.012300664559006691,
+          "cos_sim": 0.9943528175354004,
+          "wall_time_sec": 0.0005527045577764511
+        },
+        "v14_d4_Q38": {
+          "bits_per_vector": 3232,
+          "rel_mse": 0.0008472416084259748,
+          "cos_sim": 0.9996076226234436,
+          "wall_time_sec": 0.00037514977157115936
+        },
+        "v15_e8_Q10": {
+          "bits_per_vector": 2336,
+          "rel_mse": 0.008070094510912895,
+          "cos_sim": 0.9962605237960815,
+          "wall_time_sec": 0.0005483534187078476
+        },
+        "v15_e8_Q38": {
+          "bits_per_vector": 3296,
+          "rel_mse": 0.0005604951875284314,
+          "cos_sim": 0.9997400045394897,
+          "wall_time_sec": 0.0005330052226781845
+        }
+      }
+    }
+  }
+}
